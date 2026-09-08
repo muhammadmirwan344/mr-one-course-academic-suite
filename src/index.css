@@ -23958,3 +23958,313 @@ html[data-theme='light'] .payment-store-hero{color:#10283a;background:linear-gra
 .detail-row strong.exempt {
   color: #ffd33d;
 }
+
+
+/* =========================================================
+   V19 — My Badges + Academic Learning + Speaking Challenge
+   Additive overrides only; existing completed UI is preserved.
+   ========================================================= */
+
+.badge-glyph {
+  width: 1em;
+  height: 1em;
+  display: block;
+}
+
+.badge-hub-hero > span .badge-glyph,
+.badges-title > span .badge-glyph {
+  width: 34px;
+  height: 34px;
+}
+
+.unified-badge-missions {
+  margin-top: 18px;
+}
+
+.unified-badge-missions .badges-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.unified-badge-missions .badge-card {
+  position: relative;
+  min-height: 248px;
+  cursor: pointer;
+}
+
+.unified-badge-missions .badge-card.locked {
+  filter: none;
+  opacity: .68;
+}
+
+.unified-badge-missions .badge-card.unlocked {
+  transform: translateY(-1px);
+}
+
+.unified-badge-missions .badge-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+}
+
+.unified-badge-missions .badge-icon .badge-glyph {
+  width: 34px;
+  height: 34px;
+}
+
+.unified-badge-missions .badge-exp-reward {
+  margin-top: 11px;
+  padding: 6px 9px;
+  color: #f3c65c;
+  background: rgba(243, 198, 92, .09);
+  border: 1px solid rgba(243, 198, 92, .2);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.unified-badge-missions .badge-progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 14px;
+  overflow: hidden;
+  background: #0c1420;
+  border-radius: 99px;
+}
+
+.unified-badge-missions .badge-progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #25c5d4, #39e2a0);
+  border-radius: inherit;
+}
+
+.unified-badge-missions .badge-card > em {
+  margin-top: 7px;
+  color: #91a1b0;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.academic-priority-order {
+  margin-top: 25px;
+}
+
+.learning-read-reward {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 15px 16px;
+  background: rgba(37, 197, 212, .08);
+  border: 1px solid rgba(37, 197, 212, .25);
+  border-radius: 16px;
+}
+
+.learning-read-reward.done {
+  background: rgba(57, 226, 160, .09);
+  border-color: rgba(57, 226, 160, .32);
+}
+
+.learning-read-reward small,
+.learning-read-reward strong,
+.learning-read-reward span {
+  display: block;
+}
+
+.learning-read-reward small {
+  color: #25c5d4;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.learning-read-reward strong {
+  margin-top: 4px;
+  color: #eef7fb;
+  font-size: 13px;
+}
+
+.learning-read-reward span {
+  margin-top: 4px;
+  color: #8497a7;
+  font-size: 10px;
+}
+
+.learning-read-reward button {
+  flex: 0 0 auto;
+  min-width: 76px;
+  min-height: 42px;
+  padding: 0 12px;
+  color: #07111f;
+  background: #25c5d4;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.learning-read-reward.done button {
+  color: #08261c;
+  background: #39e2a0;
+}
+
+.speaking-recorder {
+  margin-bottom: 14px;
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(37,197,212,.09), rgba(130,82,230,.07));
+  border: 1px solid rgba(37,197,212,.26);
+  border-radius: 18px;
+}
+
+.speaking-target-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 13px;
+  background: #0a1522;
+  border: 1px solid #223649;
+  border-radius: 14px;
+}
+
+.speaking-target-card > span {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #25c5d4;
+  background: rgba(37,197,212,.1);
+  border-radius: 12px;
+}
+
+.speaking-target-card .badge-glyph {
+  width: 23px;
+  height: 23px;
+}
+
+.speaking-target-card small,
+.speaking-target-card strong {
+  display: block;
+}
+
+.speaking-target-card small {
+  color: #758da1;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+
+.speaking-target-card strong {
+  margin-top: 5px;
+  color: #f2f7fb;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.microphone-record-button {
+  width: 100%;
+  min-height: 58px;
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  align-items: center;
+  color: #07111f;
+  background: linear-gradient(90deg, #25c5d4, #39e2a0);
+  border: 0;
+  border-radius: 15px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.microphone-record-button .badge-glyph {
+  width: 25px;
+  height: 25px;
+}
+
+.microphone-record-button.recording {
+  color: #fff;
+  background: linear-gradient(90deg, #ef4967, #a94cff);
+  animation: mocMicPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes mocMicPulse {
+  50% { transform: scale(.985); box-shadow: 0 0 0 8px rgba(239,73,103,.08); }
+}
+
+.speech-transcript {
+  position: relative;
+  margin-top: 12px;
+  padding: 12px 50px 12px 13px;
+  background: #0b1724;
+  border: 1px solid #26394a;
+  border-radius: 13px;
+}
+
+.speech-transcript small,
+.speech-transcript strong {
+  display: block;
+}
+
+.speech-transcript small {
+  color: #778d9f;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.speech-transcript strong {
+  margin-top: 5px;
+  color: #eaf2f7;
+  font-size: 13px;
+}
+
+.speech-transcript b {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: #39e2a0;
+  transform: translateY(-50%);
+}
+
+.speech-feedback {
+  margin: 10px 1px 0 !important;
+  color: #aab9c6 !important;
+  font-size: 11px !important;
+  line-height: 1.55;
+}
+
+html[data-theme='light'] .speaking-target-card,
+html[data-theme='light'] .speech-transcript {
+  background: #f5fafc;
+  border-color: #cbdbe5;
+}
+
+html[data-theme='light'] .speaking-target-card strong,
+html[data-theme='light'] .speech-transcript strong,
+html[data-theme='light'] .learning-read-reward strong {
+  color: #102337;
+}
+
+html[data-theme='light'] .learning-read-reward {
+  background: #f3fbfc;
+  border-color: #b9e7ed;
+}
+
+@media (min-width: 700px) {
+  .unified-badge-missions .badges-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .unified-badge-missions .badges-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .unified-badge-missions .badge-card {
+    min-height: 232px;
+    padding: 14px 9px;
+  }
+}

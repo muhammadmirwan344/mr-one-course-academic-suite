@@ -294,31 +294,116 @@ function getExpRank(totalExp) {
   return { current, next, progress, remaining: next ? Math.max(0, next.min - exp) : 0 };
 }
 
+function BadgeGlyph({ name }) {
+  const common = {
+    viewBox: '0 0 48 48',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2.4,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': true,
+    focusable: false,
+    className: 'badge-glyph',
+  };
+
+  const paths = {
+    learner: <><path d="M24 5 40 11v12c0 10.6-6.6 16.5-16 20-9.4-3.5-16-9.4-16-20V11Z"/><path d="m16 24 5 5 11-12"/></>,
+    perfect: <><circle cx="24" cy="24" r="17"/><path d="m15.5 24 5.5 5.5L33 17"/><path d="M24 7v5M24 36v5M7 24h5M36 24h5"/></>,
+    task: <><rect x="10" y="8" width="28" height="33" rx="6"/><path d="M17 8h14v7H17zM17 24l4 4 9-10M17 34h14"/></>,
+    challenge: <><circle cx="24" cy="24" r="17"/><circle cx="24" cy="24" r="9"/><path d="m24 24 14-14M32 10h6v6"/></>,
+    learning: <><path d="M9 10h20a6 6 0 0 1 6 6v25H15a6 6 0 0 1-6-6Z"/><path d="M15 10v31M20 20h10M20 27h10"/></>,
+    quiz: <><path d="M13 7h22v34H13z"/><path d="M19 15h10M19 23h10M19 31h7"/><circle cx="34" cy="33" r="6"/><path d="m31.5 33 2 2 3.5-4"/></>,
+    project: <><path d="m24 6 4.2 10 10.8.8-8.2 7 2.6 10.7L24 29l-9.4 5.5 2.6-10.7-8.2-7 10.8-.8Z"/><path d="M17 40h14"/></>,
+    allround: <><path d="M11 15 17 8l7 7 7-7 6 7-3 24H14Z"/><path d="M16 23h16M18 31h12"/></>,
+    mic: <><rect x="18" y="6" width="12" height="23" rx="6"/><path d="M12 23a12 12 0 0 0 24 0M24 35v7M17 42h14"/></>,
+  };
+  return <svg {...common}>{paths[name] || paths.learner}</svg>;
+}
+
 function buildStudentBadges(overview, isID) {
   const monthly = overview?.experience?.monthly || {};
+  const breakdown = overview?.experience?.breakdown || {};
+  const attendance = overview?.monthly?.attendance || {};
   const assignments = Array.isArray(overview?.assignments) ? overview.assignments : [];
   const challenges = Array.isArray(overview?.challenges) ? overview.challenges : [];
+  const learningActivities = Array.isArray(overview?.learningActivities) ? overview.learningActivities : [];
+
   const completedAssignmentsFromRows = assignments.filter((item) => Boolean(item.submission)).length;
   const completedChallengesFromRows = challenges.filter((item) => Boolean(item.result)).length;
   const assignmentsCompleted = Number(monthly.assignmentsCompleted ?? completedAssignmentsFromRows);
-  const assignmentsTarget = Number(monthly.assignmentsTarget || assignments.length);
+  const assignmentsTarget = Math.max(Number(monthly.assignmentsTarget || 0), assignments.length);
   const challengesCompleted = Number(monthly.challengesCompleted ?? completedChallengesFromRows);
-  const challengesTarget = Number(monthly.challengesTarget || challenges.length);
+  const challengesTarget = Math.max(Number(monthly.challengesTarget || 0), challenges.length);
+  const attendancePresent = Number(attendance.present || 0);
+  const learningTarget = learningActivities.filter((item) => item.title).length;
+  const learningRead = learningActivities.filter((item) => item.readCompleted).length;
+
   const allAssignmentsDone = assignmentsTarget > 0 && assignmentsCompleted >= assignmentsTarget;
   const allChallengesDone = challengesTarget > 0 && challengesCompleted >= challengesTarget;
+  const allLearningRead = learningTarget > 0 && learningRead >= learningTarget;
 
   return [
-    { type: 'assignment', icon: '☑', name: isID ? 'Tugas Pertama' : 'First Assignment', requirement: isID ? 'Selesaikan 1 tugas' : 'Complete 1 assignment', current: assignmentsCompleted, target: 1, unlocked: assignmentsCompleted >= 1 },
-    { type: 'assignment', icon: '▤', name: isID ? 'Pejuang Tugas' : 'Assignment Streak', requirement: isID ? 'Selesaikan 3 tugas' : 'Complete 3 assignments', current: assignmentsCompleted, target: 3, unlocked: assignmentsCompleted >= 3 },
-    { type: 'assignment', icon: '★', name: isID ? 'Master Tugas' : 'Assignment Master', requirement: isID ? 'Selesaikan semua tugas bulan ini' : 'Complete all assignments this month', current: assignmentsCompleted, target: assignmentsTarget, unlocked: allAssignmentsDone },
-    { type: 'challenge', icon: '🎯', name: isID ? 'Tantangan Pertama' : 'First Challenge', requirement: isID ? 'Selesaikan 1 challenge' : 'Complete 1 challenge', current: challengesCompleted, target: 1, unlocked: challengesCompleted >= 1 },
-    { type: 'challenge', icon: '⚡', name: isID ? 'Penakluk Tantangan' : 'Challenge Conqueror', requirement: isID ? 'Selesaikan 3 challenge' : 'Complete 3 challenges', current: challengesCompleted, target: 3, unlocked: challengesCompleted >= 3 },
-    { type: 'challenge', icon: '🏆', name: 'Program Champion', requirement: isID ? 'Selesaikan semua challenge bulan ini' : 'Complete all challenges this month', current: challengesCompleted, target: challengesTarget, unlocked: allChallengesDone },
-    { type: assignmentsCompleted < 1 ? 'assignment' : 'challenge', icon: '✦', name: 'Double Achiever', requirement: isID ? 'Selesaikan tugas dan challenge' : 'Complete an assignment and a challenge', current: Math.min(assignmentsCompleted, 1) + Math.min(challengesCompleted, 1), target: 2, unlocked: assignmentsCompleted >= 1 && challengesCompleted >= 1 },
-    { type: allAssignmentsDone ? 'challenge' : 'assignment', icon: '👑', name: isID ? 'Bintang Bulanan' : 'Monthly Star', requirement: isID ? 'Tuntaskan semua tugas dan challenge' : 'Finish all assignments and challenges', current: Number(allAssignmentsDone) + Number(allChallengesDone), target: 2, unlocked: allAssignmentsDone && allChallengesDone },
+    {
+      type: 'attendance', icon: 'learner',
+      name: isID ? 'Pembelajar Setia' : 'Loyal Learner',
+      requirement: isID ? 'Hadir minimal 4 pertemuan bulan ini' : 'Attend at least 4 meetings this month',
+      current: Math.min(attendancePresent, 4), target: 4, expReward: 50,
+      unlocked: attendancePresent >= 4, targetPage: 'attendance-record'
+    },
+    {
+      type: 'attendance', icon: 'perfect',
+      name: isID ? 'Kehadiran Sempurna' : 'Perfect Attendance',
+      requirement: isID ? 'Hadir 8 dari 8 pertemuan' : 'Attend all 8 meetings',
+      current: Math.min(attendancePresent, 8), target: 8, expReward: 150,
+      unlocked: attendancePresent >= 8, targetPage: 'attendance-record'
+    },
+    {
+      type: 'learning', icon: 'learning',
+      name: isID ? 'Learning Explorer' : 'Learning Explorer',
+      requirement: isID ? 'Baca seluruh ringkasan pembelajaran bulan ini' : 'Read every learning summary this month',
+      current: learningRead, target: Math.max(learningTarget, 1), expReward: 25 * Math.max(learningTarget, 1),
+      unlocked: allLearningRead, targetPage: 'journal'
+    },
+    {
+      type: 'assignment', icon: 'task',
+      name: isID ? 'Task Master' : 'Task Master',
+      requirement: isID ? 'Selesaikan semua tugas bulan ini' : 'Complete all assignments this month',
+      current: assignmentsCompleted, target: Math.max(assignmentsTarget, 1), expReward: 100,
+      unlocked: allAssignmentsDone, targetPage: 'assignments'
+    },
+    {
+      type: 'challenge', icon: 'challenge',
+      name: isID ? 'Program Champion' : 'Program Champion',
+      requirement: isID ? 'Selesaikan semua tantangan sesuai program' : 'Complete every program challenge',
+      current: challengesCompleted, target: Math.max(challengesTarget, 1), expReward: 150,
+      unlocked: allChallengesDone, targetPage: 'challenge'
+    },
+    {
+      type: 'quiz', icon: 'quiz',
+      name: isID ? 'Quiz Master' : 'Quiz Master',
+      requirement: isID ? 'Raih EXP dari quiz atau tes' : 'Earn EXP from a quiz or test',
+      current: Number(breakdown.quizTest || 0) > 0 ? 1 : 0, target: 1, expReward: 150,
+      unlocked: Number(breakdown.quizTest || 0) > 0, targetPage: 'score'
+    },
+    {
+      type: 'project', icon: 'project',
+      name: isID ? 'Project Star' : 'Project Star',
+      requirement: isID ? 'Selesaikan project program' : 'Complete a program project',
+      current: Number(breakdown.project || 0) > 0 ? 1 : 0, target: 1, expReward: 200,
+      unlocked: Number(breakdown.project || 0) > 0, targetPage: 'score'
+    },
+    {
+      type: 'allround', icon: 'allround',
+      name: isID ? 'MOC All-Rounder' : 'MOC All-Rounder',
+      requirement: isID ? 'Tuntas tugas, tantangan, pembelajaran, dan hadir sempurna' : 'Complete assignments, challenges, learning, and perfect attendance',
+      current: Number(allAssignmentsDone) + Number(allChallengesDone) + Number(allLearningRead) + Number(attendancePresent >= 8),
+      target: 4, expReward: 250,
+      unlocked: allAssignmentsDone && allChallengesDone && allLearningRead && attendancePresent >= 8,
+      targetPage: 'badges'
+    },
   ];
 }
-
 function getProgramChallenge(program, isID) {
   const key = String(program || '').toLowerCase();
   if (key.includes('grammar')) return { name: isID ? 'Tantangan Grammar' : 'Grammar Challenge', prompt: isID ? 'Pilih dan susun struktur kalimat yang benar.' : 'Choose and arrange the correct sentence structure.', icon: '✎', action: isID ? 'Mulai latihan grammar' : 'Start grammar practice' };
@@ -1473,7 +1558,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'academic' && (
         <>
-        <section className="tutor-section tutor-page-section linked-learning-package"><div className="tutor-section-heading"><div><span>{isID ? 'TARGET • EVALUASI • GAMIFIKASI' : 'TARGET • ASSESSMENT • GAMIFICATION'}</span><h2>{isID ? 'Paket Capaian Pertemuan' : 'Meeting Achievement Package'}</h2><p>{isID ? 'Hubungkan target pembelajaran dengan assignment dan challenge pengayaan.' : 'Connect the learning target with an assignment and enrichment challenge.'}</p></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Target Capaian Siswa' : 'Student Achievement Target'}</span><textarea rows="3" value={learningPlan.targetCompetency} onChange={(event) => setLearningPlan({ ...learningPlan, targetCompetency: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat minimal lima kalimat Simple Present dengan pola yang tepat.' : 'Example: Students can write at least five accurate Simple Present sentences.'} /></label><div className="linked-package-toggle"><label><input type="checkbox" checked={learningPlan.assignment.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, enabled: event.target.checked } })} /><span><strong>Assignment</strong><small>{isID ? 'Bukti pencapaian target pembelajaran' : 'Evidence of learning-target achievement'}</small></span></label>{learningPlan.assignment.enabled && <div className="linked-package-fields"><input value={learningPlan.assignment.title} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, title: event.target.value } })} placeholder={isID ? 'Judul assignment' : 'Assignment title'} /><textarea rows="3" value={learningPlan.assignment.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, instructions: event.target.value } })} placeholder={isID ? 'Instruksi pengerjaan...' : 'Assignment instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.assignment.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="200" value={learningPlan.assignment.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.assignment.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic">{isID ? 'Otomatis' : 'Automatic'}</option></select></label>{learningPlan.assignment.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.assignment.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div><div className="linked-package-toggle challenge-link"><label><input type="checkbox" checked={learningPlan.challenge.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, enabled: event.target.checked } })} /><span><strong>Challenge</strong><small>{isID ? 'Pengayaan sesuai program dan sumber EXP' : 'Program-based enrichment and EXP source'}</small></span></label>{learningPlan.challenge.enabled && <div className="linked-package-fields"><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, ...template, enabled: true, gradingMode: template.responseType === 'text' ? 'automatic' : 'review' } }); }}><option value="">{isID ? 'Pilih template sesuai program' : 'Select a program template'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option value={index} key={item.title}>{item.title}</option>)}</select><input value={learningPlan.challenge.title} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, title: event.target.value } })} placeholder={isID ? 'Judul challenge' : 'Challenge title'} /><textarea rows="3" value={learningPlan.challenge.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, instructions: event.target.value } })} placeholder={isID ? 'Instruksi challenge...' : 'Challenge instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.challenge.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="250" value={learningPlan.challenge.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.challenge.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic" disabled={learningPlan.challenge.responseType !== 'text'}>{isID ? 'Otomatis untuk jawaban teks' : 'Automatic for text response'}</option></select></label>{learningPlan.challenge.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div></div></section>{page === 'academic' && learningPlan.assignment.enabled && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={learningPlan.assignment.questions || []} onChange={(questions) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') } })} isID={isID} /></section>}
+        <section className="tutor-section tutor-page-section linked-learning-package"><div className="tutor-section-heading"><div><span>{isID ? 'TARGET • EVALUASI • GAMIFIKASI' : 'TARGET • ASSESSMENT • GAMIFICATION'}</span><h2>{isID ? 'Paket Capaian Pertemuan' : 'Meeting Achievement Package'}</h2><p>{isID ? 'Hubungkan target pembelajaran dengan assignment dan challenge pengayaan.' : 'Connect the learning target with an assignment and enrichment challenge.'}</p></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Target Capaian Siswa' : 'Student Achievement Target'}</span><textarea rows="3" value={learningPlan.targetCompetency} onChange={(event) => setLearningPlan({ ...learningPlan, targetCompetency: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat minimal lima kalimat Simple Present dengan pola yang tepat.' : 'Example: Students can write at least five accurate Simple Present sentences.'} /></label><div className="linked-package-toggle"><label><input type="checkbox" checked={learningPlan.assignment.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, enabled: event.target.checked } })} /><span><strong>Assignment</strong><small>{isID ? 'Bukti pencapaian target pembelajaran' : 'Evidence of learning-target achievement'}</small></span></label>{learningPlan.assignment.enabled && <div className="linked-package-fields"><input value={learningPlan.assignment.title} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, title: event.target.value } })} placeholder={isID ? 'Judul assignment' : 'Assignment title'} /><textarea rows="3" value={learningPlan.assignment.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, instructions: event.target.value } })} placeholder={isID ? 'Instruksi pengerjaan...' : 'Assignment instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.assignment.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="200" value={learningPlan.assignment.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.assignment.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic">{isID ? 'Otomatis' : 'Automatic'}</option></select></label>{learningPlan.assignment.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.assignment.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div><div className="linked-package-toggle challenge-link"><label><input type="checkbox" checked={learningPlan.challenge.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, enabled: event.target.checked } })} /><span><strong>Challenge</strong><small>{isID ? 'Pengayaan sesuai program dan sumber EXP' : 'Program-based enrichment and EXP source'}</small></span></label>{learningPlan.challenge.enabled && <div className="linked-package-fields"><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, ...template, enabled: true, gradingMode: template.responseType === 'text' ? 'automatic' : 'review' } }); }}><option value="">{isID ? 'Pilih template sesuai program' : 'Select a program template'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option value={index} key={item.title}>{item.title}</option>)}</select><input value={learningPlan.challenge.title} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, title: event.target.value } })} placeholder={isID ? 'Judul challenge' : 'Challenge title'} /><textarea rows="3" value={learningPlan.challenge.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, instructions: event.target.value } })} placeholder={isID ? 'Instruksi challenge...' : 'Challenge instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.challenge.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="250" value={learningPlan.challenge.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.challenge.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic" disabled={!['text','speech'].includes(learningPlan.challenge.responseType)}>{isID ? 'Otomatis — teks / speaking' : 'Automatic — text / speaking'}</option></select></label>{learningPlan.challenge.responseType === 'speech' && <textarea rows="2" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'} />}{learningPlan.challenge.gradingMode === 'automatic' && learningPlan.challenge.responseType !== 'speech' && <textarea rows="3" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div></div></section>{page === 'academic' && learningPlan.assignment.enabled && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={learningPlan.assignment.questions || []} onChange={(questions) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') } })} isID={isID} /></section>}
         <section className="tutor-section tutor-page-section learning-plan-section"><div className="tutor-section-heading"><div><span>{isID ? 'RENCANA BULANAN' : 'MONTHLY PLAN'}</span><h2>{isID ? 'Pembelajaran 8 Pertemuan' : 'Eight-Meeting Learning Plan'}</h2><p>{isID ? 'Susun materi, tujuan, dan aktivitas sebelum kelas berlangsung.' : 'Plan the material, objectives, and activities before each class.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveLearningPlan}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Bulan Pembelajaran' : 'Learning Month'}</span><input type="month" value={learningPlan.month} onChange={(event) => setLearningPlan({ ...learningPlan, month: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={learningPlan.meetingNumber} onChange={(event) => setLearningPlan({ ...learningPlan, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Rencana Tanggal (opsional)' : 'Planned Date (optional)'}</span><input type="date" value={learningPlan.plannedDate} onChange={(event) => setLearningPlan({ ...learningPlan, plannedDate: event.target.value })} /></label><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={learningPlan.title} onChange={(event) => setLearningPlan({ ...learningPlan, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={learningPlan.objective} onChange={(event) => setLearningPlan({ ...learningPlan, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label><label><span>{isID ? 'Rencana Aktivitas' : 'Planned Activities'}</span><textarea rows="4" value={learningPlan.activities} onChange={(event) => setLearningPlan({ ...learningPlan, activities: event.target.value })} placeholder={isID ? 'Pembukaan, latihan terbimbing, praktik, dan refleksi...' : 'Warm-up, guided practice, production, and reflection...'} required /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Rencana Pertemuan' : 'Save Meeting Plan')}</button></form><div className="eight-meeting-plan-grid">{Array.from({ length: 8 }, (_, index) => { const number = index + 1; const plan = (selectedClass?.learningPlans || []).find((item) => item.month === learningPlan.month && item.meetingNumber === number); return <article className={plan ? 'planned' : ''} key={number}><span>{String(number).padStart(2, '0')}</span><div><small>{plan ? (isID ? 'SUDAH DIRENCANAKAN' : 'PLANNED') : (isID ? 'BELUM DIISI' : 'NOT PLANNED')}</small><strong>{plan?.title || (isID ? `Pertemuan ${number}` : `Meeting ${number}`)}</strong>{plan?.objective && <p>{plan.objective}</p>}</div>{plan && <button type="button" onClick={() => usePlanForJournal(plan)}>{isID ? 'Gunakan untuk Jurnal →' : 'Use for Journal →'}</button>}</article>; })}</div></section></>)}
 {page === 'journal' && (        <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Learning Journal</h2><p>{isID ? 'Isi jurnal kelas dan capaian seluruh siswa dalam satu kali simpan.' : 'Complete the class journal and every student’s progress in one save.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveJournal}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={journal.date} onChange={(event) => setJournal({ ...journal, date: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={journal.meetingNumber} onChange={(event) => setJournal({ ...journal, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={journal.title} onChange={(event) => setJournal({ ...journal, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><textarea rows="5" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Mengidentifikasi pola, latihan berpasangan, dan membuat lima kalimat.' : 'Example: Identifying patterns, pair practice, and writing five sentences.'} required /></label><label><span>{isID ? 'Catatan Kelas / Tindak Lanjut' : 'Class Notes / Follow-up'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Catatan umum kelas atau rencana pertemuan berikutnya...' : 'General class notes or next-meeting plan...'} /></label><div className="journal-roster-heading"><div><span>{isID ? 'CAPAIAN INDIVIDUAL' : 'INDIVIDUAL PROGRESS'}</span><h3>{isID ? 'Daftar Siswa' : 'Student List'}</h3><small>{isID ? 'Semua siswa otomatis dipilih. Hapus centang siswa yang tidak mengikuti pertemuan.' : 'All students are selected automatically. Uncheck students who did not attend.'}</small></div><div className="journal-roster-actions"><button type="button" onClick={() => setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { ...(journalStudents[student.studentId] || {}), selected: true, achievement: journalStudents[student.studentId]?.achievement || 'Berkembang' }])))}>{isID ? 'Pilih Semua' : 'Select All'}</button><button type="button" onClick={generateAllJournalComments} disabled={!journal.title.trim()}>{isID ? '✦ Susun Kalimat Otomatis' : '✦ Generate Comments'}</button></div></div><div className="journal-student-roster">{(selectedClass?.students || []).map((student, index) => { const entry = journalStudents[student.studentId] || { selected: true, achievement: 'Berkembang', comment: '' }; return <article className={entry.selected === false ? 'not-selected' : ''} key={student.studentId}><label className="journal-student-check"><input type="checkbox" checked={entry.selected !== false} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, selected: event.target.checked } })} /><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId}</small></div></label>{entry.selected !== false && <><label className="journal-achievement"><span>{isID ? 'Kemampuan Hari Ini' : 'Today’s Achievement'}</span><select value={entry.achievement} onChange={(event) => { const achievement = event.target.value; setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, achievement, comment: composeJournalComment(student, achievement) } }); }}><option value="Sangat Baik">{isID ? 'Sangat Baik — Mandiri' : 'Excellent — Independent'}</option><option value="Baik">{isID ? 'Baik — Sedikit Arahan' : 'Good — Limited Guidance'}</option><option value="Berkembang">{isID ? 'Berkembang — Perlu Latihan' : 'Developing — Needs Practice'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan — Pendampingan' : 'Needs Support — Guidance'}</option></select></label><label className="journal-generated-comment"><span>{isID ? 'Catatan Otomatis (boleh diedit)' : 'Generated Comment (editable)'}</span><textarea rows="3" value={entry.comment} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, comment: event.target.value } })} placeholder={isID ? 'Klik “Susun Kalimat Otomatis” atau pilih kemampuan siswa.' : 'Generate a comment or select the student achievement.'} /></label></>}</article>; })}</div><div className="journal-save-summary"><span>{Object.values(journalStudents).filter((entry) => entry.selected !== false).length} {isID ? 'siswa dipilih' : 'students selected'}</span><button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal & Capaian Siswa' : 'Save Journal & Student Progress')}</button></div></form>{selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong><small>{entry.date} • {entry.activities}</small></div></article>)}</div>}</section>)}
 
@@ -1486,7 +1571,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
       {page === 'assignments' && assignment.gradingMode === 'automatic' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') })} isID={isID} /></section>}
       {page === 'assignments' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assignments</h2></div></div><form className="tutor-journal-form" onSubmit={createAssignment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Judul Tugas' : 'Assignment Title'}</span><input value={assignment.title} onChange={(event) => setAssignment({ ...assignment, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={assignment.instructions} onChange={(event) => setAssignment({ ...assignment, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal Diberikan' : 'Assigned Date'}</span><input type="date" value={assignment.assignedDate} onChange={(event) => setAssignment({ ...assignment, assignedDate: event.target.value })} required /></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={assignment.dueDate} onChange={(event) => setAssignment({ ...assignment, dueDate: event.target.value })} required /></label></div><label><span>{isID ? 'Hadiah EXP (0–200)' : 'EXP Reward (0–200)'}</span><input type="number" min="0" max="200" value={assignment.expReward} onChange={(event) => setAssignment({ ...assignment, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Assignment' : 'Create Assignment')}</button></form>{selectedClass?.assignments?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Tugas Kelas Ini' : 'Class Assignments'}</h3>{selectedClass.assignments.map((item) => <article key={item.assignmentId}><span>☑</span><div><strong>{item.title}</strong><small>{isID ? 'Tenggat' : 'Due'}: {item.dueDate} • +{item.expReward} EXP</small></div></article>)}</div>}{selectedClass?.submissions?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Pengumpulan Siswa' : 'Student Submissions'}</h3>{selectedClass.submissions.map((item) => <button type="button" key={item.submissionId} onClick={() => { setReviewItem({ ...item, kind: 'assignment' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
 
-      {page === 'challenges' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>GAMIFICATION</span><h2>Challenges</h2></div></div><form className="tutor-journal-form" onSubmit={createChallenge}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Template sesuai program' : 'Program Template'}</span><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setChallenge({ ...challenge, ...template }); }}><option value="">{isID ? 'Pilih template atau isi manual' : 'Choose a template or enter manually'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}</select></label><label><span>{isID ? 'Judul Challenge' : 'Challenge Title'}</span><input value={challenge.title} onChange={(event) => setChallenge({ ...challenge, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={challenge.instructions} onChange={(event) => setChallenge({ ...challenge, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Jenis Jawaban' : 'Response Type'}</span><select value={challenge.responseType} onChange={(event) => setChallenge({ ...challenge, responseType: event.target.value })}><option value="text">Text</option><option value="link">Link Audio/Video/File</option></select></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={challenge.dueDate} onChange={(event) => setChallenge({ ...challenge, dueDate: event.target.value })} required /></label></div><label><span>{isID ? 'Hadiah EXP (0–250)' : 'EXP Reward (0–250)'}</span><input type="number" min="0" max="250" value={challenge.expReward} onChange={(event) => setChallenge({ ...challenge, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Challenge' : 'Create Challenge')}</button></form>{selectedClass?.challengeResults?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Hasil Challenge Siswa' : 'Student Challenge Results'}</h3>{selectedClass.challengeResults.map((item) => <button type="button" key={item.resultId} onClick={() => { setReviewItem({ ...item, kind: 'challenge' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
+      {page === 'challenges' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>GAMIFICATION</span><h2>Challenges</h2></div></div><form className="tutor-journal-form" onSubmit={createChallenge}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Template sesuai program' : 'Program Template'}</span><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setChallenge({ ...challenge, ...template }); }}><option value="">{isID ? 'Pilih template atau isi manual' : 'Choose a template or enter manually'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}</select></label><label><span>{isID ? 'Judul Challenge' : 'Challenge Title'}</span><input value={challenge.title} onChange={(event) => setChallenge({ ...challenge, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={challenge.instructions} onChange={(event) => setChallenge({ ...challenge, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Jenis Jawaban' : 'Response Type'}</span><select value={challenge.responseType} onChange={(event) => setChallenge({ ...challenge, responseType: event.target.value })}><option value="text">Text</option><option value="speech">{isID ? 'Speech — Mikrofon' : 'Speech — Microphone'}</option><option value="link">Link Audio/Video/File</option></select></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={challenge.dueDate} onChange={(event) => setChallenge({ ...challenge, dueDate: event.target.value })} required /></label></div>{challenge.responseType === 'speech' && <label><span>{isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'}</span><input value={challenge.answerKey} onChange={(event) => setChallenge({ ...challenge, answerKey: event.target.value })} placeholder={isID ? 'Contoh: I would like a glass of water.' : 'Example: I would like a glass of water.'} required /></label>}<label><span>{isID ? 'Hadiah EXP (0–250)' : 'EXP Reward (0–250)'}</span><input type="number" min="0" max="250" value={challenge.expReward} onChange={(event) => setChallenge({ ...challenge, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Challenge' : 'Create Challenge')}</button></form>{selectedClass?.challengeResults?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Hasil Challenge Siswa' : 'Student Challenge Results'}</h3>{selectedClass.challengeResults.map((item) => <button type="button" key={item.resultId} onClick={() => { setReviewItem({ ...item, kind: 'challenge' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
 
       {page === 'review' && reviewItem && <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage(reviewItem.kind === 'assignment' ? 'assignments' : 'challenges')}>← {isID ? 'Kembali' : 'Back'}</button><div className="tutor-class-title"><span>{reviewItem.kind.toUpperCase()}</span><h2>{reviewItem.studentName}</h2><p>{reviewItem.response}</p></div><form className="tutor-journal-form tutor-review-form" onSubmit={submitReview}><label><span>{isID ? 'Nilai (0–100)' : 'Score (0–100)'}</span><input type="number" min="0" max="100" value={review.score} onChange={(event) => setReview({ ...review, score: event.target.value })} required /></label><label><span>Feedback</span><textarea rows="4" value={review.feedback} onChange={(event) => setReview({ ...review, feedback: event.target.value })} required /></label><label><span>{isID ? 'EXP Disetujui' : 'Approved EXP'}</span><input type="number" min="0" max={reviewItem.kind === 'assignment' ? 200 : 250} value={review.expAwarded} onChange={(event) => setReview({ ...review, expAwarded: Number(event.target.value) })} /></label><button type="submit" disabled={saving}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Nilai & EXP' : 'Save Score & EXP')}</button></form></section>}
 
@@ -2010,6 +2095,149 @@ function StudentAssignmentQuestions({ assignment, answers, onChange, isID }) {
   return <div className="student-question-list">{rows.map((question, questionIndex) => <fieldset key={question.id || questionIndex}><legend><span>{questionIndex + 1}</span><strong>{question.text}</strong><b>{question.points || 0} {isID ? 'poin' : 'pts'}</b></legend>{question.options.map((option, optionIndex) => <label className={Number(answers?.[question.id]) === optionIndex ? 'selected' : ''} key={optionIndex}><input type="radio" name={`${assignment.assignmentId}-${question.id}`} checked={Number(answers?.[question.id]) === optionIndex} onChange={() => onChange({ ...(answers || {}), [question.id]: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>)}</fieldset>)}</div>;
 }
 
+
+function SpeakingChallengeRecorder({ item, isID, value, onChange, disabled }) {
+  const [listening, setListening] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [localScore, setLocalScore] = useState(null);
+  const target = String(item.speechTarget || item.instructions || '').trim();
+
+  function normalizeSpeech(text) {
+    return String(text || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function calculateMatch(transcript) {
+    const targetWords = normalizeSpeech(target).split(' ').filter(Boolean);
+    const spokenWords = normalizeSpeech(transcript).split(' ').filter(Boolean);
+    if (!targetWords.length || !spokenWords.length) return 0;
+    const matched = targetWords.filter((word) => spokenWords.includes(word)).length;
+    const precision = matched / spokenWords.length;
+    const recall = matched / targetWords.length;
+    return Math.round((precision + recall) / 2 * 100);
+  }
+
+  function startListening() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setFeedback(isID
+        ? 'Browser ini belum mendukung pengenalan suara. Gunakan Chrome/Edge terbaru dan izinkan mikrofon.'
+        : 'This browser does not support speech recognition. Use the latest Chrome/Edge and allow microphone access.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setListening(true);
+      setFeedback(isID ? 'Mendengarkan... ucapkan target dengan jelas.' : 'Listening... say the target clearly.');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
+      const score = calculateMatch(transcript);
+      onChange(transcript);
+      setLocalScore(score);
+      setFeedback(
+        score >= 90
+          ? (isID ? 'Sangat baik! Pengucapan terdeteksi sangat dekat dengan target.' : 'Excellent! Your detected speech is very close to the target.')
+          : score >= 75
+            ? (isID ? 'Bagus. Ulangi sekali lagi untuk meningkatkan ketepatan kata.' : 'Good. Try once more to improve word accuracy.')
+            : score >= 55
+              ? (isID ? 'Cukup baik. Perhatikan kata yang belum terbaca dengan jelas.' : 'Fair. Focus on words that were not detected clearly.')
+              : (isID ? 'Coba lagi lebih pelan dan jelas, lalu dekatkan mikrofon.' : 'Try again more slowly and clearly, with the microphone closer.')
+      );
+    };
+
+    recognition.onerror = (event) => {
+      setFeedback(
+        event.error === 'not-allowed'
+          ? (isID ? 'Izin mikrofon belum diberikan.' : 'Microphone permission has not been granted.')
+          : (isID ? 'Suara belum terbaca. Silakan coba lagi.' : 'Speech was not detected. Please try again.')
+      );
+    };
+
+    recognition.onend = () => setListening(false);
+    recognition.start();
+  }
+
+  return (
+    <div className="speaking-recorder">
+      <div className="speaking-target-card">
+        <span><BadgeGlyph name="mic" /></span>
+        <div>
+          <small>{isID ? 'TARGET SPEAKING' : 'SPEAKING TARGET'}</small>
+          <strong>{target || (isID ? 'Target kata/frasa dari tutor' : 'Target word/phrase from tutor')}</strong>
+        </div>
+      </div>
+      <button className={`microphone-record-button ${listening ? 'recording' : ''}`} type="button" onClick={startListening} disabled={disabled || listening}>
+        <BadgeGlyph name="mic" />
+        <span>{listening ? (isID ? 'Sedang Mendengarkan...' : 'Listening...') : (isID ? 'Tekan & Ucapkan' : 'Tap & Speak')}</span>
+      </button>
+      {value && (
+        <div className="speech-transcript">
+          <small>{isID ? 'TERDETEKSI' : 'DETECTED'}</small>
+          <strong>“{value}”</strong>
+          {localScore != null && <b>{localScore}/100</b>}
+        </div>
+      )}
+      {feedback && <p className="speech-feedback">{feedback}</p>}
+    </div>
+  );
+}
+
+function LearningReadReward({ token, entry, isID, onCompleted, disabled }) {
+  const [state, setState] = useState(entry.readCompleted ? 'done' : 'idle');
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    setState(entry.readCompleted ? 'done' : 'idle');
+  }, [entry.readCompleted]);
+
+  async function completeReading() {
+    if (disabled || state !== 'idle' || !entry.title) return;
+    setState('loading');
+    try {
+      const result = await callApi({
+        action: 'completeLearningActivityRead',
+        token,
+        meetingNumber: entry.meetingNumber,
+      });
+      setState('done');
+      setMessage(result.alreadyCompleted
+        ? (isID ? 'Sudah tercatat sebelumnya.' : 'Already recorded.')
+        : `+${result.expAwarded || 25} EXP`);
+      await onCompleted();
+    } catch (error) {
+      setState('idle');
+      setMessage(error.message || (isID ? 'Belum berhasil mencatat bacaan.' : 'Could not record reading completion.'));
+    }
+  }
+
+  return (
+    <div className={`learning-read-reward ${state === 'done' ? 'done' : ''}`}>
+      <div>
+        <small>{isID ? 'MISI MEMBACA' : 'READING MISSION'}</small>
+        <strong>{state === 'done'
+          ? (isID ? 'Ringkasan sudah dibaca' : 'Summary completed')
+          : (isID ? 'Sudah membaca sampai akhir?' : 'Finished reading this summary?')}</strong>
+        <span>{state === 'done'
+          ? (message || `+${entry.readExp || 25} EXP`)
+          : (isID ? 'Tandai selesai untuk mendapatkan 25 EXP.' : 'Mark as complete to earn 25 EXP.')}</span>
+      </div>
+      <button type="button" disabled={disabled || state !== 'idle'} onClick={completeReading}>
+        {state === 'loading' ? '...' : state === 'done' ? '✓' : `+${entry.readExp || 25} EXP`}
+      </button>
+    </div>
+  );
+}
+
 function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
   const isID = language === 'ID';
   const programChallenge = getProgramChallenge(overview?.program?.program, isID);
@@ -2175,7 +2403,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       {!embedded && <header><button type="button" onClick={onBack}>←</button><h1>{titles[page] || (isID ? 'Menu Siswa' : 'Student Menu')}</h1></header>}
       {embedded && (
         <div className="student-page-context-heading">
-          {page !== 'full-report' && <button type="button" onClick={onBack} aria-label={isID ? 'Kembali' : 'Back'}>←</button>}
+          {page !== 'full-report' && page !== 'badges' && <button type="button" onClick={onBack} aria-label={isID ? 'Kembali' : 'Back'}>←</button>}
           <div><span>{isID ? 'AREA SISWA' : 'STUDENT AREA'}</span><h1>{titles[page] || (isID ? 'Menu Siswa' : 'Student Menu')}</h1></div>
         </div>
       )}
@@ -2199,15 +2427,27 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
             </div>
           </section>
 
-          <section className="scroll-report-cards academic-summary-cards">
-            <button type="button" onClick={() => onSelect('program')}><div><span>Program</span><strong className="report-text-value">{overview?.program?.program || '—'}</strong><small>{overview?.program?.className || (isID ? 'Informasi kelas' : 'Class information')}</small></div><i className="yellow"><ModernUiIcon name="program" /></i></button>
-            <button type="button" onClick={() => onSelect('attendance-record')}><div><span>{isID ? 'Kehadiran' : 'Attendance'}</span><strong>{attendance?.percentage == null ? '—' : `${attendance.percentage}%`}</strong><small>{attendance?.total ? (isID ? `${attendance.present} dari ${attendance.total} pertemuan bulan ini` : `${attendance.present} of ${attendance.total} sessions attended this month`) : (isID ? 'Belum ada data kehadiran bulan ini' : 'No attendance data this month')}</small></div><i className="green"><ModernUiIcon name="attendance" /></i></button>
-            <button type="button" onClick={() => onSelect('assignments')}><div><span>{isID ? 'Tugas' : 'Assignments'}</span><strong>{studentAssignments.length || '—'}</strong><small>{studentAssignments.length ? (isID ? `${studentAssignments.length} tugas aktif` : `${studentAssignments.length} active assignments`) : (isID ? 'Belum ada tugas aktif' : 'No active assignments')}</small></div><i className="red"><ModernUiIcon name="assignment" /></i></button>
-            <button type="button" onClick={() => onSelect('journal')}><div><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><strong>{learningActivities.filter((entry) => entry.title).length}/8</strong><small>{isID ? 'Rencana dan realisasi pembelajaran bulan ini' : 'This month’s learning plan and completion'}</small></div><i className="teal"><ModernUiIcon name="journal" /></i></button>
-            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Tantangan' : 'Challenge'}</span><strong className="report-text-value">{programChallenge.name}</strong><small>{isID ? 'Hasil challenge sesuai program' : 'Results for your program challenge'}</small></div><i className="purple"><ModernUiIcon name="challenge" /></i></button>
-            <button type="button" onClick={() => onSelect('score')}><div><span>{isID ? 'Level & Skor Akademik' : 'Academic Level & Score'}</span><strong className="report-text-value">{cefrCardValue}</strong><small>{rawCefrLevel ? (isID ? 'Berdasarkan hasil tes CEFR' : 'Based on CEFR assessment') : (isID ? 'Hasil level akan muncul setelah penilaian' : 'Your level will appear after assessment')} • {rankInfo.current.name} • {totalExp} EXP</small></div><i className="blue"><ModernUiIcon name="score" /></i></button>
-            <button type="button" onClick={() => onSelect('monthly-report')}><div><span>{isID ? 'Laporan Bulanan' : 'Monthly Report'}</span><strong className="report-text-value">{isID ? 'Kemajuan Akademik' : 'Academic Progress'}</strong><small>{isID ? 'Profil, keterampilan, nilai, komentar tutor, dan log pertemuan' : 'Profile, skills, scores, tutor comments, and meeting log'}</small></div><i className="blue"><ModernUiIcon name="report" /></i></button>
-            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Misi Bulanan' : 'Monthly Quests'}</span><strong>{attendanceQuestProgress}/{attendanceQuestTarget}</strong><small>{attendanceQuestDone ? (isID ? 'Perfect Attendance selesai' : 'Perfect Attendance completed') : (isID ? 'Target 8 pertemuan bulan ini' : 'Target: 8 meetings this month')}</small></div><i className="teal"><ModernUiIcon name="quest" /></i></button>
+          <section className="scroll-report-cards academic-summary-cards academic-priority-order">
+            <button type="button" onClick={() => onSelect('attendance-record')}>
+              <div><span>{isID ? 'Kehadiran' : 'Attendance'}</span><strong>{attendance?.percentage == null ? '—' : `${attendance.percentage}%`}</strong><small>{attendance?.total ? (isID ? `${attendance.present} dari ${attendance.total} pertemuan bulan ini` : `${attendance.present} of ${attendance.total} meetings this month`) : (isID ? 'Belum ada data kehadiran bulan ini' : 'No attendance data this month')}</small></div>
+              <i className="green"><ModernUiIcon name="attendance" /></i>
+            </button>
+            <button type="button" onClick={() => onSelect('journal')}>
+              <div><span>{isID ? 'Pembelajaran' : 'Learning'}</span><strong>{learningActivities.filter((entry) => entry.title).length}/8</strong><small>{isID ? 'Ringkasan materi setiap pertemuan + EXP membaca' : 'Meeting summaries + reading EXP'}</small></div>
+              <i className="teal"><ModernUiIcon name="journal" /></i>
+            </button>
+            <button type="button" onClick={() => onSelect('score')}>
+              <div><span>{isID ? 'Level & Skor' : 'Level & Score'}</span><strong className="report-text-value">{cefrCardValue}</strong><small>{academicAverage != null ? `${isID ? 'Rata-rata akademik' : 'Academic average'} ${academicAverage} • ` : ''}{Number(assignmentSummary.completed || 0)} {isID ? 'tugas selesai' : 'assignments completed'} • {totalExp} EXP</small></div>
+              <i className="blue"><ModernUiIcon name="score" /></i>
+            </button>
+            <button type="button" onClick={() => onSelect('challenge')}>
+              <div><span>{isID ? 'Tantangan Sesuai Program' : 'Program Challenge'}</span><strong className="report-text-value">{programChallenge.name}</strong><small>{isID ? 'Tantangan mengikuti program aktif siswa' : 'Challenges match the student’s active program'}</small></div>
+              <i className="purple"><ModernUiIcon name="challenge" /></i>
+            </button>
+            <button type="button" onClick={() => onSelect('monthly-report')}>
+              <div><span>{isID ? 'Laporan Bulanan' : 'Monthly Report'}</span><strong className="report-text-value">{isID ? 'Kemajuan Akademik' : 'Academic Progress'}</strong><small>{isID ? 'Keterampilan, nilai, komentar tutor, dan log pertemuan' : 'Skills, scores, tutor comments, and meeting log'}</small></div>
+              <i className="blue"><ModernUiIcon name="report" /></i>
+            </button>
           </section>
         </>
       )}
@@ -2215,38 +2455,37 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       {page === 'badges' && (
         <section className="student-badge-hub">
           <section className="badge-hub-hero">
-            <span>🏅</span>
+            <span><BadgeGlyph name="allround" /></span>
             <div>
               <small>MY BADGES</small>
               <h2>{isID ? 'Selesaikan Misi dan Buka Badge' : 'Complete Missions and Unlock Badges'}</h2>
-              <p>{isID ? 'Kerjakan tugas dan tantangan dari halaman ini. Progres badge akan diperbarui otomatis setelah jawaban dikumpulkan.' : 'Complete assignments and challenges here. Badge progress updates automatically after submission.'}</p>
+              <p>{isID ? 'Progres badge diperbarui otomatis setelah tugas, tantangan, kehadiran, atau misi pembelajaran selesai.' : 'Badge progress updates automatically after assignments, challenges, attendance, or learning missions are completed.'}</p>
             </div>
           </section>
 
-          <div className="badge-action-grid">
-            <button type="button" onClick={() => onSelect('assignments')}>
-              <span><ModernUiIcon name="assignment" /></span>
-              <div><small>ASSIGNMENT</small><strong>{isID ? 'Kerjakan Tugas' : 'Do Assignments'}</strong><p>{studentAssignments.filter((item) => !item.submission).length} {isID ? 'tugas belum selesai' : 'assignments remaining'}</p></div>
-              <b>→</b>
-            </button>
-            <button type="button" onClick={() => onSelect('challenge')}>
-              <span><ModernUiIcon name="challenge" /></span>
-              <div><small>CHALLENGE</small><strong>{isID ? 'Kerjakan Tantangan' : 'Do Challenges'}</strong><p>{studentChallenges.filter((item) => !item.result).length} {isID ? 'tantangan belum selesai' : 'challenges remaining'}</p></div>
-              <b>→</b>
-            </button>
-          </div>
-
-          <section className="badges-section badge-hub-list">
-            <div className="badges-title"><span>🏆</span><div><h2>{isID ? 'Koleksi Badge' : 'Badge Collection'}</h2><p>{isID ? 'Klik badge untuk menuju aktivitas yang harus diselesaikan' : 'Tap a badge to open the activity needed to unlock it'}</p></div></div>
+          <section className="badges-section badge-hub-list unified-badge-missions">
+            <div className="badges-title">
+              <span><BadgeGlyph name="perfect" /></span>
+              <div>
+                <h2>{isID ? 'Koleksi Badge' : 'Badge Collection'}</h2>
+                <p>{isID ? 'Setiap badge adalah misi. Selesaikan target, kumpulkan EXP, lalu buka badge.' : 'Every badge is a mission. Complete the target, earn EXP, and unlock the badge.'}</p>
+              </div>
+            </div>
             <div className="badges-grid">
               {studentBadges.map((badge) => (
-                <button type="button" onClick={() => onSelect(badge.type === 'challenge' ? 'challenge' : 'assignments')} className={`badge-card ${badge.unlocked ? 'unlocked' : 'locked'}`} key={badge.name}>
-                  <span className="badge-icon">{badge.icon}</span>
+                <button
+                  type="button"
+                  onClick={() => badge.targetPage && badge.targetPage !== 'badges' && onSelect(badge.targetPage)}
+                  className={`badge-card ${badge.unlocked ? 'unlocked' : 'locked'}`}
+                  key={badge.name}
+                >
+                  <span className="badge-icon"><BadgeGlyph name={badge.icon} /></span>
                   <strong>{badge.name}</strong>
                   <small>{badge.requirement}</small>
+                  <div className="badge-exp-reward">⚡ +{badge.expReward || 0} EXP</div>
                   <div className="badge-progress"><span style={{ width: `${Math.min(100, (Number(badge.current || 0) / Math.max(1, Number(badge.target || 1))) * 100)}%` }} /></div>
-                  <em>{Number(badge.target || 0) > 0 ? `${Math.min(Number(badge.current || 0), Number(badge.target))}/${badge.target}` : (isID ? 'Belum ada target' : 'No target yet')}</em>
-                  <b>{badge.unlocked ? (isID ? 'TERBUKA' : 'UNLOCKED') : (badge.type === 'challenge' ? (isID ? 'BUKA TANTANGAN →' : 'OPEN CHALLENGE →') : (isID ? 'BUKA TUGAS →' : 'OPEN ASSIGNMENT →'))}</b>
+                  <em>{`${Math.min(Number(badge.current || 0), Number(badge.target || 1))}/${Math.max(1, Number(badge.target || 1))}`}</em>
+                  <b>{badge.unlocked ? (isID ? 'TERBUKA' : 'UNLOCKED') : (isID ? 'LANJUTKAN MISI →' : 'CONTINUE MISSION →')}</b>
                 </button>
               ))}
             </div>
@@ -2442,7 +2681,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
 
       {page === 'journal' && (
         <section className="learning-journal-section">
-          <div className="journal-heading"><span>▤</span><div><h2>{isID ? 'Aktivitas Pembelajaran Bulanan' : 'Monthly Learning Activities'}</h2><p>{isID ? 'Rencana dan hasil pembelajaran untuk 8 pertemuan bulan ini' : 'Learning plans and outcomes for this month’s eight meetings'}</p></div></div>
+          <div className="journal-heading"><span>▤</span><div><h2>{isID ? 'Pembelajaran & Misi Bulanan' : 'Learning & Monthly Missions'}</h2><p>{isID ? 'Ringkasan materi setiap pertemuan. Baca sampai akhir untuk mendapatkan EXP.' : 'Meeting-by-meeting learning summaries. Read each one to the end to earn EXP.'}</p></div></div>
           {learningActivities.length ? learningActivities.map((entry, index) => (
             <article className={`journal-entry-card ${String(entry.status || '').toLowerCase().replace(/\s+/g, '-')}`} key={entry.id || `${entry.date}-${index}`}>
               <span className="journal-number">{String(entry.meetingNumber || index + 1).padStart(2, '0')}</span>
@@ -2455,6 +2694,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                 <p className="journal-activity"><strong>{isID ? 'Aktivitas:' : 'Activities:'}</strong> {entry.activities || entry.activity || entry.notes || '—'}</p>
                 {(entry.assignment || entry.challenge) && <div className="learning-evidence-grid">{entry.assignment && <button type="button" onClick={() => onSelect('assignments')}><span>Assignment</span><strong>{entry.assignment.title}</strong><small>{entry.assignment.status}{entry.assignment.score !== '' && entry.assignment.score != null ? ` • ${entry.assignment.score}/100` : ''} • +{entry.assignment.expReward || 0} EXP</small></button>}{entry.challenge && <button type="button" onClick={() => onSelect('challenge')}><span>{isID ? 'Pengayaan' : 'Enrichment'}</span><strong>{entry.challenge.title}</strong><small>{entry.challenge.status}{entry.challenge.score !== '' && entry.challenge.score != null ? ` • ${entry.challenge.score}/100` : ''} • +{entry.challenge.expReward || 0} EXP</small></button>}</div>}
                 {entry.achievement && <div className="journal-personal-progress"><span>{isID ? 'CAPAIAN SAYA' : 'MY ACHIEVEMENT'}</span><strong>{entry.achievement}</strong>{entry.individualComment && <p>{entry.individualComment}</p>}</div>}
+                {entry.title && <LearningReadReward token={token} entry={entry} isID={isID} onCompleted={onRefreshOverview} disabled={studentSubmitting === `read-${entry.meetingNumber}`} />}
               </div>
             </article>
           )) : (
@@ -2531,71 +2771,58 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
             <h2>{isID ? 'Tantangan sesuai program Anda' : 'Your program challenge'}</h2>
             <p>{programChallenge.prompt}</p>
             <div className="challenge-target"><small>{isID ? 'PROGRAM AKTIF' : 'ACTIVE PROGRAM'}</small><strong>{overview?.program?.program || 'English'}</strong></div>
-            <button className="challenge-program-action" type="button" disabled><span>{programChallenge.icon}</span><strong>{programChallenge.action}</strong></button>
-            <p className="challenge-note">{isID ? 'Aktivitas akan diaktifkan setelah bank soal program tersedia.' : 'The activity will be enabled when the program question bank is ready.'}</p>
           </section>
+          {studentChallenges.length > 0 && (
+            <section className="active-challenges-section">
+              <div className="monthly-quests-title"><span><ModernUiIcon name="challenge" /></span><h2>{isID ? 'Challenge Aktif' : 'Active Challenges'}</h2></div>
+              {studentSubmitMessage && <div className="student-submit-message">{studentSubmitMessage}</div>}
+              <div className="student-challenge-list">
+                {studentChallenges.map((item) => (
+                  <article key={item.challengeId}>
+                    <div className="assignment-title-row">
+                      <div><small>{programChallenge.name}</small><h3>{item.title}</h3></div>
+                      <b>+{item.expReward} EXP</b>
+                    </div>
+                    <p>{item.instructions}</p>
+                    <div className="assignment-meta">
+                      <span>{item.responseType === 'speech' ? (isID ? 'Jawaban: mikrofon & pengenalan suara' : 'Response: microphone & speech recognition') : item.responseType === 'link' ? (isID ? 'Jawaban: tautan audio/video/file' : 'Response: audio/video/file link') : (isID ? 'Jawaban teks' : 'Text response')}</span>
+                      <strong>{isID ? 'Tenggat' : 'Due'}: {item.dueDate}</strong>
+                    </div>
+                    {item.result ? (
+                      <div className={`submission-result ${String(item.result.status).toLowerCase()}`}>
+                        <strong>{item.result.status === 'Reviewed' ? (isID ? 'Sudah Dinilai' : 'Reviewed') : (isID ? 'Sudah Dikirim' : 'Submitted')}</strong>
+                        {item.result.status === 'Reviewed' && <p>{item.result.score}/100 • +{item.result.expAwarded} EXP<br />{item.result.feedback}</p>}
+                      </div>
+                    ) : (
+                      <div className="student-response-box">
+                        {item.responseType === 'speech' ? (
+                          <SpeakingChallengeRecorder
+                            item={item}
+                            isID={isID}
+                            value={challengeResponses[item.challengeId] || ''}
+                            onChange={(value) => setChallengeResponses({ ...challengeResponses, [item.challengeId]: value })}
+                            disabled={studentSubmitting === item.challengeId}
+                          />
+                        ) : (
+                          <textarea
+                            rows="3"
+                            value={challengeResponses[item.challengeId] || ''}
+                            onChange={(event) => setChallengeResponses({ ...challengeResponses, [item.challengeId]: event.target.value })}
+                            placeholder={item.responseType === 'link' ? (isID ? 'Tempel tautan audio, video, atau file...' : 'Paste an audio, video, or file link...') : (isID ? 'Tulis jawaban Anda...' : 'Write your response...')}
+                          />
+                        )}
+                        <button type="button" disabled={studentSubmitting === item.challengeId || !String(challengeResponses[item.challengeId] || '').trim()} onClick={() => sendChallenge(item.challengeId)}>
+                          {studentSubmitting === item.challengeId ? (isID ? 'Mengirim...' : 'Sending...') : (isID ? 'Kirim Challenge' : 'Submit Challenge')}
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
-          {studentChallenges.length > 0 && <section className="active-challenges-section"><div className="monthly-quests-title"><span>🎯</span><h2>{isID ? 'Challenge Aktif' : 'Active Challenges'}</h2></div>{studentSubmitMessage && <div className="student-submit-message">{studentSubmitMessage}</div>}<div className="student-challenge-list">{studentChallenges.map((item) => <article key={item.challengeId}><div className="assignment-title-row"><div><small>{programChallenge.name}</small><h3>{item.title}</h3></div><b>+{item.expReward} EXP</b></div><p>{item.instructions}</p><div className="assignment-meta"><span>{item.responseType === 'link' ? (isID ? 'Jawaban: tautan audio/video/file' : 'Response: audio/video/file link') : (isID ? 'Jawaban teks' : 'Text response')}</span><strong>{isID ? 'Tenggat' : 'Due'}: {item.dueDate}</strong></div>{item.result ? <div className={`submission-result ${String(item.result.status).toLowerCase()}`}><strong>{item.result.status === 'Reviewed' ? (isID ? 'Sudah Dinilai' : 'Reviewed') : (isID ? 'Sudah Dikirim' : 'Submitted')}</strong>{item.result.status === 'Reviewed' && <p>{item.result.score}/100 • +{item.result.expAwarded} EXP<br />{item.result.feedback}</p>}</div> : <div className="student-response-box"><textarea rows="3" value={challengeResponses[item.challengeId] || ''} onChange={(event) => setChallengeResponses({ ...challengeResponses, [item.challengeId]: event.target.value })} placeholder={item.responseType === 'link' ? (isID ? 'Tempel tautan audio, video, atau file...' : 'Paste an audio, video, or file link...') : (isID ? 'Tulis jawaban Anda...' : 'Write your response...')} /><button type="button" disabled={studentSubmitting === item.challengeId} onClick={() => sendChallenge(item.challengeId)}>{studentSubmitting === item.challengeId ? (isID ? 'Mengirim...' : 'Sending...') : (isID ? 'Kirim Challenge' : 'Submit Challenge')}</button></div>}</article>)}</div></section>}
 
-          <section className="monthly-quests-card challenge-monthly-quests">
-            <div className="monthly-quests-title"><span>◎</span><h2>{isID ? 'Tantangan & Misi Bulanan' : 'Challenges & Monthly Quests'} <small>({overview?.currentMonth || '—'})</small></h2></div>
-            <article className={`quest-item ${attendanceQuestDone ? 'done' : ''}`}>
-              <div className="quest-icon">♙</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Kehadiran Sempurna' : 'Perfect Attendance'}</strong><b>+150 EXP</b></div>
-                <p>{isID ? 'Hadiri seluruh 8 pertemuan bulan ini' : 'Attend all 8 meetings this month'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: `${(attendanceQuestProgress / attendanceQuestTarget) * 100}%` }} /></div><strong>{attendanceQuestDone ? (isID ? 'SELESAI' : 'DONE') : `${attendanceQuestProgress}/${attendanceQuestTarget}`}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">🎯</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{programChallenge.name}</strong><b>+150 EXP</b></div>
-                <p>{programChallenge.prompt}</p>
-                <div className="quest-progress-row"><div><span style={{ width: experience?.monthly?.challengesTarget ? `${Math.min(100, (experience.monthly.challengesCompleted / experience.monthly.challengesTarget) * 100)}%` : '0%' }} /></div><strong>{experience?.monthly?.challengesTarget ? `${experience.monthly.challengesCompleted}/${experience.monthly.challengesTarget}` : (isID ? 'BELUM ADA DATA' : 'NO DATA')}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">☑</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Pahlawan Tugas' : 'Assignment Hero'}</strong><b>+100 EXP</b></div>
-                <p>{isID ? 'Selesaikan semua tugas program bulan ini' : 'Complete all program assignments this month'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: experience?.monthly?.assignmentsTarget ? `${Math.min(100, (experience.monthly.assignmentsCompleted / experience.monthly.assignmentsTarget) * 100)}%` : '0%' }} /></div><strong>{experience?.monthly?.assignmentsTarget ? `${experience.monthly.assignmentsCompleted}/${experience.monthly.assignmentsTarget}` : (isID ? 'BELUM ADA DATA' : 'NO DATA')}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">📝</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Master Quiz & Tes' : 'Quiz & Test Master'}</strong><b>+150 EXP</b></div>
-                <p>{isID ? 'Selesaikan seluruh quiz atau tes bulan ini sesuai standar tutor' : 'Complete every quiz or test this month to the tutor’s standard'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: '0%' }} /></div><strong>{isID ? 'BELUM ADA DATA' : 'NO DATA'}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">🙋</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Aktif di Kelas' : 'Active in Class'}</strong><b>+100 EXP</b></div>
-                <p>{isID ? 'Berpartisipasi aktif, menjawab, bertanya, dan bekerja sama selama pembelajaran' : 'Participate, answer, ask questions, and collaborate during class'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: '0%' }} /></div><strong>{isID ? 'DINILAI TUTOR' : 'TUTOR REVIEW'}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">🚀</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Project Finisher' : 'Project Finisher'}</strong><b>+200 EXP</b></div>
-                <p>{isID ? 'Selesaikan project program dan kumpulkan tepat waktu' : 'Complete the program project and submit it on time'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: '0%' }} /></div><strong>{isID ? 'BELUM ADA DATA' : 'NO DATA'}</strong></div>
-              </div>
-            </article>
-            <article className="quest-item">
-              <div className="quest-icon">🏆</div>
-              <div className="quest-content">
-                <div className="quest-name"><strong>{isID ? 'Pencapaian Istimewa' : 'Special Achievement'}</strong><b>+250 EXP</b></div>
-                <p>{isID ? 'Raih prestasi, peningkatan menonjol, atau kontribusi khusus yang disahkan tutor' : 'Earn an achievement, notable improvement, or special contribution approved by the tutor'}</p>
-                <div className="quest-progress-row"><div><span style={{ width: '0%' }} /></div><strong>{isID ? 'BONUS TUTOR' : 'TUTOR BONUS'}</strong></div>
-              </div>
-            </article>
-          </section>
 
         </>
       )}
