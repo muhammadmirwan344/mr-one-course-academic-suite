@@ -36,6 +36,26 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function ModernUiIcon({ name }) {
+  const common = {
+    viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.9,
+    strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true, focusable: false,
+    className: 'modern-ui-icon',
+  };
+  const paths = {
+    calendar: <><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3.5v3M16 3.5v3M3.5 9h17"/></>,
+    assignment: <><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M9 3.5h6v3H9zM8.5 11.5l1.7 1.7 3.3-3.5M8.5 17h7"/></>,
+    challenge: <><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><path d="m12 12 7-7M16 5h3v3"/></>,
+    attendance: <><circle cx="12" cy="12" r="8.5"/><path d="m8.2 12.2 2.4 2.4 5.3-5.5"/></>,
+    program: <><path d="M4 6.5 12 3l8 3.5-8 3.5Z"/><path d="M7 8.5v5.2c2.8 2.2 7.2 2.2 10 0V8.5M20 6.5v6"/></>,
+    journal: <><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3Z"/><path d="M8 4v16M11 9h5M11 13h5"/></>,
+    score: <><path d="M4 19V9M10 19V5M16 19v-7M3 19.5h18"/><path d="m4 6 5-3 5 3 6-4"/></>,
+    report: <><path d="M6 3.5h9l3 3v14H6Z"/><path d="M14.5 3.5V7H18M9 11h6M9 15h6"/></>,
+    quest: <><path d="M12 3.5 14.5 9l6 .6-4.5 4 1.3 5.9L12 16.4l-5.3 3.1L8 13.6l-4.5-4L9.5 9Z"/></>,
+  };
+  return <svg {...common}>{paths[name] || paths.assignment}</svg>;
+}
+
 function getDirectPhotoUrl(value) {
   const url = String(value || '').trim();
   if (!url) return '';
@@ -101,6 +121,7 @@ function StudentPersistentHeader({
     { page: 'landing', icon: 'home', label: 'Home' },
     { page: 'checkin', icon: 'checkin', label: 'Check-in' },
     { page: 'full-report', icon: 'academic', label: isID ? 'Akademik' : 'Academic' },
+    { page: 'badges', icon: 'badges', label: isID ? 'My Badges' : 'My Badges' },
   ];
 
   return (
@@ -1534,9 +1555,6 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
   const rankInfo = getExpRank(totalExp);
   const currentRank = rankInfo.current.name;
   const expProgress = rankInfo.progress;
-  const homeBadges = buildStudentBadges(overview, isID);
-
-
   function openStudentPage(page) {
     setMenuOpen(false);
     setPageHistory((history) => [...history, detailPage]);
@@ -1565,6 +1583,8 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
     ? 'landing'
     : detailPage === 'checkin'
       ? 'checkin'
+      : detailPage === 'badges'
+        ? 'badges'
       : detailPage === 'payment'
         ? 'payment'
         : (detailPage === 'menu' || detailPage === 'profile')
@@ -1708,22 +1728,6 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
         </section>
       </section>
 
-      <section className="badges-section home-badges-section">
-        <button className="badges-title badge-hub-link" type="button" onClick={() => openStudentPage('badges')}><span>🏅</span><div><h2>{isID ? 'Badge Saya' : 'My Badges'}</h2><p>{isID ? 'Klik untuk membuka tugas dan tantangan' : 'Tap to open assignments and challenges'}</p></div><b>→</b></button>
-        <div className="badges-grid">
-          {homeBadges.map((badge) => (
-            <button type="button" onClick={() => openStudentPage('badges')} className={`badge-card ${badge.unlocked ? 'unlocked' : 'locked'}`} key={badge.name}>
-              <span className="badge-icon">{badge.icon}</span>
-              <strong>{badge.name}</strong>
-              <small>{badge.requirement}</small>
-              <div className="badge-progress"><span style={{ width: `${Math.min(100, (Number(badge.current || 0) / Math.max(1, Number(badge.target || 1))) * 100)}%` }} /></div>
-              <em>{Number(badge.target || 0) > 0 ? `${Math.min(Number(badge.current || 0), Number(badge.target))}/${badge.target}` : (isID ? 'Belum ada target' : 'No target yet')}</em>
-              <b>{badge.unlocked ? (isID ? 'TERBUKA' : 'UNLOCKED') : (isID ? 'TERKUNCI' : 'LOCKED')}</b>
-            </button>
-          ))}
-        </div>
-      </section>
-
     </section>
   );
 }
@@ -1772,6 +1776,16 @@ function StudentNavIcon({ name }) {
       <svg className="student-nav-icon" {...common}>
         <rect x="3.2" y="5.3" width="17.6" height="13.4" rx="2.2" />
         <path d="M3.7 9.4h16.6M7 14.2h3.8" />
+      </svg>
+    );
+  }
+
+  if (name === 'badges') {
+    return (
+      <svg className="student-nav-icon" {...common}>
+        <circle cx="12" cy="9" r="5.4" />
+        <path d="m8.5 13.2-1 7.3 4.5-2.6 4.5 2.6-1-7.3" />
+        <path d="m12 5.8 1 2 2.2.3-1.6 1.6.4 2.2-2-1-2 1 .4-2.2-1.6-1.6 2.2-.3Z" />
       </svg>
     );
   }
@@ -2161,7 +2175,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       {!embedded && <header><button type="button" onClick={onBack}>←</button><h1>{titles[page] || (isID ? 'Menu Siswa' : 'Student Menu')}</h1></header>}
       {embedded && (
         <div className="student-page-context-heading">
-          <button type="button" onClick={onBack} aria-label={isID ? 'Kembali' : 'Back'}>←</button>
+          {page !== 'full-report' && <button type="button" onClick={onBack} aria-label={isID ? 'Kembali' : 'Back'}>←</button>}
           <div><span>{isID ? 'AREA SISWA' : 'STUDENT AREA'}</span><h1>{titles[page] || (isID ? 'Menu Siswa' : 'Student Menu')}</h1></div>
         </div>
       )}
@@ -2173,27 +2187,27 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
             <p>{isID ? 'Apa yang perlu saya lakukan hari ini?' : 'What should I do today?'}</p>
 
             <div className="overview-four-grid">
-              <div><span>◷ {isID ? 'KELAS BERIKUTNYA' : 'NEXT CLASS'}</span><strong>{overviewNextClass?.className || (isID ? 'Belum dijadwalkan' : 'Not scheduled')}</strong>{overviewNextClass && <small>{formatStudentClassDate(overviewNextClass.date, isID) || overviewNextClass.day} • {overviewNextClass.start}{overviewNextClass.end ? `–${overviewNextClass.end}` : ''}{overviewNextClass.tutor ? ` • ${overviewNextClass.tutor}` : ''}</small>}</div>
-              <div><span>☑ {isID ? 'TUGAS' : 'ASSIGNMENTS'}</span><strong>{Number(assignmentSummary.pending ?? studentAssignments.length)}</strong><small>{isID ? `${Number(assignmentSummary.completed || 0)} selesai` : `${Number(assignmentSummary.completed || 0)} completed`}</small></div>
-              <div><span>♙ {isID ? 'KEHADIRAN' : 'ATTENDANCE'}</span><strong>{overviewAttendance?.percentage == null ? (isID ? 'Belum ada data' : 'No data yet') : `${overviewAttendance.percentage}%`}</strong><small>{overviewAttendance?.total ? `${overviewAttendance.present}/${overviewAttendance.total} ${isID ? 'pertemuan' : 'meetings'}` : (isID ? 'Menunggu absensi pertama' : 'Waiting for first attendance')}</small></div>
-              <div><span>★ {isID ? 'LEVEL & SKOR' : 'LEVEL & SCORE'}</span><strong>{cefrCardValue}</strong><small>{academicAverage != null ? `${isID ? 'Nilai akademik' : 'Academic score'} ${academicAverage} • ` : ''}${totalExp} EXP</small></div>
+              <div><span><ModernUiIcon name="calendar" />{isID ? 'KELAS BERIKUTNYA' : 'NEXT CLASS'}</span><strong>{overviewNextClass?.className || (isID ? 'Belum dijadwalkan' : 'Not scheduled')}</strong>{overviewNextClass && <small>{formatStudentClassDate(overviewNextClass.date, isID) || overviewNextClass.day} • {overviewNextClass.start}{overviewNextClass.end ? `–${overviewNextClass.end}` : ''}{overviewNextClass.tutor ? ` • ${overviewNextClass.tutor}` : ''}</small>}</div>
+              <div><span><ModernUiIcon name="assignment" />{isID ? 'TUGAS' : 'ASSIGNMENTS'}</span><strong>{Number(assignmentSummary.pending ?? studentAssignments.length)}</strong><small>{isID ? `${Number(assignmentSummary.completed || 0)} selesai` : `${Number(assignmentSummary.completed || 0)} completed`}</small></div>
+              <div><span><ModernUiIcon name="attendance" />{isID ? 'KEHADIRAN' : 'ATTENDANCE'}</span><strong>{overviewAttendance?.percentage == null ? (isID ? 'Belum ada data' : 'No data yet') : `${overviewAttendance.percentage}%`}</strong><small>{overviewAttendance?.total ? `${overviewAttendance.present}/${overviewAttendance.total} ${isID ? 'pertemuan' : 'meetings'}` : (isID ? 'Menunggu absensi pertama' : 'Waiting for first attendance')}</small></div>
+              <div><span><ModernUiIcon name="score" />{isID ? 'LEVEL & SKOR' : 'LEVEL & SCORE'}</span><strong>{cefrCardValue}</strong><small>{academicAverage != null ? `${isID ? 'Nilai akademik' : 'Academic score'} ${academicAverage} • ` : ''}${totalExp} EXP</small></div>
             </div>
 
             <div className="overview-actions">
-              <button type="button" onClick={() => onSelect('schedule')}>📅 {isID ? 'Lihat Kelas' : 'View Class'}</button>
-              <button type="button" onClick={() => onSelect('assignments')}>▧ {isID ? 'Lihat Tugas' : 'View Assignments'}</button>
+              <button type="button" onClick={() => onSelect('schedule')}><ModernUiIcon name="calendar" /> {isID ? 'Lihat Kelas' : 'View Class'}</button>
+              <button type="button" onClick={() => onSelect('assignments')}><ModernUiIcon name="assignment" /> {isID ? 'Lihat Tugas' : 'View Assignments'}</button>
             </div>
           </section>
 
           <section className="scroll-report-cards academic-summary-cards">
-            <button type="button" onClick={() => onSelect('program')}><div><span>Program</span><strong className="report-text-value">{overview?.program?.program || '—'}</strong><small>{overview?.program?.className || (isID ? 'Informasi kelas' : 'Class information')}</small></div><i className="yellow">🎓</i></button>
-            <button type="button" onClick={() => onSelect('attendance-record')}><div><span>{isID ? 'Kehadiran' : 'Attendance'}</span><strong>{attendance?.percentage == null ? '—' : `${attendance.percentage}%`}</strong><small>{attendance?.total ? (isID ? `${attendance.present} dari ${attendance.total} pertemuan bulan ini` : `${attendance.present} of ${attendance.total} sessions attended this month`) : (isID ? 'Belum ada data kehadiran bulan ini' : 'No attendance data this month')}</small></div><i className="green">♙</i></button>
-            <button type="button" onClick={() => onSelect('assignments')}><div><span>{isID ? 'Tugas' : 'Assignments'}</span><strong>{studentAssignments.length || '—'}</strong><small>{studentAssignments.length ? (isID ? `${studentAssignments.length} tugas aktif` : `${studentAssignments.length} active assignments`) : (isID ? 'Belum ada tugas aktif' : 'No active assignments')}</small></div><i className="red">☑</i></button>
-            <button type="button" onClick={() => onSelect('journal')}><div><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><strong>{learningActivities.filter((entry) => entry.title).length}/8</strong><small>{isID ? 'Rencana dan realisasi pembelajaran bulan ini' : 'This month’s learning plan and completion'}</small></div><i className="teal">▤</i></button>
-            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Tantangan' : 'Challenge'}</span><strong className="report-text-value">{programChallenge.name}</strong><small>{isID ? 'Hasil challenge sesuai program' : 'Results for your program challenge'}</small></div><i className="purple">🎙</i></button>
-            <button type="button" onClick={() => onSelect('score')}><div><span>{isID ? 'Level & Skor Akademik' : 'Academic Level & Score'}</span><strong className="report-text-value">{cefrCardValue}</strong><small>{rawCefrLevel ? (isID ? 'Berdasarkan hasil tes CEFR' : 'Based on CEFR assessment') : (isID ? 'Hasil level akan muncul setelah penilaian' : 'Your level will appear after assessment')} • {rankInfo.current.name} • {totalExp} EXP</small></div><i className="blue">★</i></button>
-            <button type="button" onClick={() => onSelect('monthly-report')}><div><span>{isID ? 'Laporan Bulanan' : 'Monthly Report'}</span><strong className="report-text-value">{isID ? 'Kemajuan Akademik' : 'Academic Progress'}</strong><small>{isID ? 'Profil, keterampilan, nilai, komentar tutor, dan log pertemuan' : 'Profile, skills, scores, tutor comments, and meeting log'}</small></div><i className="blue">▤</i></button>
-            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Misi Bulanan' : 'Monthly Quests'}</span><strong>{attendanceQuestProgress}/{attendanceQuestTarget}</strong><small>{attendanceQuestDone ? (isID ? 'Perfect Attendance selesai' : 'Perfect Attendance completed') : (isID ? 'Target 8 pertemuan bulan ini' : 'Target: 8 meetings this month')}</small></div><i className="teal">◎</i></button>
+            <button type="button" onClick={() => onSelect('program')}><div><span>Program</span><strong className="report-text-value">{overview?.program?.program || '—'}</strong><small>{overview?.program?.className || (isID ? 'Informasi kelas' : 'Class information')}</small></div><i className="yellow"><ModernUiIcon name="program" /></i></button>
+            <button type="button" onClick={() => onSelect('attendance-record')}><div><span>{isID ? 'Kehadiran' : 'Attendance'}</span><strong>{attendance?.percentage == null ? '—' : `${attendance.percentage}%`}</strong><small>{attendance?.total ? (isID ? `${attendance.present} dari ${attendance.total} pertemuan bulan ini` : `${attendance.present} of ${attendance.total} sessions attended this month`) : (isID ? 'Belum ada data kehadiran bulan ini' : 'No attendance data this month')}</small></div><i className="green"><ModernUiIcon name="attendance" /></i></button>
+            <button type="button" onClick={() => onSelect('assignments')}><div><span>{isID ? 'Tugas' : 'Assignments'}</span><strong>{studentAssignments.length || '—'}</strong><small>{studentAssignments.length ? (isID ? `${studentAssignments.length} tugas aktif` : `${studentAssignments.length} active assignments`) : (isID ? 'Belum ada tugas aktif' : 'No active assignments')}</small></div><i className="red"><ModernUiIcon name="assignment" /></i></button>
+            <button type="button" onClick={() => onSelect('journal')}><div><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><strong>{learningActivities.filter((entry) => entry.title).length}/8</strong><small>{isID ? 'Rencana dan realisasi pembelajaran bulan ini' : 'This month’s learning plan and completion'}</small></div><i className="teal"><ModernUiIcon name="journal" /></i></button>
+            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Tantangan' : 'Challenge'}</span><strong className="report-text-value">{programChallenge.name}</strong><small>{isID ? 'Hasil challenge sesuai program' : 'Results for your program challenge'}</small></div><i className="purple"><ModernUiIcon name="challenge" /></i></button>
+            <button type="button" onClick={() => onSelect('score')}><div><span>{isID ? 'Level & Skor Akademik' : 'Academic Level & Score'}</span><strong className="report-text-value">{cefrCardValue}</strong><small>{rawCefrLevel ? (isID ? 'Berdasarkan hasil tes CEFR' : 'Based on CEFR assessment') : (isID ? 'Hasil level akan muncul setelah penilaian' : 'Your level will appear after assessment')} • {rankInfo.current.name} • {totalExp} EXP</small></div><i className="blue"><ModernUiIcon name="score" /></i></button>
+            <button type="button" onClick={() => onSelect('monthly-report')}><div><span>{isID ? 'Laporan Bulanan' : 'Monthly Report'}</span><strong className="report-text-value">{isID ? 'Kemajuan Akademik' : 'Academic Progress'}</strong><small>{isID ? 'Profil, keterampilan, nilai, komentar tutor, dan log pertemuan' : 'Profile, skills, scores, tutor comments, and meeting log'}</small></div><i className="blue"><ModernUiIcon name="report" /></i></button>
+            <button type="button" onClick={() => onSelect('challenge')}><div><span>{isID ? 'Misi Bulanan' : 'Monthly Quests'}</span><strong>{attendanceQuestProgress}/{attendanceQuestTarget}</strong><small>{attendanceQuestDone ? (isID ? 'Perfect Attendance selesai' : 'Perfect Attendance completed') : (isID ? 'Target 8 pertemuan bulan ini' : 'Target: 8 meetings this month')}</small></div><i className="teal"><ModernUiIcon name="quest" /></i></button>
           </section>
         </>
       )}
@@ -2211,12 +2225,12 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
 
           <div className="badge-action-grid">
             <button type="button" onClick={() => onSelect('assignments')}>
-              <span>☑</span>
+              <span><ModernUiIcon name="assignment" /></span>
               <div><small>ASSIGNMENT</small><strong>{isID ? 'Kerjakan Tugas' : 'Do Assignments'}</strong><p>{studentAssignments.filter((item) => !item.submission).length} {isID ? 'tugas belum selesai' : 'assignments remaining'}</p></div>
               <b>→</b>
             </button>
             <button type="button" onClick={() => onSelect('challenge')}>
-              <span>🎯</span>
+              <span><ModernUiIcon name="challenge" /></span>
               <div><small>CHALLENGE</small><strong>{isID ? 'Kerjakan Tantangan' : 'Do Challenges'}</strong><p>{studentChallenges.filter((item) => !item.result).length} {isID ? 'tantangan belum selesai' : 'challenges remaining'}</p></div>
               <b>→</b>
             </button>
@@ -2405,10 +2419,10 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           <div className="detail-row"><span>Tutor</span><strong>{overview?.program?.tutor || '—'}</strong></div>
 
           <div className="profile-subsection-title"><span>💳</span><h3>{isID ? 'Riwayat Pembayaran' : 'Payment History'}</h3></div>
-          <div className="detail-row"><span>{isID ? 'Status Bulan Ini' : 'This Month Status'}</span><strong className={overview?.monthly?.payment?.status === 'Lunas' ? 'paid' : 'unpaid'}>{overview?.monthly?.payment?.status || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Status Bulan Ini' : 'This Month Status'}</span><strong className={overview?.monthly?.payment?.status === 'Lunas' ? 'paid' : overview?.monthly?.payment?.status === 'Libur' ? 'exempt' : 'unpaid'}>{overview?.monthly?.payment?.status || '—'}</strong></div>
           <div className="detail-row"><span>{isID ? 'Catatan' : 'Details'}</span><strong>{overview?.monthly?.payment?.detail || '—'}</strong></div>
           {(overview?.overall?.paymentHistory || []).map((item) => (
-            <div className="detail-row" key={item.month}><span>{item.month}</span><strong className={item.status === 'Lunas' ? 'paid' : 'unpaid'}>{item.status}</strong></div>
+            <div className="detail-row" key={item.month}><span>{item.month}</span><strong className={item.status === 'Lunas' ? 'paid' : item.status === 'Libur' ? 'exempt' : 'unpaid'}>{item.status === 'Libur' ? (isID ? 'LIBUR • TIDAK DITAGIHKAN' : 'HOLIDAY • NOT BILLED') : item.status}</strong></div>
           ))}
           <button className="student-logout-detail" type="button" onClick={onLogout}>{isID ? 'Keluar dari Akun' : 'Sign Out'}</button>
         </section>

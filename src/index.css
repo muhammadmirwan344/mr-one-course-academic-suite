@@ -23924,3 +23924,37 @@ html[data-theme='light'] .payment-store-hero{color:#10283a;background:linear-gra
 .badge-action-grid small{color:var(--moc-primary);font-size:9px;font-weight:900;letter-spacing:.1em}.badge-action-grid strong{display:block;margin-top:3px;font-size:15px}.badge-action-grid p{margin:4px 0 0;color:var(--moc-muted);font-size:11px}.badge-action-grid>button>b{color:var(--moc-primary);font-size:20px}
 .badge-hub-list{margin-top:0!important}
 @media(max-width:620px){.badge-action-grid{grid-template-columns:1fr}.badge-hub-hero{align-items:flex-start;padding:17px}.badge-hub-hero h2{font-size:18px}}
+/* V25 — modern academic icons and July tuition holiday status */
+.modern-ui-icon {
+  display: block;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+}
+
+.overview-four-grid > div > span,
+.overview-actions > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.overview-four-grid > div > span .modern-ui-icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.academic-summary-cards > button > i .modern-ui-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.badge-action-grid > button > span .modern-ui-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.detail-row strong.exempt {
+  color: #ffd33d;
+}
