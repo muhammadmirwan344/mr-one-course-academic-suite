@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const API_URL =
-'https://script.google.com/macros/s/AKfycbzAMj7SqCnWWXyqO-MpWGutxwxuBWZSivOqRom1wlHBVVwY-utArca72QgiSDE4HhrGAg/exec';
+'https://script.google.com/macros/s/AKfycbx-3ZB29sQk08VmWvQac6pydaCveGI_shSHNkgfQOOuv1GcfYANtNft1gFPos9EOu6txA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -768,6 +768,26 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (!user || !token) return undefined;
+    const role = String(user.role || '').toLowerCase();
+    if (role === 'siswa' || role === 'tutor') return undefined;
+
+    function refreshDashboardOnFocus() {
+      if (document.visibilityState === 'visible' && activePage === 'home') {
+        loadDashboard(token);
+      }
+    }
+
+    window.addEventListener('focus', refreshDashboardOnFocus);
+    document.addEventListener('visibilitychange', refreshDashboardOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', refreshDashboardOnFocus);
+      document.removeEventListener('visibilitychange', refreshDashboardOnFocus);
+    };
+  }, [user, token, activePage]);
+
   async function loadStudentOverview(activeToken) {
     setStudentOverviewLoading(true);
     setMessage('');
@@ -918,6 +938,7 @@ function App() {
       const result = await callApi(request);
       setMessage(result.message);
       await loadRegistrations();
+      await loadDashboard(token);
     } catch (error) {
       setMessage(error.message || 'Pendaftaran gagal diproses.');
       setRegistrationsLoading(false);
@@ -981,6 +1002,7 @@ function App() {
     setActivePage(page);
     setMessage('');
 
+    if (page === 'home') loadDashboard(token);
     if (page === 'students') {
       loadStudents(studentSearch, 1);
     }
