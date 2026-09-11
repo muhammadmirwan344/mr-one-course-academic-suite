@@ -1,0 +1,13 @@
+MOC Academic Suite — Vercel deployment package
+
+Source: exact project downloaded from StackBlitz on 2026-09-12.
+
+Validated before packaging:
+- src/App.jsx JSX parse: PASS
+- src/main.jsx JSX parse: PASS
+- Dark/Light icon controls present on Sign In
+- Forgot Password -> Management / Miss Vita present
+- Footer attribution present
+
+Deploy this project root to Vercel. package.json identifies it as a Vite app.
+Do not upload only src/App.jsx; upload/replace the complete project root so public assets and styles stay in sync.
