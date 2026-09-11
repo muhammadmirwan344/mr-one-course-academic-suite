@@ -26568,3 +26568,432 @@ html[data-theme='light'] .forgot-password-management-card > span {
 html[data-theme='light'] .moc-copyright-footer {
   color:#647b8c !important;
 }
+
+
+/* V60 — Grammar curriculum */
+.grammar-curriculum {
+  margin-top:18px;
+  padding-top:18px;
+  border-top:1px solid rgba(127,127,127,.14);
+}
+.grammar-curriculum-heading > span {
+  display:block;
+  color:#25c5d4;
+  font-size:.65rem;
+  font-weight:900;
+  letter-spacing:.08em;
+}
+.grammar-curriculum-heading h3 { margin:4px 0 5px; }
+.grammar-curriculum-heading p {
+  margin:0;
+  color:var(--muted-text,#8d97a5);
+  font-size:.74rem;
+  line-height:1.55;
+}
+.grammar-curriculum-list {
+  display:grid;
+  gap:10px;
+  margin-top:14px;
+}
+.grammar-curriculum-list > article {
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr);
+  gap:12px;
+  padding:14px;
+  border:1px solid rgba(37,197,212,.22);
+  border-radius:14px;
+  background:rgba(37,197,212,.035);
+}
+.grammar-module-number {
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid rgba(37,197,212,.42);
+  color:#25c5d4;
+  font-weight:900;
+}
+.grammar-curriculum-list h4 { margin:0; font-size:.92rem; }
+.grammar-curriculum-list p {
+  margin:3px 0 8px;
+  color:#25c5d4;
+  font-size:.68rem;
+}
+.grammar-curriculum-list ul {
+  margin:0;
+  padding-left:17px;
+  color:var(--muted-text,#8d97a5);
+  font-size:.69rem;
+  line-height:1.55;
+}
+
+/* V60 — Simple learning feed */
+.learning-feed-simple .journal-heading { margin-bottom:2px; }
+.learning-feed-list {
+  display:grid;
+  gap:10px;
+}
+.learning-feed-card {
+  padding:16px;
+  border:1px solid rgba(37,197,212,.25);
+  border-radius:16px;
+  background:#0d1623;
+}
+.learning-feed-head {
+  display:grid;
+  grid-template-columns:42px minmax(0,1fr) auto;
+  gap:11px;
+  align-items:start;
+}
+.learning-feed-number {
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  border:1px solid rgba(37,197,212,.45);
+  color:#25c5d4;
+  font-size:.72rem;
+  font-weight:900;
+}
+.learning-feed-head h3 {
+  margin:0;
+  color:#f3f8fb;
+  font-size:.94rem;
+}
+.learning-feed-head p,
+.learning-feed-head time {
+  margin:4px 0 0;
+  color:#8294a4;
+  font-size:.67rem;
+}
+.learning-feed-head p b { color:#25c5d4; }
+.learning-feed-body {
+  margin:13px 0 0 53px;
+  padding-top:12px;
+  border-top:1px solid rgba(127,127,127,.16);
+}
+.learning-feed-body p {
+  margin:0 0 7px;
+  color:#d9e3e9;
+  font-size:.74rem;
+  line-height:1.55;
+}
+.learning-feed-body small {
+  display:block;
+  margin-top:4px;
+  color:#8fa1af;
+  font-size:.67rem;
+  line-height:1.45;
+}
+.learning-feed-actions,
+.learning-feed-read {
+  margin:12px 0 0 53px;
+}
+.learning-feed-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.learning-feed-actions button {
+  min-height:36px;
+  padding:8px 11px;
+  border:1px solid rgba(37,197,212,.3);
+  border-radius:9px;
+  background:rgba(37,197,212,.08);
+  color:#25c5d4;
+  font-size:.67rem;
+  font-weight:800;
+  cursor:pointer;
+}
+html[data-theme='light'] .learning-feed-card,
+html[data-theme='light'] .grammar-curriculum-list > article {
+  background:#fff !important;
+  color:#193448 !important;
+  border-color:#c8dce5 !important;
+}
+html[data-theme='light'] .learning-feed-head h3,
+html[data-theme='light'] .learning-feed-body p {
+  color:#193448 !important;
+}
+html[data-theme='light'] .learning-feed-head p,
+html[data-theme='light'] .learning-feed-head time,
+html[data-theme='light'] .learning-feed-body small,
+html[data-theme='light'] .grammar-curriculum-list ul {
+  color:#63798a !important;
+}
+
+/* V60 — Report radar chart */
+.report-skill-chart-card {
+  overflow:hidden;
+}
+.academic-radar {
+  position:relative;
+  width:min(100%,420px);
+  aspect-ratio:1/1;
+  margin:12px auto 0;
+}
+.academic-radar svg {
+  display:block;
+  width:72%;
+  height:72%;
+  margin:14% auto;
+  overflow:visible;
+}
+.academic-radar-grid {
+  fill:none;
+  stroke:#c9d6e0;
+  stroke-width:1;
+}
+.academic-radar-axis {
+  stroke:#d6e0e8;
+  stroke-width:1;
+}
+.academic-radar-value {
+  fill:rgba(38,122,240,.14);
+  stroke:#267af0;
+  stroke-width:3;
+}
+.academic-radar-dot {
+  fill:#267af0;
+}
+.academic-radar-label {
+  position:absolute;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  max-width:34%;
+  color:#758596;
+  font-size:.62rem;
+  line-height:1.2;
+  text-align:center;
+}
+.academic-radar-label strong {
+  margin-top:2px;
+  color:#172235;
+  font-size:.74rem;
+}
+.academic-radar-label.top { top:0; left:33%; }
+.academic-radar-label.right { right:0; top:43%; align-items:flex-start; text-align:left; }
+.academic-radar-label.bottom { bottom:0; left:33%; }
+.academic-radar-label.left { left:0; top:43%; align-items:flex-end; text-align:right; }
+html[data-theme='dark'] .academic-radar-grid,
+html[data-theme='dark'] .academic-radar-axis { stroke:#334554; }
+html[data-theme='dark'] .academic-radar-value { fill:rgba(37,197,212,.12); stroke:#25c5d4; }
+html[data-theme='dark'] .academic-radar-dot { fill:#25c5d4; }
+html[data-theme='dark'] .academic-radar-label { color:#8fa1af; }
+html[data-theme='dark'] .academic-radar-label strong { color:#eef6fa; }
+
+/* V60 — Invoice / receipt wording */
+.payment-document-reference .payment-document-note {
+  margin:18px 4px 4px;
+  padding:12px 14px;
+  border-left:4px solid #267af0;
+  background:#f4f8fb;
+  color:#53677a;
+  font-size:.7rem;
+  line-height:1.55;
+}
+.payment-document-reference .receipt-signature {
+  margin:-12px 0 20px;
+  color:#4f6070;
+  font-size:.72rem;
+  font-weight:800;
+  text-align:center;
+}
+.receipt-transaction-details > div {
+  min-height:44px;
+}
+
+@media(max-width:640px) {
+  .learning-feed-head { grid-template-columns:38px minmax(0,1fr); }
+  .learning-feed-head time { grid-column:2; margin-top:-2px; }
+  .learning-feed-body,
+  .learning-feed-actions,
+  .learning-feed-read { margin-left:49px; }
+  .academic-radar { width:100%; }
+}
+
+@media print {
+  #monthly-academic-report .academic-radar {
+    width:360px !important;
+    margin:6px auto !important;
+    break-inside:avoid;
+  }
+  #monthly-academic-report .academic-radar-value {
+    fill:rgba(38,122,240,.14) !important;
+    stroke:#267af0 !important;
+  }
+}
+
+
+/* V62 — Registration WhatsApp follow-up */
+.registration-rejected-section {
+  margin-top:18px;
+}
+.registration-rejected-card {
+  border-color:rgba(211,91,91,.24) !important;
+}
+.rejected-status {
+  display:inline-flex;
+  align-items:center;
+  min-height:25px;
+  padding:4px 9px;
+  border-radius:999px;
+  background:rgba(211,91,91,.12);
+  color:#d35b5b;
+  font-size:.64rem;
+  font-weight:900;
+  letter-spacing:.04em;
+}
+.registration-rejection-reason {
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin:10px 0;
+  padding:11px 12px;
+  border-radius:10px;
+  background:rgba(211,91,91,.06);
+  border:1px solid rgba(211,91,91,.16);
+}
+.registration-rejection-reason span {
+  color:#d35b5b;
+  font-size:.62rem;
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.registration-rejection-reason strong {
+  font-size:.72rem;
+  line-height:1.5;
+}
+html[data-theme='light'] .registration-rejected-card,
+html[data-theme='light'] .registration-rejection-reason {
+  background:#fff !important;
+  color:#193448 !important;
+}
+html[data-theme='light'] .registration-rejection-reason {
+  background:#fff7f7 !important;
+  border-color:#efc4c8 !important;
+}
+
+
+/* V64 — Tuition logo + resilient QRIS display */
+.tuition-document-brand {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+}
+.tuition-document-brand img {
+  width:40px;
+  height:40px;
+  object-fit:contain;
+  border-radius:8px;
+  background:#fff;
+}
+.tuition-document-brand span {
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:2px;
+}
+.qris-payment-box-v64 {
+  display:grid;
+  grid-template-columns:minmax(150px,220px) minmax(0,1fr);
+  gap:18px;
+  align-items:center;
+}
+.qris-payment-box-v64 img {
+  display:block;
+  width:100%;
+  max-width:220px;
+  aspect-ratio:1/1;
+  object-fit:contain;
+  margin:auto;
+  padding:10px;
+  border-radius:14px;
+  background:#fff;
+  border:1px solid rgba(127,127,127,.18);
+}
+.qris-payment-box-v64 > div:last-child strong {
+  display:block;
+  margin-bottom:6px;
+}
+.qris-payment-box-v64 > div:last-child p {
+  margin:0;
+}
+.qris-missing-safe {
+  min-height:180px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  padding:18px;
+  border:1px dashed rgba(37,197,212,.45);
+  border-radius:14px;
+  background:rgba(37,197,212,.05);
+  text-align:center;
+}
+.qris-missing-safe strong {
+  color:#25c5d4;
+  font-size:.85rem;
+}
+.qris-missing-safe span {
+  max-width:190px;
+  color:#8998a6;
+  font-size:.68rem;
+  line-height:1.45;
+}
+@media(max-width:640px) {
+  .qris-payment-box-v64 {
+    grid-template-columns:1fr;
+    text-align:center;
+  }
+  .tuition-document-brand img {
+    width:34px;
+    height:34px;
+  }
+}
+@media print {
+  .tuition-document-brand img {
+    width:36px !important;
+    height:36px !important;
+  }
+}
+
+
+/* V65 — Mr One Course logo on student progress report */
+.monthly-report-brand-logo {
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  margin-bottom:12px;
+}
+.monthly-report-brand-logo.standalone {
+  margin:0 0 12px;
+}
+.monthly-report-brand-logo img {
+  width:56px;
+  height:56px;
+  object-fit:contain;
+  border-radius:10px;
+  background:#fff;
+}
+@media(max-width:640px) {
+  .monthly-report-brand-logo img {
+    width:48px;
+    height:48px;
+  }
+}
+@media print {
+  #monthly-academic-report .monthly-report-brand-logo {
+    margin-bottom:10px !important;
+  }
+  #monthly-academic-report .monthly-report-brand-logo img {
+    width:52px !important;
+    height:52px !important;
+  }
+}

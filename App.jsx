@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const API_URL =
-'https://script.google.com/macros/s/AKfycbxhOi5yJdiZJa_ES7Uxiz8sTkzSzg6R-y26nAm3G6bMEQqiuHwvbxxiR8eAU3UlQ7ZROw/exec';
+'https://script.google.com/macros/s/AKfycbzZ02JeqEiB0RYDRO5ei7HrrmpdspVSK9b2SktXc_OwCg1qHAi6aV29rPjS2sJiblVnxw/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -462,60 +462,56 @@ function getProgramReportConfig(program, overview, monthlyReport, isID) {
   if (key.includes('grammar')) {
     const learningActivities = Array.isArray(overview?.learningActivities) ? overview.learningActivities : [];
     const textCorpus = learningActivities
-      .map((item) => `${item.title || ''} ${item.summary || ''} ${item.achievement || ''}`)
+      .map((item) => `${item.title || ''} ${item.summary || ''} ${item.achievement || ''} ${item.activities || ''}`)
       .join(' ')
       .toLowerCase();
 
-    let stageKey = 'introduction';
-    let stageLabel = isID ? 'Grammar Introduction' : 'Grammar Introduction';
+    let stageKey = 'partsOfSpeech';
+    let stageLabel = 'Parts of Speech';
     let stageFocus = isID
-      ? 'Pengenalan pola kalimat dasar dan fungsi grammar dalam penggunaan bahasa Inggris.'
-      : 'Introduction to basic sentence patterns and the role of grammar in English use.';
+      ? 'Memahami jenis kata, fungsi kata, dan penggunaannya sebagai fondasi pembentukan kalimat.'
+      : 'Understanding word classes, their functions, and their use as the foundation of sentence building.';
 
     if (
-      textCorpus.includes('part of speech') ||
-      textCorpus.includes('parts of speech') ||
-      /\bnoun\b|\bpronoun\b|\bverb\b|\badjective\b|\badverb\b|\bpreposition\b|\bconjunction\b|\barticle\b/.test(textCorpus)
+      /\b(simple present|present continuous|present perfect|past simple|simple past|past continuous|past perfect|future|past future|16 tenses|tense)\b/.test(textCorpus)
     ) {
-      stageKey = 'partsOfSpeech';
-      stageLabel = isID ? 'Parts of Speech' : 'Parts of Speech';
+      stageKey = 'tenses';
+      stageLabel = '16 Tenses';
       stageFocus = isID
-        ? 'Memahami jenis kata, fungsi kata, dan penerapannya dalam kalimat sederhana.'
-        : 'Understanding word classes, their functions, and their application in simple sentences.';
+        ? 'Memahami pola waktu, bentuk verb, dan penggunaan 16 tenses dalam konteks yang tepat.'
+        : 'Understanding time reference, verb forms, and the contextual use of the 16 tenses.';
     }
 
     if (
+      textCorpus.includes('grammar essential') ||
       textCorpus.includes('essential grammar') ||
-      /\btense\b|subject.?verb agreement|question form|negative form|sentence structure/.test(textCorpus)
+      /\b(passive voice|conditional|reported speech|direct speech|indirect speech|gerund|infinitive|modal|degree of comparison|relative clause|subject.?verb agreement|question tag)\b/.test(textCorpus)
     ) {
-      stageKey = 'essential';
-      stageLabel = isID ? 'Essential Grammar' : 'Essential Grammar';
+      stageKey = 'grammarEssential';
+      stageLabel = 'Grammar Essential';
       stageFocus = isID
-        ? 'Menerapkan struktur kalimat, tense, subject–verb agreement, serta bentuk pertanyaan dan negatif secara tepat.'
-        : 'Applying sentence structure, tenses, subject–verb agreement, and question/negative forms accurately.';
+        ? 'Menerapkan struktur grammar penting untuk membangun kalimat yang lebih akurat dan kompleks.'
+        : 'Applying essential grammar structures to build more accurate and complex sentences.';
     }
 
     const stageMetrics = {
-      introduction: [
-        { label: isID ? 'Kesadaran Pola Kalimat' : 'Basic Sentence Awareness', value: safeScore(skillScores.writing), suffix: '/100' },
-        { label: isID ? 'Pengenalan Subject–Verb' : 'Subject–Verb Recognition', value: safeScore(skillScores.quizTest), suffix: '/100' },
-        { label: isID ? 'Pemahaman Pola Dasar' : 'Sentence Pattern Understanding', value: safeScore(skillScores.reading), suffix: '/100' },
-        { label: isID ? 'Penerapan Kosakata Dasar' : 'Basic Vocabulary Application', value: safeScore(skillScores.writing), suffix: '/100' },
-        { label: isID ? 'Ketepatan Latihan Dasar' : 'Accuracy in Simple Exercises', value: safeScore(skillScores.quizTest), suffix: '/100' },
-      ],
       partsOfSpeech: [
         { label: isID ? 'Pengenalan Jenis Kata' : 'Word Class Recognition', value: safeScore(skillScores.quizTest), suffix: '/100' },
-        { label: isID ? 'Pemahaman Fungsi Kata' : 'Word Function Understanding', value: safeScore(skillScores.reading), suffix: '/100' },
+        { label: isID ? 'Fungsi Kata' : 'Word Function', value: safeScore(skillScores.reading), suffix: '/100' },
         { label: isID ? 'Penerapan dalam Kalimat' : 'Sentence Application', value: safeScore(skillScores.writing), suffix: '/100' },
         { label: isID ? 'Ketepatan Grammar' : 'Grammar Accuracy', value: safeScore(skillScores.quizTest), suffix: '/100' },
-        { label: isID ? 'Latihan Tertulis' : 'Written Practice', value: safeScore(skillScores.writing), suffix: '/100' },
       ],
-      essential: [
+      tenses: [
+        { label: isID ? 'Pengenalan Pola Tense' : 'Tense Pattern Recognition', value: safeScore(skillScores.quizTest), suffix: '/100' },
+        { label: isID ? 'Ketepatan Verb' : 'Verb Form Accuracy', value: safeScore(skillScores.writing), suffix: '/100' },
+        { label: isID ? 'Pemilihan Tense' : 'Tense Selection', value: safeScore(skillScores.reading), suffix: '/100' },
+        { label: isID ? 'Penerapan dalam Kalimat' : 'Sentence Application', value: safeScore(skillScores.writing), suffix: '/100' },
+      ],
+      grammarEssential: [
         { label: isID ? 'Struktur Kalimat' : 'Sentence Structure', value: safeScore(skillScores.writing), suffix: '/100' },
-        { label: isID ? 'Ketepatan Tense' : 'Tense Accuracy', value: safeScore(skillScores.quizTest), suffix: '/100' },
-        { label: isID ? 'Subject–Verb Agreement' : 'Subject–Verb Agreement', value: safeScore(skillScores.quizTest), suffix: '/100' },
-        { label: isID ? 'Bentuk Pertanyaan & Negatif' : 'Question & Negative Forms', value: safeScore(skillScores.writing), suffix: '/100' },
+        { label: isID ? 'Ketepatan Grammar' : 'Grammar Accuracy', value: safeScore(skillScores.quizTest), suffix: '/100' },
         { label: isID ? 'Grammar dalam Konteks' : 'Grammar in Context', value: safeScore(skillScores.reading), suffix: '/100' },
+        { label: isID ? 'Penerapan Tertulis' : 'Written Application', value: safeScore(skillScores.writing), suffix: '/100' },
       ],
     };
 
@@ -590,6 +586,57 @@ async function callApi(payload) {
   }
 
   return result;
+}
+
+
+function useEdgeSwipeBack(onBack, enabled = true) {
+  useEffect(() => {
+    if (!enabled || typeof window === 'undefined') return undefined;
+
+    let tracking = false;
+    let startX = 0;
+    let startY = 0;
+
+    function handleTouchStart(event) {
+      const touch = event.touches?.[0];
+      if (!touch) return;
+
+      const target = event.target;
+      const interactive = target?.closest?.('input, textarea, select, [contenteditable="true"]');
+      if (interactive) return;
+
+      // Mulai dari sisi kiri layar agar tidak mengganggu scroll/slider biasa.
+      tracking = touch.clientX <= 42;
+      startX = touch.clientX;
+      startY = touch.clientY;
+    }
+
+    function handleTouchEnd(event) {
+      if (!tracking) return;
+      tracking = false;
+
+      const touch = event.changedTouches?.[0];
+      if (!touch) return;
+
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      const isHorizontalBackSwipe =
+        deltaX >= 72 &&
+        Math.abs(deltaY) <= 70 &&
+        deltaX > Math.abs(deltaY) * 1.25;
+
+      if (isHorizontalBackSwipe) onBack();
+    }
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [enabled, onBack]);
 }
 
 function App() {
@@ -867,7 +914,7 @@ function App() {
     try {
       const request = action === 'approveStudentRegistration'
         ? { action, token, approval: payload }
-        : { action, token, registrationId: payload };
+        : { action, token, rejection: payload };
       const result = await callApi(request);
       setMessage(result.message);
       await loadRegistrations();
@@ -1040,7 +1087,7 @@ function App() {
         registrations={registrations}
         registrationsLoading={registrationsLoading}
         onApproveRegistration={(approval) => processRegistration('approveStudentRegistration', approval)}
-        onRejectRegistration={(registrationId) => processRegistration('rejectStudentRegistration', registrationId)}
+        onRejectRegistration={(rejection) => processRegistration('rejectStudentRegistration', rejection)}
         paymentConfirmations={paymentConfirmations}
         paymentRecords={paymentRecords}
         paymentConfirmationsLoading={paymentConfirmationsLoading}
@@ -1744,6 +1791,28 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const [attendanceControl, setAttendanceControl] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, statuses: {} });
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  function goTutorBack() {
+    if (page === 'report') {
+      setPage('student');
+      return;
+    }
+    if (page === 'student') {
+      setPage('class');
+      return;
+    }
+    if (page === 'class' || page === 'attendance') {
+      setPage('classes');
+      return;
+    }
+    if (['assignments', 'assessment', 'notes', 'challenges', 'review'].includes(page)) {
+      setPage('academic');
+      return;
+    }
+    if (page !== 'home') setPage('home');
+  }
+
+  useEdgeSwipeBack(goTutorBack, page !== 'home');
+
   useEffect(() => {
     if (!selectedClassId && classes[0]?.classId) setSelectedClassId(classes[0].classId);
   }, [classes, selectedClassId]);
@@ -2165,6 +2234,8 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
     setPageHistory([]);
     setDetailPage(page);
   }
+
+  useEdgeSwipeBack(goBack, detailPage !== 'landing');
 
   const headerActivePage = detailPage === 'landing'
     ? 'landing'
@@ -2798,6 +2869,139 @@ function GamificationRewardToast({ reward, onClose, isID }) {
   );
 }
 
+
+const GRAMMAR_CURRICULUM = [
+  {
+    key: 'partsOfSpeech',
+    title: 'Parts of Speech',
+    subtitleID: 'Fondasi jenis dan fungsi kata',
+    subtitleEN: 'Foundation of word classes and functions',
+    topics: [
+      'Noun: common, proper, concrete, abstract, collective, countable & uncountable',
+      'Pronoun: subject, object, possessive, reflexive, demonstrative',
+      'Verb: action, linking, auxiliary & modal',
+      'Adjective: description, order & comparison',
+      'Adverb: manner, frequency, time & place',
+      'Preposition: place, time & movement',
+      'Conjunction: coordinating & subordinating',
+      'Interjection, articles & basic determiners',
+    ],
+  },
+  {
+    key: 'tenses',
+    title: '16 Tenses',
+    subtitleID: 'Pola waktu dan perubahan bentuk verb',
+    subtitleEN: 'Time patterns and verb-form changes',
+    topics: [
+      'Simple Present • Present Continuous • Present Perfect • Present Perfect Continuous',
+      'Simple Past • Past Continuous • Past Perfect • Past Perfect Continuous',
+      'Simple Future • Future Continuous • Future Perfect • Future Perfect Continuous',
+      'Past Future • Past Future Continuous • Past Future Perfect • Past Future Perfect Continuous',
+      'Time signals, affirmative, negative & interrogative forms',
+      'Choosing the correct tense from context',
+    ],
+  },
+  {
+    key: 'grammarEssential',
+    title: 'Grammar Essential',
+    subtitleID: 'Struktur penting untuk grammar tingkat lanjut',
+    subtitleEN: 'Essential structures for stronger grammar',
+    topics: [
+      'Subject–Verb Agreement & sentence patterns',
+      'Auxiliary verbs, modals & question forms',
+      'Gerund & To-Infinitive',
+      'Degree of Comparison',
+      'Passive Voice',
+      'Conditional Sentences',
+      'Direct & Indirect / Reported Speech',
+      'Relative Clauses, quantifiers & selected grammar review',
+    ],
+  },
+];
+
+function AcademicRadarChart({ metrics = [], isID = true }) {
+  const usable = (metrics || []).slice(0, 4).map((metric) => {
+    const raw = Number(metric?.value);
+    const denominatorMatch = String(metric?.suffix || '').match(/^\/(\d+)$/);
+    let normalized = Number.isFinite(raw) ? raw : 0;
+    if (denominatorMatch) normalized = denominatorMatch[1] ? (normalized / Number(denominatorMatch[1])) * 100 : normalized;
+    normalized = Math.max(0, Math.min(100, normalized));
+    return { ...metric, normalized };
+  });
+
+  while (usable.length < 4) {
+    usable.push({ label: '—', value: null, normalized: 0 });
+  }
+
+  const center = 120;
+  const radius = 76;
+  const angles = [-90, 0, 90, 180];
+
+  const point = (angle, value = 100) => {
+    const rad = (angle * Math.PI) / 180;
+    const r = radius * (value / 100);
+    return [center + Math.cos(rad) * r, center + Math.sin(rad) * r];
+  };
+
+  const gridLevels = [25, 50, 75, 100];
+  const valuePoints = usable.map((metric, index) => point(angles[index], metric.normalized));
+  const polygon = valuePoints.map(([x, y]) => `${x},${y}`).join(' ');
+
+  return (
+    <div className="academic-radar">
+      <svg viewBox="0 0 240 240" role="img" aria-label={isID ? 'Grafik perkembangan akademik' : 'Academic progress chart'}>
+        {gridLevels.map((level) => (
+          <polygon
+            key={level}
+            className="academic-radar-grid"
+            points={angles.map((angle) => point(angle, level).join(',')).join(' ')}
+          />
+        ))}
+        {angles.map((angle, index) => {
+          const [x, y] = point(angle, 100);
+          return <line className="academic-radar-axis" x1={center} y1={center} x2={x} y2={y} key={`axis-${index}`} />;
+        })}
+        <polygon className="academic-radar-value" points={polygon} />
+        {valuePoints.map(([x, y], index) => <circle className="academic-radar-dot" cx={x} cy={y} r="4" key={`dot-${index}`} />)}
+      </svg>
+      <div className="academic-radar-label top"><span>{usable[0].label}</span><strong>{usable[0].value ?? '—'}</strong></div>
+      <div className="academic-radar-label right"><span>{usable[1].label}</span><strong>{usable[1].value ?? '—'}</strong></div>
+      <div className="academic-radar-label bottom"><span>{usable[2].label}</span><strong>{usable[2].value ?? '—'}</strong></div>
+      <div className="academic-radar-label left"><span>{usable[3].label}</span><strong>{usable[3].value ?? '—'}</strong></div>
+    </div>
+  );
+}
+
+
+function QrisPaymentDisplay({ isID }) {
+  const [qrisAvailable, setQrisAvailable] = useState(true);
+
+  return (
+    <div className="qris-payment-box qris-payment-box-v64">
+      {qrisAvailable ? (
+        <img
+          src="/qris-mr-one-course.jpeg"
+          alt="QRIS Mr One Course"
+          onError={() => setQrisAvailable(false)}
+        />
+      ) : (
+        <div className="qris-missing-safe">
+          <strong>QRIS MR ONE COURSE</strong>
+          <span>{isID ? 'Barcode QRIS belum tersedia pada file aplikasi.' : 'The QRIS barcode is not yet available in the app files.'}</span>
+        </div>
+      )}
+      <div>
+        <strong>QRIS Mr One Course</strong>
+        <p>
+          {isID
+            ? 'Pindai barcode QRIS menggunakan aplikasi bank atau e-wallet, lalu masukkan nominal sesuai tagihan.'
+            : 'Scan the QRIS barcode using your banking or e-wallet app, then enter the invoice amount.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
   const isID = language === 'ID';
   const programChallenge = getProgramChallenge(overview?.program?.program, isID);
@@ -2885,6 +3089,14 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
     { category: 'ID Card', label: 'ID Card Siswa', icon: '🪪', amount: 20000, period: isID ? 'Sekali Bayar' : 'One-time', status: 'Belum Dibeli' },
   ];
   const invoiceNumber = `MOC-${overview?.profile?.studentId || 'STUDENT'}-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const isGrammarProgram = String(overview?.program?.program || '').toLowerCase().includes('grammar');
+
+  function paymentPeriodLabel(period) {
+    const match = String(period || '').match(/^(\d{4})-(\d{2})$/);
+    if (!match) return String(period || '—');
+    const monthIndex = Number(match[2]) - 1;
+    return `${monthNames[monthIndex] || match[2]} ${match[1]}`;
+  }
 
   function showGamificationReward(result, fallbackMessage = '') {
     const reward = result?.gamification || (
@@ -3185,12 +3397,47 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           {selectedPaymentItem && !selectedReceipt && (
             <>
               <button className="receipt-back-button" type="button" onClick={() => { setSelectedPaymentItem(null); setShowPaymentForm(false); setPaymentMessage(''); }}>← {isID ? 'Kembali ke Pembayaran' : 'Back to Payments'}</button>
-              <article className="tuition-document tuition-invoice" id="tuition-print-document">
-                <header><div><span>{selectedPaymentItem.category === 'Tuition' ? (isID ? 'TAGIHAN' : 'INVOICE') : (isID ? 'PEMBELIAN' : 'PURCHASE')}</span><strong>{invoiceNumber}</strong></div><div><b>Mr One Course</b><small>Academic Suite</small></div></header>
-                <section className="tuition-amount"><span>{String(selectedPaymentItem.label).toUpperCase()}</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong><small>{selectedPaymentItem.category === 'Tuition' ? (isID ? 'Batas pembayaran: tanggal 7' : 'Payment due: the 7th') : (isID ? 'Pembayaran satu kali' : 'One-time payment')}</small></section>
-                <section className="tuition-student-info"><span>{isID ? 'INFORMASI SISWA' : 'STUDENT INFORMATION'}</span><strong>{overview?.profile?.fullName || '—'}</strong><p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'} • {overview?.program?.className || '—'}</p></section>
-                <section className="tuition-transaction"><div><span>{isID ? 'Periode' : 'Period'}</span><strong>{selectedPaymentItem.period || '—'}</strong></div><div><span>{isID ? 'Jumlah' : 'Amount'}</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong></div><div><span>Status</span><strong className="unpaid">{selectedPaymentItem.category === 'Tuition' ? (isID ? 'BELUM LUNAS' : 'UNPAID') : (isID ? 'BELUM DIBELI' : 'NOT PURCHASED')}</strong></div></section>
-                <footer><strong>Mr One Course</strong><span>{isID ? 'Dokumen pembayaran resmi' : 'Official payment document'}</span></footer>
+              <article className="tuition-document tuition-invoice payment-document-reference" id="tuition-print-document">
+                <header>
+                  <div>
+                    <span>{isID ? 'INVOICE PEMBAYARAN' : 'PAYMENT INVOICE'}</span>
+                    <strong>{invoiceNumber}</strong>
+                  </div>
+                  <div className="tuition-document-brand"><img src="/logo-mr-one-course.jpeg" alt="Mr One Course" /><span><b>Mr One Course</b><small>Academic Suite</small></span></div>
+                </header>
+
+                <section className="tuition-amount">
+                  <span>
+                    {selectedPaymentItem.category === 'Tuition'
+                      ? `${isID ? 'BIAYA LES' : 'TUITION FEE'} ${paymentPeriodLabel(selectedPaymentItem.period).toUpperCase()}`
+                      : String(selectedPaymentItem.label || (isID ? 'PEMBAYARAN' : 'PAYMENT')).toUpperCase()}
+                  </span>
+                  <strong>{formatRupiah(selectedPaymentItem.amount)}</strong>
+                  <small>{selectedPaymentItem.category === 'Tuition' ? (isID ? 'Batas pembayaran: tanggal 7' : 'Payment due: the 7th') : (isID ? 'Pembayaran satu kali' : 'One-time payment')}</small>
+                </section>
+
+                <section className="tuition-student-info">
+                  <span>{isID ? 'INFORMASI SISWA' : 'STUDENT INFO'}</span>
+                  <strong>{overview?.profile?.fullName || '—'}</strong>
+                  <p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'} • {overview?.program?.className || '—'}</p>
+                </section>
+
+                <section className="tuition-transaction">
+                  <div><span>{isID ? 'Periode' : 'Period'}</span><strong>{paymentPeriodLabel(selectedPaymentItem.period)}</strong></div>
+                  <div><span>{isID ? 'Jumlah Tagihan' : 'Amount Due'}</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong></div>
+                  <div><span>Status</span><strong className="unpaid">{selectedPaymentItem.category === 'Tuition' ? (isID ? 'BELUM LUNAS' : 'UNPAID') : (isID ? 'BELUM DIBELI' : 'NOT PURCHASED')}</strong></div>
+                </section>
+
+                <p className="payment-document-note">
+                  {isID
+                    ? 'Silakan selesaikan pembayaran melalui metode yang tersedia pada Academic Suite. Simpan invoice ini sebagai referensi pembayaran.'
+                    : 'Please complete payment using an available method in Academic Suite. Keep this invoice as your payment reference.'}
+                </p>
+
+                <footer>
+                  <strong>Mr One Course</strong>
+                  <span>{isID ? 'Invoice resmi pembayaran Mr One Course Academic Suite.' : 'Official payment invoice from Mr One Course Academic Suite.'}</span>
+                </footer>
               </article>
               <div className="tuition-actions">
                 <button className="tuition-pay-button" type="button" onClick={() => setShowPaymentForm((value) => !value)}>💳 {isID ? 'Pilih & Konfirmasi Pembayaran' : 'Choose & Confirm Payment'}</button>
@@ -3210,7 +3457,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                     ['Tunai', isID ? 'Bayar langsung' : 'Pay in person', isID ? 'Pilih penerima di bawah' : 'Choose the recipient below'],
                   ].map(([name, number, owner]) => <label className={paymentForm.paymentMethod === name ? 'selected' : ''} key={name}><input type="radio" name="payment-method" value={name} checked={paymentForm.paymentMethod === name} onChange={(event) => setPaymentForm({ ...paymentForm, paymentMethod: event.target.value, proof: event.target.value === 'Tunai' ? null : paymentForm.proof })} /><span><b>{name}</b><strong>{number}</strong><small>{name === 'Tunai' ? owner : `a.n. ${owner}`}</small></span>{number.match(/^\d+$/) && <button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button>}</label>)}
                 </div>
-                {paymentForm.paymentMethod === 'QRIS Mr One Course' && <div className="qris-payment-box"><img src="/qris-mr-one-course.jpeg" alt="QRIS Mr One Course" /><p>{isID ? 'Buka aplikasi pembayaran, pindai QRIS, lalu masukkan nominal tagihan.' : 'Open your payment app, scan QRIS, then enter the invoice amount.'}</p></div>}
+                {paymentForm.paymentMethod === 'QRIS Mr One Course' && <QrisPaymentDisplay isID={isID} />}
                 {paymentForm.paymentMethod === 'Tunai' && <div className="cash-recipient-box"><span>{isID ? 'PEMBAYARAN TUNAI DITERIMA OLEH' : 'CASH PAYMENT RECEIVED BY'}</span><div>{['Mr One', 'Miss Vita'].map((recipient) => <label className={paymentForm.cashRecipient === recipient ? 'selected' : ''} key={recipient}><input type="radio" name="cash-recipient" value={recipient} checked={paymentForm.cashRecipient === recipient} onChange={(event) => setPaymentForm({ ...paymentForm, cashRecipient: event.target.value })} /><strong>{recipient}</strong></label>)}</div></div>}
                 <div className="payment-form-heading"><span>2</span><div><h2>{paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? 'Kirim Bukti Pembayaran' : 'Submit Payment Proof')}</h2><p>{isID ? 'Admin akan memeriksa data berikut.' : 'Admin will review these details.'}</p></div></div>
                 <div className="payment-input-grid payment-date-only"><label><span>{isID ? 'Tanggal pembayaran' : 'Payment date'}</span><input type="date" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} required /></label></div>
@@ -3225,13 +3472,47 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           {selectedReceipt && (
             <>
               <button className="receipt-back-button" type="button" onClick={() => setSelectedReceipt(null)}>← {isID ? 'Kembali ke Riwayat' : 'Back to History'}</button>
-              <article className="tuition-document tuition-receipt" id="tuition-print-document">
-                <header><div><span>{isID ? 'BUKTI PEMBAYARAN' : 'PAYMENT RECEIPT'}</span><strong>{selectedReceipt.paymentId || selectedReceipt.invoiceNumber || invoiceNumber}</strong></div><div><b>Mr One Course</b><small>Academic Suite</small></div></header>
-                <section className="tuition-amount"><span>{String(selectedReceipt.label || 'PEMBAYARAN').toUpperCase()}</span><strong>{formatRupiah(selectedReceipt.amount)}</strong></section>
-                <section className="tuition-student-info"><span>{isID ? 'INFORMASI SISWA' : 'STUDENT INFORMATION'}</span><strong>{overview?.profile?.fullName || '—'}</strong><p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'} • {overview?.program?.className || '—'}</p></section>
-                <section className="tuition-transaction"><div><span>{isID ? 'Periode' : 'Period'}</span><strong>{selectedReceipt.period || '—'}</strong></div><div><span>{isID ? 'Metode' : 'Method'}</span><strong>{selectedReceipt.paymentMethod || (isID ? 'Diverifikasi Admin' : 'Admin verified')}</strong></div>{selectedReceipt.fulfillmentStatus && <div><span>{isID ? 'Status Penyerahan' : 'Fulfillment'}</span><strong>{selectedReceipt.fulfillmentStatus}</strong></div>}<div><span>Status</span><strong className="paid">{isID ? 'LUNAS' : 'PAID'}</strong></div></section>
-                <p className="receipt-thanks">{isID ? 'Terima kasih atas pembayaran Anda.' : 'Thank you for your payment.'}</p>
-                <footer><strong>Mr One Course</strong><span>{isID ? 'Dokumen ini merupakan bukti pembayaran resmi.' : 'This document serves as an official payment receipt.'}</span></footer>
+              <article className="tuition-document tuition-receipt payment-document-reference" id="tuition-print-document">
+                <header>
+                  <div>
+                    <span>{isID ? 'KWITANSI PEMBAYARAN' : 'PAYMENT RECEIPT'}</span>
+                    <strong>{selectedReceipt.paymentId || selectedReceipt.invoiceNumber || invoiceNumber}</strong>
+                  </div>
+                  <div className="tuition-document-brand"><img src="/logo-mr-one-course.jpeg" alt="Mr One Course" /><span><b>Mr One Course</b><small>Academic Suite</small></span></div>
+                </header>
+
+                <section className="tuition-amount">
+                  <span>
+                    {String(selectedReceipt.category || '').toLowerCase() === 'tuition' || /les|tuition/i.test(String(selectedReceipt.label || ''))
+                      ? `${isID ? 'BIAYA LES' : 'TUITION FEE'} ${paymentPeriodLabel(selectedReceipt.period).toUpperCase()}`
+                      : String(selectedReceipt.label || (isID ? 'PEMBAYARAN' : 'PAYMENT')).toUpperCase()}
+                  </span>
+                  <strong>{formatRupiah(selectedReceipt.amount)}</strong>
+                </section>
+
+                <section className="tuition-student-info">
+                  <span>{isID ? 'INFORMASI SISWA' : 'STUDENT INFO'}</span>
+                  <strong>{overview?.profile?.fullName || '—'}</strong>
+                  <p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'} • {overview?.program?.className || '—'}</p>
+                </section>
+
+                <section className="tuition-transaction receipt-transaction-details">
+                  <div><span>{isID ? 'Tanggal & Waktu' : 'Date & Time'}</span><strong>{selectedReceipt.paymentDate || selectedReceipt.verifiedAt || '—'}</strong></div>
+                  <div><span>{isID ? 'Metode' : 'Method'}</span><strong>{selectedReceipt.paymentMethod || (isID ? 'Diverifikasi Manajemen' : 'Management verified')}</strong></div>
+                  <div><span>{isID ? 'No. Kwitansi' : 'Receipt No.'}</span><strong>{selectedReceipt.paymentId || selectedReceipt.invoiceNumber || invoiceNumber}</strong></div>
+                  {selectedReceipt.fulfillmentStatus && <div><span>{isID ? 'Status Penyerahan' : 'Fulfillment'}</span><strong>{selectedReceipt.fulfillmentStatus}</strong></div>}
+                  <div><span>Status</span><strong className="paid">{isID ? 'LUNAS' : 'PAID'}</strong></div>
+                </section>
+
+                <p className="receipt-thanks">
+                  {isID ? 'Terima kasih atas pembayaran Anda.' : 'Thank you for your payment.'}
+                </p>
+                <p className="receipt-signature">— Mr One Course Management</p>
+
+                <footer>
+                  <strong>Mr One Course Academic Suite</strong>
+                  <span>{isID ? 'Dokumen ini merupakan bukti pembayaran resmi.' : 'This document serves as an official payment receipt.'}</span>
+                </footer>
               </article>
               <button className="receipt-print-button" type="button" onClick={() => window.print()}>⤓ {isID ? 'Cetak / Simpan PDF' : 'Print / Save PDF'}</button>
             </>
@@ -3322,6 +3603,28 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           <div className="detail-row"><span>{isID ? 'Kelas' : 'Class'}</span><strong>{overview?.program?.className || '—'}</strong></div>
           <div className="detail-row"><span>Tutor</span><strong>{overview?.program?.tutor || '—'}</strong></div>
           <div className="detail-row"><span>Level</span><strong>{overview?.program?.level || (isID ? 'Belum ditentukan' : 'Not determined')}</strong></div>
+
+          {isGrammarProgram && (
+            <section className="grammar-curriculum">
+              <div className="grammar-curriculum-heading">
+                <span>GRAMMAR ROADMAP</span>
+                <h3>{isID ? 'Materi Program Grammar' : 'Grammar Program Curriculum'}</h3>
+                <p>{isID ? 'Materi disusun bertahap dari fondasi kata, pola tense, sampai grammar penting untuk penggunaan bahasa Inggris yang lebih akurat.' : 'The curriculum moves from word foundations to tense patterns and essential grammar for more accurate English use.'}</p>
+              </div>
+              <div className="grammar-curriculum-list">
+                {GRAMMAR_CURRICULUM.map((module, index) => (
+                  <article key={module.key}>
+                    <div className="grammar-module-number">{String(index + 1).padStart(2, '0')}</div>
+                    <div>
+                      <h4>{module.title}</h4>
+                      <p>{isID ? module.subtitleID : module.subtitleEN}</p>
+                      <ul>{module.topics.map((topic) => <li key={topic}>{topic}</li>)}</ul>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
         </section>
       )}
 
@@ -3341,25 +3644,62 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       )}
 
       {page === 'journal' && (
-        <section className="learning-journal-section">
-          <div className="journal-heading"><span>▤</span><div><h2>{isID ? 'Pembelajaran & Misi Bulanan' : 'Learning & Monthly Missions'}</h2><p>{isID ? 'Ringkasan materi setiap pertemuan. Baca sampai akhir untuk mendapatkan EXP.' : 'Meeting-by-meeting learning summaries. Read each one to the end to earn EXP.'}</p></div></div>
-          {learningActivities.length ? learningActivities.map((entry, index) => (
-            <article className={`journal-entry-card ${String(entry.status || '').toLowerCase().replace(/\s+/g, '-')}`} key={entry.id || `${entry.date}-${index}`}>
-              <span className="journal-number">{String(entry.meetingNumber || index + 1).padStart(2, '0')}</span>
-              <div className="journal-entry-content">
-                <div className="journal-entry-title"><h3>{entry.title || entry.material || (isID ? `Pertemuan ${index + 1} — Belum direncanakan` : `Meeting ${index + 1} — Not planned`)}</h3><time>{entry.date || '—'}</time></div>
-                <p className="journal-tutor">Tutor: {entry.tutor || overview?.program?.tutor || '—'}</p>
-                <span className="learning-activity-status">{entry.status || (isID ? 'Terlaksana' : 'Completed')}</span>
-                {entry.objective && <p className="journal-objective"><strong>{isID ? 'Tujuan:' : 'Objective:'}</strong> {entry.objective}</p>}
-                {entry.targetCompetency && <div className="learning-target-card"><span>{isID ? 'TARGET CAPAIAN' : 'ACHIEVEMENT TARGET'}</span><p>{entry.targetCompetency}</p></div>}
-                <p className="journal-activity"><strong>{isID ? 'Aktivitas:' : 'Activities:'}</strong> {entry.activities || entry.activity || entry.notes || '—'}</p>
-                {(entry.assignment || entry.challenge) && <div className="learning-evidence-grid">{entry.assignment && <button type="button" onClick={() => onSelect('missions')}><span>Assignment</span><strong>{entry.assignment.title}</strong><small>{entry.assignment.status}{entry.assignment.score !== '' && entry.assignment.score != null ? ` • ${entry.assignment.score}/100` : ''} • +{entry.assignment.expReward || 0} EXP</small></button>}{entry.challenge && <button type="button" onClick={() => onSelect('missions')}><span>{isID ? 'Pengayaan' : 'Enrichment'}</span><strong>{entry.challenge.title}</strong><small>{entry.challenge.status}{entry.challenge.score !== '' && entry.challenge.score != null ? ` • ${entry.challenge.score}/100` : ''} • +{entry.challenge.expReward || 0} EXP</small></button>}</div>}
-                {entry.achievement && <div className="journal-personal-progress"><span>{isID ? 'CAPAIAN SAYA' : 'MY ACHIEVEMENT'}</span><strong>{entry.achievement}</strong>{entry.individualComment && <p>{entry.individualComment}</p>}</div>}
-                {entry.title && <LearningReadReward token={token} entry={entry} isID={isID} onCompleted={onRefreshOverview} onReward={(result) => showGamificationReward(result, isID ? 'Ringkasan pembelajaran selesai' : 'Learning summary completed')} disabled={studentSubmitting === `read-${entry.meetingNumber}`} />}
-              </div>
-            </article>
-          )) : (
-            <section className="detail-panel empty-feature"><span>▤</span><h2>{isID ? 'Rencana pembelajaran belum tersedia' : 'Learning plan not available yet'}</h2><p>{isID ? 'Pertemuan 1–8 akan muncul setelah tutor menyusun rencana pembelajaran bulanan.' : 'Meetings 1–8 will appear after the tutor prepares the monthly learning plan.'}</p></section>
+        <section className="learning-journal-section learning-feed-simple">
+          <div className="journal-heading">
+            <span>▤</span>
+            <div>
+              <h2>{isID ? 'Pembelajaran' : 'Learning'}</h2>
+              <p>{isID ? 'Materi dan aktivitas setiap pertemuan dalam satu tampilan sederhana.' : 'Materials and activities from each meeting in one simple view.'}</p>
+            </div>
+          </div>
+
+          {learningActivities.length ? (
+            <div className="learning-feed-list">
+              {learningActivities.map((entry, index) => (
+                <article className="learning-feed-card" key={entry.id || `${entry.date}-${index}`}>
+                  <div className="learning-feed-head">
+                    <span className="learning-feed-number">{String(entry.meetingNumber || index + 1).padStart(2, '0')}</span>
+                    <div>
+                      <h3>{entry.title || entry.material || (isID ? `Pertemuan ${index + 1}` : `Meeting ${index + 1}`)}</h3>
+                      <p><b>Tutor:</b> {entry.tutor || overview?.program?.tutor || '—'}</p>
+                    </div>
+                    <time>{entry.date || '—'}</time>
+                  </div>
+
+                  <div className="learning-feed-body">
+                    <p><strong>{isID ? 'Aktivitas:' : 'Activities:'}</strong> {entry.activities || entry.activity || entry.notes || '—'}</p>
+                    {entry.targetCompetency && <small><b>{isID ? 'Target:' : 'Target:'}</b> {entry.targetCompetency}</small>}
+                    {entry.achievement && <small><b>{isID ? 'Capaian:' : 'Achievement:'}</b> {entry.achievement}</small>}
+                  </div>
+
+                  {(entry.assignment || entry.challenge) && (
+                    <div className="learning-feed-actions">
+                      {entry.assignment && <button type="button" onClick={() => onSelect('missions')}>☑ {isID ? 'Buka Tugas' : 'Open Assignment'}</button>}
+                      {entry.challenge && <button type="button" onClick={() => onSelect('missions')}>🎯 {isID ? 'Buka Tantangan' : 'Open Challenge'}</button>}
+                    </div>
+                  )}
+
+                  {entry.title && (
+                    <div className="learning-feed-read">
+                      <LearningReadReward
+                        token={token}
+                        entry={entry}
+                        isID={isID}
+                        onCompleted={onRefreshOverview}
+                        onReward={(result) => showGamificationReward(result, isID ? 'Ringkasan pembelajaran selesai' : 'Learning summary completed')}
+                        disabled={studentSubmitting === `read-${entry.meetingNumber}`}
+                      />
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <section className="detail-panel empty-feature">
+              <span>▤</span>
+              <h2>{isID ? 'Pembelajaran belum tersedia' : 'Learning is not available yet'}</h2>
+              <p>{isID ? 'Materi akan muncul setelah tutor mengisi pertemuan.' : 'Materials will appear after the tutor records a meeting.'}</p>
+            </section>
           )}
         </section>
       )}
@@ -3371,6 +3711,9 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           <button type="button" onClick={() => window.print()}>⤓ {isID ? 'Cetak / Simpan PDF' : 'Print / Save PDF'}</button>
         </div>
         <section className="monthly-report-page" id="monthly-academic-report">
+          <div className="monthly-report-brand-logo standalone">
+            <img src="/logo-mr-one-course.jpeg" alt="Mr One Course" />
+          </div>
           <header className="monthly-report-cover">
             <img className="report-logo report-brand-logo-transparent" src="/logo-mr-one-course.jpeg" alt="Mr One Course" />
             <div><h2>{programReport.title.toUpperCase()}</h2><p>MR ONE COURSE • {isID ? 'PERIODE LAPORAN' : 'REPORT PERIOD'}: {overview?.currentMonth || '—'}</p></div>
@@ -3393,11 +3736,11 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
               <span className="report-section-label">{isID ? 'TAHAP PEMBELAJARAN GRAMMAR' : 'GRAMMAR LEARNING STAGE'}</span>
               <div className="grammar-stage-track">
                 {[
-                  { key: 'introduction', label: 'Grammar Introduction' },
                   { key: 'partsOfSpeech', label: 'Parts of Speech' },
-                  { key: 'essential', label: 'Essential Grammar' },
+                  { key: 'tenses', label: '16 Tenses' },
+                  { key: 'grammarEssential', label: 'Grammar Essential' },
                 ].map((stage, index) => {
-                  const order = ['introduction', 'partsOfSpeech', 'essential'];
+                  const order = ['partsOfSpeech', 'tenses', 'grammarEssential'];
                   const currentIndex = order.indexOf(programReport.stageKey);
                   const stageIndex = order.indexOf(stage.key);
                   return (
@@ -3429,6 +3772,11 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                 </div>
               ))}
             </div>
+          </article>
+
+          <article className="monthly-report-card report-skill-chart-card">
+            <span className="report-section-label">{isID ? 'GRAFIK PERKEMBANGAN' : 'PROGRESS CHART'}</span>
+            <AcademicRadarChart metrics={programReport.metrics} isID={isID} />
           </article>
 
           <div className="report-score-grid">
@@ -3790,6 +4138,11 @@ function Dashboard({
   token,
 }) {
 
+  useEdgeSwipeBack(
+    () => onNavigate('home'),
+    activePage !== 'home' && activePage !== 'students'
+  );
+
   const cards =
     user.role === 'CEO'
       ? [
@@ -3916,73 +4269,6 @@ function Dashboard({
             />
           )}
 
-          {user.role === 'CEO' && ceoMonitoring && (
-            <section className="ceo-finance-monitoring">
-              <div className="section-heading">
-                <div><span className="eyebrow">CEO MONITORING</span><h2>Keuangan & Produk</h2></div>
-                <span className="data-count">{ceoMonitoring.currentPeriod}</span>
-              </div>
-
-              <div className="ceo-finance-summary">
-                <article>
-                  <span>Les Bulan Ini</span>
-                  <strong>{ceoMonitoring.tuitionCurrent?.paidStudents || 0}/{ceoMonitoring.tuitionCurrent?.totalStudents || 0}</strong>
-                  <small>{ceoMonitoring.tuitionCurrent?.percentage || 0}% siswa sudah bayar</small>
-                </article>
-                <article>
-                  <span>Pemasukan Les</span>
-                  <strong>{formatRupiah(ceoMonitoring.tuitionCurrent?.revenue || 0)}</strong>
-                  <small>Periode {ceoMonitoring.tuitionCurrent?.label || ceoMonitoring.currentPeriod}</small>
-                </article>
-                <article>
-                  <span>Buku Dibeli</span>
-                  <strong>{ceoMonitoring.bookSummary?.purchased || 0}</strong>
-                  <small>{ceoMonitoring.bookSummary?.received || 0} sudah diterima siswa</small>
-                </article>
-                <article>
-                  <span>ID Card Dibeli</span>
-                  <strong>{ceoMonitoring.idCardSummary?.purchased || 0}</strong>
-                  <small>Pembelian terverifikasi</small>
-                </article>
-              </div>
-
-              <article className="ceo-monitor-panel">
-                <header><div><span className="eyebrow">TUITION TREND</span><h3>Perkembangan Pembayaran Les</h3></div><small>3 bulan terakhir</small></header>
-                <div className="ceo-tuition-trend">
-                  {(ceoMonitoring.tuitionMonthly || []).map((item) => (
-                    <div key={item.period} className="ceo-tuition-month">
-                      <div className="ceo-tuition-month-head"><strong>{item.label}</strong><span>{item.percentage}%</span></div>
-                      <div className="ceo-tuition-progress"><i style={{ width: `${Math.min(100, Math.max(0, item.percentage || 0))}%` }} /></div>
-                      <div className="ceo-tuition-meta"><span>{item.paidStudents}/{item.totalStudents} siswa</span><strong>{formatRupiah(item.revenue)}</strong></div>
-                    </div>
-                  ))}
-                </div>
-              </article>
-
-              <div className="ceo-product-grid">
-                <article className="ceo-monitor-panel">
-                  <header><div><span className="eyebrow">BOOK SALES</span><h3>Pembelian & Penyerahan Buku</h3></div><small>{ceoMonitoring.bookSummary?.pendingDelivery || 0} belum diterima</small></header>
-                  {(ceoMonitoring.bookPurchases || []).length ? <div className="ceo-product-list">
-                    {ceoMonitoring.bookPurchases.map((item,index) => <div key={item.paymentId || `${item.studentId}-${index}`}>
-                      <div><strong>{item.fullName || 'Nama siswa'}</strong><span>{item.studentId || '—'} • {item.program || '—'}</span></div>
-                      <div className="ceo-product-status"><b>{item.fulfillmentStatus || 'Sedang Disiapkan'}</b><small>{formatRupiah(item.amount || 0)}</small></div>
-                    </div>)}
-                  </div> : <p className="ceo-monitor-empty">Belum ada pembelian buku terverifikasi.</p>}
-                </article>
-
-                <article className="ceo-monitor-panel">
-                  <header><div><span className="eyebrow">ID CARD SALES</span><h3>Pembelian ID Card</h3></div><small>{ceoMonitoring.idCardSummary?.purchased || 0} siswa</small></header>
-                  {(ceoMonitoring.idCardPurchases || []).length ? <div className="ceo-product-list">
-                    {ceoMonitoring.idCardPurchases.map((item,index) => <div key={item.paymentId || `${item.studentId}-${index}`}>
-                      <div><strong>{item.fullName || 'Nama siswa'}</strong><span>{item.studentId || '—'} • {item.program || '—'}</span></div>
-                      <div className="ceo-product-status"><b>{item.fulfillmentStatus || 'Sedang Disiapkan'}</b><small>{formatRupiah(item.amount || 0)}</small></div>
-                    </div>)}
-                  </div> : <p className="ceo-monitor-empty">Belum ada pembelian ID Card terverifikasi.</p>}
-                </article>
-              </div>
-            </section>
-          )}
-
           {user.role === 'CEO' && <section className="dashboard-section">
             <div className="section-heading">
               <div>
@@ -4103,6 +4389,7 @@ function Dashboard({
           message={message}
           token={token}
           attentionLists={attentionLists}
+          onBack={() => onNavigate('home')}
         />
       ) : activePage === 'registrations' ? (
         <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} token={token} />
@@ -4228,6 +4515,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   const pending = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'menunggu verifikasi');
   const approved = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'disetujui');
+  const rejected = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'ditolak');
 
   const draftFor = (item) => drafts[item.registrationId] || {
     registrationId: item.registrationId,
@@ -4262,8 +4550,8 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     return digits;
   }
 
-  async function sendRegistrationWhatsApp(item) {
-    const key = `${item.registrationId}-combined`;
+  async function sendRegistrationWhatsApp(item, type = 'approved') {
+    const key = `${item.registrationId}-${type}`;
     setWaLoading(key);
     try {
       const result = await callApi({ action: 'getRegistrationWhatsAppPayload', token, registrationId: item.registrationId });
@@ -4275,6 +4563,15 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     } finally {
       setWaLoading('');
     }
+  }
+
+  function rejectRegistration(item, draft) {
+    const reason = String(draft.note || '').trim();
+    if (!reason) {
+      window.alert('Tuliskan alasan penolakan pada Catatan Admin terlebih dahulu.');
+      return;
+    }
+    onReject({ registrationId: item.registrationId, note: reason });
   }
 
   return <section className="registration-admin-page">
@@ -4325,7 +4622,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
               <label><span>Jadwal</span><input value={draft.schedule} onChange={(event) => update(item, 'schedule', event.target.value)} placeholder="Rabu & Jumat 19.00–20.00" /></label>
             </div>
             <label className="registration-note"><span>Catatan Admin</span><input value={draft.note} onChange={(event) => update(item, 'note', event.target.value)} /></label>
-            <footer><button type="button" className="reject" onClick={() => onReject(item.registrationId)}>Tolak</button><button type="button" className="approve" disabled={!draft.program || !draft.classId || !draft.schedule} onClick={() => onApprove(draft)}>Verifikasi & Setujui Pendaftaran</button></footer>
+            <footer><button type="button" className="reject" onClick={() => rejectRegistration(item, draft)}>Tolak</button><button type="button" className="approve" disabled={!draft.program || !draft.classId || !draft.schedule} onClick={() => onApprove(draft)}>Verifikasi & Setujui Pendaftaran</button></footer>
           </article>;
         })}</div>}
 
@@ -4335,8 +4632,22 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
           <div className="registration-contact"><span>Student ID: <b>{item.studentId || '—'}</b></span><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
           <div className="registration-wa-actions single">
-            <button type="button" onClick={() => sendRegistrationWhatsApp(item)} disabled={waLoading === `${item.registrationId}-combined`}>
-              {waLoading === `${item.registrationId}-combined` ? 'Membuka...' : '💬 Kirim Link Grup & Aktivasi Akun'}
+            <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'approved')} disabled={waLoading === `${item.registrationId}-approved`}>
+              {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Ucapan Selamat via WA'}
+            </button>
+          </div>
+        </article>)}</div>
+      </div>}
+
+      {rejected.length > 0 && <div className="registration-rejected-section">
+        <div className="registration-approved-heading"><div><span className="eyebrow">DITOLAK</span><h3>Informasikan Hasil Verifikasi</h3></div><small>Alasan penolakan + tindak lanjut</small></div>
+        <div className="registration-admin-list">{rejected.map((item) => <article key={`rejected-${item.registrationId}`} className="registration-rejected-card">
+          <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="rejected-status">DITOLAK</span></header>
+          <div className="registration-rejection-reason"><span>Alasan</span><strong>{item.adminNote || '—'}</strong></div>
+          <div className="registration-contact"><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
+          <div className="registration-wa-actions single">
+            <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'rejected')} disabled={waLoading === `${item.registrationId}-rejected`}>
+              {waLoading === `${item.registrationId}-rejected` ? 'Membuka...' : '💬 Kirim Alasan Penolakan via WA'}
             </button>
           </div>
         </article>)}</div>
@@ -4345,11 +4656,28 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
   </section>;
 }
 
-function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists }) {
+function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists, onBack }) {
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState('');
+
+  function closeStudentDetail() {
+    setSelectedStudentId('');
+    setDetail(null);
+    setDetailMessage('');
+  }
+
+  useEdgeSwipeBack(
+    () => {
+      if (selectedStudentId) {
+        closeStudentDetail();
+      } else if (onBack) {
+        onBack();
+      }
+    },
+    true
+  );
 
   function normalizeAdminWa(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -4375,7 +4703,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
 
   if (selectedStudentId) {
     return <section className="students-page admin-student-detail-page">
-      <button type="button" className="admin-student-detail-back" onClick={() => { setSelectedStudentId(''); setDetail(null); setDetailMessage(''); }}>← Kembali ke Data Siswa</button>
+      <button type="button" className="admin-student-detail-back" onClick={closeStudentDetail}>← Kembali ke Data Siswa</button>
       {detailLoading ? <div className="dashboard-loading">Memuat laporan siswa...</div> : detailMessage ? <div className="error-message">{detailMessage}</div> : detail ? <>
         <div className="admin-student-detail-hero">
           <div className="student-avatar large">{String(detail.student?.fullName || 'S').charAt(0).toUpperCase()}</div>
