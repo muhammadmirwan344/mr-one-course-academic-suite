@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const API_URL =
-'https://script.google.com/macros/s/AKfycbzZ02JeqEiB0RYDRO5ei7HrrmpdspVSK9b2SktXc_OwCg1qHAi6aV29rPjS2sJiblVnxw/exec';
+'https://script.google.com/macros/s/AKfycbzAMj7SqCnWWXyqO-MpWGutxwxuBWZSivOqRom1wlHBVVwY-utArca72QgiSDE4HhrGAg/exec';
 
 function PaperPlaneLogo() {
   return (
