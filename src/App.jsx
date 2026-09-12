@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const API_URL =
-'https://script.google.com/macros/s/AKfycbzhR99zk3pSqjxF8rxmG19xHjs9ctbSya1WRQLTrqLmCERppy2muP8UEUIz40zbPm2NBg/exec';
+'https://script.google.com/macros/s/AKfycbx-3ZB29sQk08VmWvQac6pydaCveGI_shSHNkgfQOOuv1GcfYANtNft1gFPos9EOu6txA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -768,6 +768,26 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    if (!user || !token) return undefined;
+    const role = String(user.role || '').toLowerCase();
+    if (role === 'siswa' || role === 'tutor') return undefined;
+
+    function refreshDashboardOnFocus() {
+      if (document.visibilityState === 'visible' && activePage === 'home') {
+        loadDashboard(token);
+      }
+    }
+
+    window.addEventListener('focus', refreshDashboardOnFocus);
+    document.addEventListener('visibilitychange', refreshDashboardOnFocus);
+
+    return () => {
+      window.removeEventListener('focus', refreshDashboardOnFocus);
+      document.removeEventListener('visibilitychange', refreshDashboardOnFocus);
+    };
+  }, [user, token, activePage]);
+
   async function loadStudentOverview(activeToken) {
     setStudentOverviewLoading(true);
     setMessage('');
@@ -918,6 +938,7 @@ function App() {
       const result = await callApi(request);
       setMessage(result.message);
       await loadRegistrations();
+      await loadDashboard(token);
     } catch (error) {
       setMessage(error.message || 'Pendaftaran gagal diproses.');
       setRegistrationsLoading(false);
@@ -981,6 +1002,7 @@ function App() {
     setActivePage(page);
     setMessage('');
 
+    if (page === 'home') loadDashboard(token);
     if (page === 'students') {
       loadStudents(studentSearch, 1);
     }
@@ -2972,6 +2994,36 @@ function AcademicRadarChart({ metrics = [], isID = true }) {
   );
 }
 
+
+function QrisPaymentDisplay({ isID }) {
+  const [qrisAvailable, setQrisAvailable] = useState(true);
+
+  return (
+    <div className="qris-payment-box qris-payment-box-v64">
+      {qrisAvailable ? (
+        <img
+          src="/qris-mr-one-course.jpeg"
+          alt="QRIS Mr One Course"
+          onError={() => setQrisAvailable(false)}
+        />
+      ) : (
+        <div className="qris-missing-safe">
+          <strong>QRIS MR ONE COURSE</strong>
+          <span>{isID ? 'Barcode QRIS belum tersedia pada file aplikasi.' : 'The QRIS barcode is not yet available in the app files.'}</span>
+        </div>
+      )}
+      <div>
+        <strong>QRIS Mr One Course</strong>
+        <p>
+          {isID
+            ? 'Pindai barcode QRIS menggunakan aplikasi bank atau e-wallet, lalu masukkan nominal sesuai tagihan.'
+            : 'Scan the QRIS barcode using your banking or e-wallet app, then enter the invoice amount.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
   const isID = language === 'ID';
   const programChallenge = getProgramChallenge(overview?.program?.program, isID);
@@ -3373,7 +3425,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                     <span>{isID ? 'INVOICE PEMBAYARAN' : 'PAYMENT INVOICE'}</span>
                     <strong>{invoiceNumber}</strong>
                   </div>
-                  <div><b>Mr One Course</b><small>Academic Suite</small></div>
+                  <div className="tuition-document-brand"><img src="/logo-mr-one-course.jpeg" alt="Mr One Course" /><span><b>Mr One Course</b><small>Academic Suite</small></span></div>
                 </header>
 
                 <section className="tuition-amount">
@@ -3427,7 +3479,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                     ['Tunai', isID ? 'Bayar langsung' : 'Pay in person', isID ? 'Pilih penerima di bawah' : 'Choose the recipient below'],
                   ].map(([name, number, owner]) => <label className={paymentForm.paymentMethod === name ? 'selected' : ''} key={name}><input type="radio" name="payment-method" value={name} checked={paymentForm.paymentMethod === name} onChange={(event) => setPaymentForm({ ...paymentForm, paymentMethod: event.target.value, proof: event.target.value === 'Tunai' ? null : paymentForm.proof })} /><span><b>{name}</b><strong>{number}</strong><small>{name === 'Tunai' ? owner : `a.n. ${owner}`}</small></span>{number.match(/^\d+$/) && <button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button>}</label>)}
                 </div>
-                {paymentForm.paymentMethod === 'QRIS Mr One Course' && <div className="qris-payment-box"><img src="/qris-mr-one-course.jpeg" alt="QRIS Mr One Course" /><p>{isID ? 'Buka aplikasi pembayaran, pindai QRIS, lalu masukkan nominal tagihan.' : 'Open your payment app, scan QRIS, then enter the invoice amount.'}</p></div>}
+                {paymentForm.paymentMethod === 'QRIS Mr One Course' && <QrisPaymentDisplay isID={isID} />}
                 {paymentForm.paymentMethod === 'Tunai' && <div className="cash-recipient-box"><span>{isID ? 'PEMBAYARAN TUNAI DITERIMA OLEH' : 'CASH PAYMENT RECEIVED BY'}</span><div>{['Mr One', 'Miss Vita'].map((recipient) => <label className={paymentForm.cashRecipient === recipient ? 'selected' : ''} key={recipient}><input type="radio" name="cash-recipient" value={recipient} checked={paymentForm.cashRecipient === recipient} onChange={(event) => setPaymentForm({ ...paymentForm, cashRecipient: event.target.value })} /><strong>{recipient}</strong></label>)}</div></div>}
                 <div className="payment-form-heading"><span>2</span><div><h2>{paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? 'Kirim Bukti Pembayaran' : 'Submit Payment Proof')}</h2><p>{isID ? 'Admin akan memeriksa data berikut.' : 'Admin will review these details.'}</p></div></div>
                 <div className="payment-input-grid payment-date-only"><label><span>{isID ? 'Tanggal pembayaran' : 'Payment date'}</span><input type="date" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} required /></label></div>
@@ -3448,7 +3500,7 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                     <span>{isID ? 'KWITANSI PEMBAYARAN' : 'PAYMENT RECEIPT'}</span>
                     <strong>{selectedReceipt.paymentId || selectedReceipt.invoiceNumber || invoiceNumber}</strong>
                   </div>
-                  <div><b>Mr One Course</b><small>Academic Suite</small></div>
+                  <div className="tuition-document-brand"><img src="/logo-mr-one-course.jpeg" alt="Mr One Course" /><span><b>Mr One Course</b><small>Academic Suite</small></span></div>
                 </header>
 
                 <section className="tuition-amount">
@@ -3681,6 +3733,9 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
           <button type="button" onClick={() => window.print()}>⤓ {isID ? 'Cetak / Simpan PDF' : 'Print / Save PDF'}</button>
         </div>
         <section className="monthly-report-page" id="monthly-academic-report">
+          <div className="monthly-report-brand-logo standalone">
+            <img src="/logo-mr-one-course.jpeg" alt="Mr One Course" />
+          </div>
           <header className="monthly-report-cover">
             <img className="report-logo report-brand-logo-transparent" src="/logo-mr-one-course.jpeg" alt="Mr One Course" />
             <div><h2>{programReport.title.toUpperCase()}</h2><p>MR ONE COURSE • {isID ? 'PERIODE LAPORAN' : 'REPORT PERIOD'}: {overview?.currentMonth || '—'}</p></div>
