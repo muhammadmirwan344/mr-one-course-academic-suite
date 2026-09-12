@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxb4AgjH8T4BKLJvs2PHwUSfr_6c2jmoQloefsSmQvuxD1MTlvS_XjSX3NGxQtivzG6rg/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby2jWkrxa86HjjwWGtBO-3YUsK4RXkEBrFuspmKGOqmpdgVr-8xeFgtuuC5HceT6mV0Cw/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4550,12 +4550,12 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   }
 
   function chooseCategory(category) { setHistorical({ ...historical, paymentCategory: category, amount: category === 'ID Card' ? 20000 : 150000, fulfillmentStatus: category === 'Tuition' ? '' : 'Sedang Disiapkan' }); }
-  return <section className="payment-admin-page">
-    <div className="section-heading">
+  return <section className="payment-admin-page payment-admin-page-v77">
+    <div className="section-heading payment-center-heading-v77">
       <div><span className="eyebrow">PAYMENT CENTER</span><h2>Kelola Pembayaran</h2></div>
       {!showHistorical && <button className="add-historical-button" type="button" onClick={toggleHistoricalForm}>＋ Tambah Pembayaran Lama</button>}
     </div>
-    {showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v71 historical-payment-form-top" onSubmit={submitHistorical}>
+    {showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
       <header>
         <div><small>TRANSAKSI SEBELUM PORTAL</small><h3>Tambah Pembayaran Lama</h3></div>
         <button type="button" onClick={() => setShowHistorical(false)}>×</button>

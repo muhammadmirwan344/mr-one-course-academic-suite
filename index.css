@@ -27309,3 +27309,18 @@ html[data-theme='light'] .tutor-dashboard-header svg {
 .legacy-student-activation-action button.sent {
   opacity: .72;
 }
+
+
+/* V77 — Transaksi Sebelum Portal: exact placement under Payment Center */
+.payment-admin-page-v77 .payment-center-heading-v77 {
+  margin-bottom: 12px;
+}
+.payment-admin-page-v77 .historical-payment-form-top-v77 {
+  display: block;
+  width: 100%;
+  margin: 0 0 18px;
+  scroll-margin-top: 88px;
+}
+.payment-admin-page-v77 .historical-payment-form-top-v77 + .error-message {
+  margin-top: 0;
+}
