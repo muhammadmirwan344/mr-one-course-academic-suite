@@ -26997,3 +26997,293 @@ html[data-theme='light'] .registration-rejection-reason {
     height:52px !important;
   }
 }
+
+
+/* V67 — Global authenticated light-theme stabilization
+   Goal: remove remaining black/dark islands in Admin, CEO, Tutor, and Student
+   while preserving the existing dark theme exactly. */
+
+html[data-theme='light'] {
+  --moc-light-bg: #f4f8fb;
+  --moc-light-surface: #ffffff;
+  --moc-light-surface-soft: #f8fbfd;
+  --moc-light-surface-muted: #eef5f8;
+  --moc-light-border: #d8e4eb;
+  --moc-light-border-strong: #c8d7e0;
+  --moc-light-text: #173247;
+  --moc-light-text-soft: #607789;
+  --moc-light-accent: #18b7c7;
+}
+
+/* Authenticated page backgrounds */
+html[data-theme='light'] .app-dashboard,
+html[data-theme='light'] .student-dashboard,
+html[data-theme='light'] .student-detail-page,
+html[data-theme='light'] .student-full-menu,
+html[data-theme='light'] .student-checkin-page,
+html[data-theme='light'] .tutor-dashboard,
+html[data-theme='light'] .tutor-dashboard-page,
+html[data-theme='light'] .admin-menu-page,
+html[data-theme='light'] .students-page,
+html[data-theme='light'] .registration-admin-page,
+html[data-theme='light'] .payment-admin-page,
+html[data-theme='light'] .payment-confirmations-page,
+html[data-theme='light'] .ceo-monitoring-page,
+html[data-theme='light'] .ceo-detail-page {
+  background: var(--moc-light-bg) !important;
+  color: var(--moc-light-text) !important;
+}
+
+/* Main surfaces/cards across all authenticated roles */
+html[data-theme='light'] .app-dashboard article,
+html[data-theme='light'] .app-dashboard section:not(.student-bottom-nav):not(.student-checkin-shell),
+html[data-theme='light'] .student-dashboard article,
+html[data-theme='light'] .student-dashboard .detail-panel,
+html[data-theme='light'] .student-detail-page article,
+html[data-theme='light'] .student-detail-page .detail-panel,
+html[data-theme='light'] .student-full-menu article,
+html[data-theme='light'] .student-full-menu section,
+html[data-theme='light'] .tutor-dashboard article,
+html[data-theme='light'] .tutor-dashboard section,
+html[data-theme='light'] .students-page article,
+html[data-theme='light'] .registration-admin-page article,
+html[data-theme='light'] .payment-confirmations-page article,
+html[data-theme='light'] .admin-menu-page article,
+html[data-theme='light'] .ceo-monitoring-page article,
+html[data-theme='light'] .ceo-detail-page article {
+  background-color: var(--moc-light-surface) !important;
+  color: var(--moc-light-text) !important;
+  border-color: var(--moc-light-border) !important;
+  box-shadow: 0 10px 28px rgba(30, 64, 86, .06) !important;
+}
+
+/* Headers, navs, sticky bars */
+html[data-theme='light'] .app-header,
+html[data-theme='light'] .tutor-dashboard-header,
+html[data-theme='light'] .student-detail-header,
+html[data-theme='light'] .full-menu-header,
+html[data-theme='light'] .student-bottom-nav,
+html[data-theme='light'] .student-dashboard-header,
+html[data-theme='light'] .student-checkin-page > header {
+  background: rgba(255,255,255,.96) !important;
+  color: var(--moc-light-text) !important;
+  border-color: var(--moc-light-border) !important;
+  box-shadow: 0 8px 24px rgba(28, 64, 87, .07) !important;
+}
+
+/* Text consistency */
+html[data-theme='light'] .app-dashboard h1,
+html[data-theme='light'] .app-dashboard h2,
+html[data-theme='light'] .app-dashboard h3,
+html[data-theme='light'] .app-dashboard h4,
+html[data-theme='light'] .student-dashboard h1,
+html[data-theme='light'] .student-dashboard h2,
+html[data-theme='light'] .student-dashboard h3,
+html[data-theme='light'] .student-detail-page h1,
+html[data-theme='light'] .student-detail-page h2,
+html[data-theme='light'] .student-detail-page h3,
+html[data-theme='light'] .student-full-menu h1,
+html[data-theme='light'] .student-full-menu h2,
+html[data-theme='light'] .student-full-menu h3,
+html[data-theme='light'] .tutor-dashboard h1,
+html[data-theme='light'] .tutor-dashboard h2,
+html[data-theme='light'] .tutor-dashboard h3,
+html[data-theme='light'] .students-page h1,
+html[data-theme='light'] .students-page h2,
+html[data-theme='light'] .students-page h3,
+html[data-theme='light'] .registration-admin-page h1,
+html[data-theme='light'] .registration-admin-page h2,
+html[data-theme='light'] .registration-admin-page h3,
+html[data-theme='light'] .payment-confirmations-page h1,
+html[data-theme='light'] .payment-confirmations-page h2,
+html[data-theme='light'] .payment-confirmations-page h3 {
+  color: var(--moc-light-text) !important;
+}
+
+html[data-theme='light'] .app-dashboard p,
+html[data-theme='light'] .app-dashboard small,
+html[data-theme='light'] .app-dashboard span:not(.status):not(.paid):not(.unpaid):not(.approved-status):not(.rejected-status),
+html[data-theme='light'] .student-dashboard p,
+html[data-theme='light'] .student-dashboard small,
+html[data-theme='light'] .student-detail-page p,
+html[data-theme='light'] .student-detail-page small,
+html[data-theme='light'] .student-full-menu p,
+html[data-theme='light'] .student-full-menu small,
+html[data-theme='light'] .tutor-dashboard p,
+html[data-theme='light'] .tutor-dashboard small,
+html[data-theme='light'] .students-page p,
+html[data-theme='light'] .students-page small,
+html[data-theme='light'] .registration-admin-page p,
+html[data-theme='light'] .registration-admin-page small,
+html[data-theme='light'] .payment-confirmations-page p,
+html[data-theme='light'] .payment-confirmations-page small {
+  color: var(--moc-light-text-soft) !important;
+}
+
+/* Inputs/selects/textareas/buttons that were still dark */
+html[data-theme='light'] .app-dashboard input,
+html[data-theme='light'] .app-dashboard select,
+html[data-theme='light'] .app-dashboard textarea,
+html[data-theme='light'] .student-dashboard input,
+html[data-theme='light'] .student-dashboard select,
+html[data-theme='light'] .student-dashboard textarea,
+html[data-theme='light'] .student-detail-page input,
+html[data-theme='light'] .student-detail-page select,
+html[data-theme='light'] .student-detail-page textarea,
+html[data-theme='light'] .tutor-dashboard input,
+html[data-theme='light'] .tutor-dashboard select,
+html[data-theme='light'] .tutor-dashboard textarea,
+html[data-theme='light'] .registration-admin-page input,
+html[data-theme='light'] .registration-admin-page select,
+html[data-theme='light'] .registration-admin-page textarea,
+html[data-theme='light'] .payment-confirmations-page input,
+html[data-theme='light'] .payment-confirmations-page select,
+html[data-theme='light'] .payment-confirmations-page textarea {
+  background: #fff !important;
+  color: var(--moc-light-text) !important;
+  border-color: var(--moc-light-border-strong) !important;
+}
+
+/* Utility dark boxes */
+html[data-theme='light'] .student-rank-card,
+html[data-theme='light'] .learning-feed-card,
+html[data-theme='light'] .challenge-card,
+html[data-theme='light'] .assignment-card,
+html[data-theme='light'] .badge-card,
+html[data-theme='light'] .program-progress-card,
+html[data-theme='light'] .monthly-report-card:not(.print-report-page),
+html[data-theme='light'] .payment-method-grid label,
+html[data-theme='light'] .qris-payment-box,
+html[data-theme='light'] .cash-recipient-box,
+html[data-theme='light'] .selected-payment-summary,
+html[data-theme='light'] .registration-file-actions,
+html[data-theme='light'] .registration-submitted-data,
+html[data-theme='light'] .payment-review-details,
+html[data-theme='light'] .admin-detail-keyvalues,
+html[data-theme='light'] .tutor-journal-form,
+html[data-theme='light'] .tutor-academic-workspace,
+html[data-theme='light'] .tutor-class-card,
+html[data-theme='light'] .tutor-student-card {
+  background: var(--moc-light-surface) !important;
+  color: var(--moc-light-text) !important;
+  border-color: var(--moc-light-border) !important;
+}
+
+/* Preserve branded/accent controls but remove black backgrounds */
+html[data-theme='light'] .app-dashboard button:not(.approve):not(.reject),
+html[data-theme='light'] .student-dashboard button,
+html[data-theme='light'] .student-detail-page button,
+html[data-theme='light'] .tutor-dashboard button,
+html[data-theme='light'] .students-page button,
+html[data-theme='light'] .registration-admin-page button:not(.approve):not(.reject),
+html[data-theme='light'] .payment-confirmations-page button {
+  border-color: var(--moc-light-border) !important;
+}
+
+/* Specifically neutralize known hard-dark action/nav surfaces in light mode */
+html[data-theme='light'] .tutor-refresh,
+html[data-theme='light'] .dashboard-header-actions button,
+html[data-theme='light'] .admin-menu-links button,
+html[data-theme='light'] .student-full-menu button,
+html[data-theme='light'] .receipt-back-button,
+html[data-theme='light'] .admin-student-detail-back,
+html[data-theme='light'] .registration-wa-actions button,
+html[data-theme='light'] .view-payment-proof,
+html[data-theme='light'] .save-historical-payment {
+  background: var(--moc-light-surface) !important;
+  color: var(--moc-light-text) !important;
+}
+
+/* Keep semantic status colors readable */
+html[data-theme='light'] .approve,
+html[data-theme='light'] .checkin-primary,
+html[data-theme='light'] .submit-payment-proof,
+html[data-theme='light'] .student-access-submit {
+  color: #fff !important;
+}
+html[data-theme='light'] .reject {
+  color: #b33d45 !important;
+}
+
+/* Tables and list rows */
+html[data-theme='light'] table,
+html[data-theme='light'] thead,
+html[data-theme='light'] tbody,
+html[data-theme='light'] tr,
+html[data-theme='light'] td,
+html[data-theme='light'] th {
+  border-color: var(--moc-light-border) !important;
+}
+html[data-theme='light'] th {
+  background: var(--moc-light-surface-muted) !important;
+  color: var(--moc-light-text) !important;
+}
+html[data-theme='light'] td {
+  background: #fff !important;
+  color: var(--moc-light-text) !important;
+}
+
+/* Empty states / notices */
+html[data-theme='light'] .empty-state,
+html[data-theme='light'] .dashboard-loading,
+html[data-theme='light'] .tutor-loading,
+html[data-theme='light'] .error-message,
+html[data-theme='light'] .tutor-notice,
+html[data-theme='light'] .payment-form-message {
+  background: var(--moc-light-surface-soft) !important;
+  color: var(--moc-light-text) !important;
+  border-color: var(--moc-light-border) !important;
+}
+
+/* Student report remains white/light for print-like readability in both themes */
+html[data-theme='light'] #monthly-academic-report,
+html[data-theme='light'] #monthly-academic-report article,
+html[data-theme='light'] #tuition-print-document {
+  background:#fff !important;
+  color:#172235 !important;
+}
+
+/* Avoid accidental dark SVG/icon fills in light mode while keeping brand accents */
+html[data-theme='light'] .student-nav-icon,
+html[data-theme='light'] .modern-signout-icon,
+html[data-theme='light'] .app-header svg,
+html[data-theme='light'] .tutor-dashboard-header svg {
+  color: var(--moc-light-text) !important;
+  stroke: currentColor !important;
+}
+
+
+/* V70 — Historical payment form interaction fix */
+.add-historical-button {
+  cursor:pointer !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+.add-historical-button.active {
+  border-color:#1fb9c7 !important;
+  box-shadow:0 0 0 3px rgba(31,185,199,.10) !important;
+}
+.historical-payment-form-v70 {
+  scroll-margin-top:90px;
+  animation:mocHistoricalOpen .18s ease-out;
+}
+.historical-payment-form-v70 .save-historical-payment {
+  cursor:pointer;
+  opacity:1;
+}
+.historical-payment-form-v70 .save-historical-payment:disabled {
+  cursor:wait;
+  opacity:.65;
+}
+@keyframes mocHistoricalOpen {
+  from { opacity:0; transform:translateY(-6px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+
+/* V71 — Historical payment at top + one-time app guide WA */
+.historical-payment-form-top { margin:0 0 18px; scroll-margin-top:88px; }
+.registration-wa-actions-approved { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.registration-wa-actions-approved button.sent,
+.registration-wa-actions-approved button:disabled.sent { opacity:.72; cursor:not-allowed; }
+@media(max-width:640px) { .registration-wa-actions-approved { grid-template-columns:1fr; } }
