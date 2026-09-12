@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbx-3ZB29sQk08VmWvQac6pydaCveGI_shSHNkgfQOOuv1GcfYANtNft1gFPos9EOu6txA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyHbQt8a9C9NJ678jIO19nuLzpc0EkDOc9M-kI7bU-Y2MJKk52iNJwETCr8nbBW9cTDZg/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4413,7 +4413,7 @@ function Dashboard({
           onBack={() => onNavigate('home')}
         />
       ) : activePage === 'registrations' ? (
-        <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} token={token} />
+        <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} token={token} onRefresh={loadRegistrations} />
       ) : activePage === 'payment-confirmations' ? (
         <PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} />
       ) : activePage === 'menu' ? (
@@ -4474,9 +4474,78 @@ function Dashboard({
 
 function PaymentConfirmationsPage({ confirmations, payments, loading, message, onReview, onAddHistorical, onUpdateFulfillment, token, attentionLists }) {
   const [proof, setProof] = useState(null); const [proofLoading, setProofLoading] = useState(''); const [notes, setNotes] = useState({}); const [showHistorical, setShowHistorical] = useState(false);
-  const [historical, setHistorical] = useState({ studentId: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '' });
+  const [historicalSubmitting, setHistoricalSubmitting] = useState(false);
+  const historicalFormRef = useRef(null);
+  const emptyHistoricalPayment = () => ({ studentId: '', studentName: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '', proof: null });
+  const [historical, setHistorical] = useState(emptyHistoricalPayment);
   const pending = (confirmations || []).filter((item) => /menunggu verifikasi/i.test(item.status));
-  const tuitionTargets = attentionLists?.tuitionReminderTargets || [];
+
+  // Tuition Watch V81:
+  // tampilannya tidak hanya bergantung pada snapshot dashboard.
+  // Daftar tagihan direkonsiliasi lagi dengan data pembayaran yang sedang tampil
+  // di Payment Center, sehingga setelah Admin/siswa mencatat pembayaran periode aktif,
+  // nama siswa langsung hilang dari Tuition Watch.
+  const tuitionPeriod = String(attentionLists?.period || '').trim();
+  const baseTuitionTargets = attentionLists?.tuitionReminderTargets || [];
+
+  function normalizeTuitionStudentId(value) {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  function normalizeTuitionCategory(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized || normalized === 'tuition' || normalized.includes('les') || normalized.includes('course')) {
+      return 'Tuition';
+    }
+    return normalized;
+  }
+
+  function tuitionPaymentPeriod(item) {
+    const direct = String(item?.period || '').trim();
+    if (/^\d{4}-\d{2}$/.test(direct)) return direct;
+
+    const rawDate = String(item?.paymentDate || '').trim();
+    const match = rawDate.match(/^(\d{4})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}` : '';
+  }
+
+  const paidOrSubmittedTuitionIds = new Set();
+
+  (payments || []).forEach((item) => {
+    const id = normalizeTuitionStudentId(item.studentId);
+    const status = String(item.status || '').trim().toLowerCase();
+    const category = normalizeTuitionCategory(item.paymentCategory || item.category);
+    const period = tuitionPaymentPeriod(item);
+
+    if (
+      id &&
+      category === 'Tuition' &&
+      period === tuitionPeriod &&
+      /^(lunas|paid|verified)$/.test(status)
+    ) {
+      paidOrSubmittedTuitionIds.add(id);
+    }
+  });
+
+  (confirmations || []).forEach((item) => {
+    const id = normalizeTuitionStudentId(item.studentId);
+    const status = String(item.status || '').trim().toLowerCase();
+    const category = normalizeTuitionCategory(item.paymentCategory);
+    const period = tuitionPaymentPeriod(item);
+
+    if (
+      id &&
+      category === 'Tuition' &&
+      period === tuitionPeriod &&
+      /^(menunggu verifikasi|pending|menunggu|lunas|paid|verified)$/.test(status)
+    ) {
+      paidOrSubmittedTuitionIds.add(id);
+    }
+  });
+
+  const tuitionTargets = baseTuitionTargets.filter(
+    (item) => !paidOrSubmittedTuitionIds.has(normalizeTuitionStudentId(item.studentId))
+  );
 
   function normalizePaymentWa(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -4507,9 +4576,112 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     });
   }
   async function viewProof(item) { setProofLoading(item.confirmationId); try { const result = await callApi({ action: 'getPaymentProof', token, confirmationId: item.confirmationId }); setProof({ ...result, confirmationId: item.confirmationId }); } catch (error) { window.alert(error.message); } finally { setProofLoading(''); } }
-  async function submitHistorical(event) { event.preventDefault(); const success = await onAddHistorical(historical); if (success) { setShowHistorical(false); setHistorical({ studentId: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '' }); } }
+
+  function toggleHistoricalForm() {
+    setShowHistorical((value) => {
+      const next = !value;
+      if (next) {
+        window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+      }
+      return next;
+    });
+  }
+
+  function openTuitionPaymentForm(item) {
+    setHistorical({
+      ...emptyHistoricalPayment(),
+      studentId: String(item.studentId || '').trim().toUpperCase(),
+      studentName: String(item.fullName || '').trim(),
+      paymentCategory: 'Tuition',
+      amount: 150000,
+      paymentMethod: 'BCA',
+      period: String(item.period || tuitionPeriod || '').trim(),
+      fulfillmentStatus: '',
+      note: 'Pembayaran periode berjalan dicatat melalui Tuition Watch.'
+    });
+    setShowHistorical(true);
+    window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  }
+
+  function chooseHistoricalProof(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      window.alert('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      window.alert('Ukuran bukti pembayaran maksimal 4 MB.');
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setHistorical((value) => ({ ...value, proof: { fileName: file.name, mimeType: file.type, base64: String(reader.result || '') } }));
+    reader.onerror = () => window.alert('File bukti pembayaran tidak dapat dibaca.');
+    reader.readAsDataURL(file);
+  }
+
+  async function submitHistorical(event) {
+    event.preventDefault();
+
+    const studentId = String(historical.studentId || '').trim();
+    if (!studentId) {
+      window.alert('Isi Student ID terlebih dahulu.');
+      return;
+    }
+    if (!historical.paymentDate) {
+      window.alert('Pilih tanggal pembayaran.');
+      return;
+    }
+    if (historical.paymentCategory === 'Tuition' && !historical.period) {
+      window.alert('Pilih periode les.');
+      return;
+    }
+    if (!historical.proof) {
+      window.alert('Upload bukti pembayaran terlebih dahulu.');
+      return;
+    }
+
+    setHistoricalSubmitting(true);
+    try {
+      const success = await onAddHistorical({ ...historical, studentId: studentId.toUpperCase() });
+      if (success) {
+        setShowHistorical(false);
+        setHistorical(emptyHistoricalPayment());
+      }
+    } finally {
+      setHistoricalSubmitting(false);
+    }
+  }
+
   function chooseCategory(category) { setHistorical({ ...historical, paymentCategory: category, amount: category === 'ID Card' ? 20000 : 150000, fulfillmentStatus: category === 'Tuition' ? '' : 'Sedang Disiapkan' }); }
-  return <section className="payment-admin-page"><div className="section-heading"><div><span className="eyebrow">PAYMENT CENTER</span><h2>Kelola Pembayaran</h2></div><button className="add-historical-button" type="button" onClick={() => setShowHistorical((value) => !value)}>＋ Tambah Pembayaran Lama</button></div>{message && <div className="error-message">{message}</div>}
+  return <section className="payment-admin-page payment-admin-page-v77">
+    <div className="section-heading payment-center-heading-v77">
+      <div><span className="eyebrow">PAYMENT CENTER</span><h2>Kelola Pembayaran</h2></div>
+      {!showHistorical && <button className="add-historical-button" type="button" onClick={toggleHistoricalForm}>＋ Tambah Pembayaran Lama</button>}
+    </div>
+    {showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
+      <header>
+        <div><small>TRANSAKSI SEBELUM PORTAL</small><h3>Tambah Pembayaran Lama</h3></div>
+        <button type="button" onClick={() => setShowHistorical(false)}>×</button>
+      </header>
+      <div className="historical-payment-grid">
+        <label><span>Student ID</span><input value={historical.studentId} onChange={(event) => setHistorical({ ...historical, studentId: event.target.value.toUpperCase() })} placeholder="MOC001" required /></label>
+        {historical.studentName && <label><span>Nama Siswa</span><input value={historical.studentName} readOnly /></label>}
+        <label><span>Jenis Pembayaran</span><select value={historical.paymentCategory} onChange={(event) => chooseCategory(event.target.value)}><option value="Book Package">Paket 4 Buku</option><option value="ID Card">ID Card</option><option value="Tuition">Les Bulanan</option></select></label>
+        <label><span>Nominal</span><input type="number" value={historical.amount} onChange={(event) => setHistorical({ ...historical, amount: Number(event.target.value) })} required /></label>
+        <label><span>Tanggal Pembayaran</span><input type="date" value={historical.paymentDate} onChange={(event) => setHistorical({ ...historical, paymentDate: event.target.value })} required /></label>
+        <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label>
+        {historical.paymentCategory === 'Tuition' && <label><span>Periode Les</span><input type="month" value={historical.period} onChange={(event) => setHistorical({ ...historical, period: event.target.value })} required /></label>}
+        {historical.paymentCategory !== 'Tuition' && <label><span>Status Penyerahan</span><select value={historical.fulfillmentStatus} onChange={(event) => setHistorical({ ...historical, fulfillmentStatus: event.target.value })}><option>Sedang Disiapkan</option><option>Siap Diambil</option><option>Sudah Diterima Siswa</option></select></label>}
+        <label className="wide historical-proof-upload"><span>Bukti Pembayaran</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={chooseHistoricalProof} required /><small>{historical.proof?.fileName || 'Upload JPG, PNG, WEBP, atau PDF • Maks. 4 MB'}</small></label>
+        <label className="wide"><span>Catatan</span><input value={historical.note} onChange={(event) => setHistorical({ ...historical, note: event.target.value })} placeholder="Opsional" /></label>
+      </div>
+      <button className="save-historical-payment" type="submit" disabled={historicalSubmitting}>{historicalSubmitting ? 'Menyimpan...' : 'Simpan sebagai Lunas'}</button>
+    </form>}
+    {message && <div className="error-message">{message}</div>}
     <section className="admin-tuition-watch">
       <div className="admin-tuition-watch-heading">
         <div><span className="eyebrow">TUITION WATCH</span><h3>Tagihan Les Aktif</h3><p>{attentionLists?.paymentWatchActive === false ? 'Monitoring setelah tanggal 7 belum aktif, tetapi pengingat tagihan tetap dapat dikirim.' : 'Daftar siswa yang belum tercatat lunas pada periode berjalan.'}</p></div>
@@ -4518,17 +4690,18 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div className="admin-tuition-watch-summary">
         <strong>{tuitionTargets.length}</strong><span>siswa dengan tagihan aktif • {attentionLists?.period || 'periode berjalan'}</span>
       </div>
-      {(attentionLists?.unpaidAfterDaySeven || []).length > 0 && (
+      {tuitionTargets.length > 0 ? (
         <div className="admin-tuition-watch-list">
-          {attentionLists.unpaidAfterDaySeven.map((item) => <div key={`tuition-watch-${item.studentId}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong></div>)}
+          {tuitionTargets.map((item) => <button type="button" key={`tuition-watch-${item.studentId}`} onClick={() => openTuitionPaymentForm(item)} aria-label={`Catat pembayaran ${item.fullName}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong><b>Tambah Pembayaran →</b></button>)}
         </div>
+      ) : (
+        <div className="empty-state tuition-watch-empty">Tidak ada tagihan les aktif untuk periode ini.</div>
       )}
     </section>
-    {showHistorical && <form className="historical-payment-form" onSubmit={submitHistorical}><header><div><small>TRANSAKSI SEBELUM PORTAL</small><h3>Tambah Pembayaran Lama</h3></div><button type="button" onClick={() => setShowHistorical(false)}>×</button></header><div className="historical-payment-grid"><label><span>Student ID</span><input value={historical.studentId} onChange={(event) => setHistorical({ ...historical, studentId: event.target.value.toUpperCase() })} placeholder="MOC001" required /></label><label><span>Jenis Pembayaran</span><select value={historical.paymentCategory} onChange={(event) => chooseCategory(event.target.value)}><option value="Book Package">Paket 4 Buku</option><option value="ID Card">ID Card</option><option value="Tuition">Les Bulanan</option></select></label><label><span>Nominal</span><input type="number" value={historical.amount} onChange={(event) => setHistorical({ ...historical, amount: Number(event.target.value) })} required /></label><label><span>Tanggal Pembayaran</span><input type="date" value={historical.paymentDate} onChange={(event) => setHistorical({ ...historical, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label>{historical.paymentCategory === 'Tuition' && <label><span>Periode Les</span><input type="month" value={historical.period} onChange={(event) => setHistorical({ ...historical, period: event.target.value })} required /></label>}{historical.paymentCategory !== 'Tuition' && <label><span>Status Penyerahan</span><select value={historical.fulfillmentStatus} onChange={(event) => setHistorical({ ...historical, fulfillmentStatus: event.target.value })}><option>Sedang Disiapkan</option><option>Siap Diambil</option><option>Sudah Diterima Siswa</option></select></label>}<label className="wide"><span>Catatan</span><input value={historical.note} onChange={(event) => setHistorical({ ...historical, note: event.target.value })} placeholder="Opsional" /></label></div><button className="save-historical-payment" type="submit" disabled={loading}>Simpan sebagai Lunas</button></form>}
     <div className="payment-admin-tabs-heading"><h3>Perlu Verifikasi</h3><span>{pending.length} menunggu</span></div>{loading ? <div className="dashboard-loading">Memuat pembayaran...</div> : pending.length === 0 ? <div className="empty-state">Tidak ada pembayaran yang menunggu verifikasi.</div> : <div className="payment-confirmation-list">{pending.map((item) => { const cash = /^Tunai\s*-/i.test(String(item.paymentMethod || '')); return <article key={item.confirmationId}><header><div><small>{item.invoiceNumber}</small><h3>{item.studentName}</h3><p>{item.studentId} • {item.itemLabel || item.paymentCategory} • {item.period}</p></div><span>MENUNGGU</span></header><div className="payment-review-details"><div><span>Nominal</span><strong>{formatRupiah(item.amount)}</strong></div><div><span>Metode</span><strong>{item.paymentMethod}</strong></div><div><span>Tanggal Bayar</span><strong>{item.paymentDate}</strong></div></div>{!cash && <button className="view-payment-proof" type="button" onClick={() => viewProof(item)} disabled={proofLoading === item.confirmationId}>{proofLoading === item.confirmationId ? 'Membuka...' : 'Lihat Bukti Pembayaran'}</button>}{cash && <div className="cash-admin-note">Pembayaran tunai — konfirmasi langsung kepada penerima yang tertera.</div>}{proof?.confirmationId === item.confirmationId && <div className="payment-proof-preview">{proof.mimeType === 'application/pdf' ? <iframe title="Bukti pembayaran PDF" src={`data:${proof.mimeType};base64,${proof.base64}`} /> : <img src={`data:${proof.mimeType};base64,${proof.base64}`} alt="Bukti pembayaran" />}<button type="button" onClick={() => setProof(null)}>Tutup Bukti</button></div>}<label className="payment-admin-note"><span>Catatan Admin (wajib jika ditolak)</span><input value={notes[item.confirmationId] || ''} onChange={(event) => setNotes({ ...notes, [item.confirmationId]: event.target.value })} placeholder="Contoh: nominal belum sesuai" /></label><footer><button className="reject" type="button" disabled={!notes[item.confirmationId]} onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'reject', note: notes[item.confirmationId] })}>Tolak</button><button className="approve" type="button" onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'verify', note: notes[item.confirmationId] || 'Pembayaran telah diverifikasi.' })}>Verifikasi & Tandai Lunas</button></footer></article>; })}</div>}</section>;
 }
 
-function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, token }) {
+function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, token, onRefresh }) {
   const [drafts, setDrafts] = useState({});
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState('');
@@ -4567,8 +4740,43 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   function normalizeWa(value) {
     let digits = String(value || '').replace(/\D/g, '');
-    if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+    if (digits.startsWith('0')) {
+      digits = '62' + digits.slice(1);
+    } else if (digits.startsWith('8')) {
+      // Form lama/baru kadang menyimpan nomor Indonesia tanpa awalan 0.
+      // Contoh: 895419666966 -> 62895419666966.
+      digits = '62' + digits;
+    }
     return digits;
+  }
+
+  function openRegistrationWhatsApp(numberValue, messageValue) {
+    const number = normalizeWa(numberValue);
+    const message = String(messageValue || '');
+
+    if (!number) {
+      throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
+    }
+
+    // Indonesia: 62 + nomor seluler. Tolak data yang jelas tidak valid
+    // agar browser tidak menerima URL WhatsApp yang malformed.
+    if (!/^62\d{8,13}$/.test(number)) {
+      throw new Error('Format nomor WhatsApp tidak valid. Periksa kembali nomor pada form pendaftaran.');
+    }
+
+    const waUrl = 'https://api.whatsapp.com/send?phone=' +
+      encodeURIComponent(number) +
+      '&text=' +
+      encodeURIComponent(message);
+
+    try {
+      const opened = window.open(waUrl, '_blank');
+      if (!opened) {
+        window.location.href = waUrl;
+      }
+    } catch (error) {
+      window.location.href = waUrl;
+    }
   }
 
   async function sendRegistrationWhatsApp(item, type = 'approved') {
@@ -4576,11 +4784,38 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     setWaLoading(key);
     try {
       const result = await callApi({ action: 'getRegistrationWhatsAppPayload', token, registrationId: item.registrationId });
-      const number = normalizeWa(result.waStudent || result.waParent);
-      if (!number) throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
-      window.open(`https://wa.me/${number}?text=${encodeURIComponent(result.combinedMessage)}`, '_blank', 'noopener,noreferrer');
+
+      // Tujuan WA harus sama dengan nomor yang tampil pada kartu/form pendaftaran.
+      // Backend hanya menyediakan isi pesan; nomor tujuan tidak boleh mengganti data form.
+      const number = normalizeWa(item.waStudent || item.waParent);
+      openRegistrationWhatsApp(number, result.combinedMessage);
     } catch (error) {
       window.alert(error.message || 'Pesan WhatsApp tidak dapat dibuat.');
+    } finally {
+      setWaLoading('');
+    }
+  }
+
+
+  async function sendStudentAppGuide(item) {
+    if (item.appGuideSentAt) {
+      window.alert('Panduan aplikasi sudah pernah dibuka untuk dikirim ke siswa ini.');
+      return;
+    }
+    const key = `${item.registrationId}-app-guide`;
+    setWaLoading(key);
+    try {
+      const result = await callApi({ action:'getStudentAppGuideWhatsApp', token, registrationId:item.registrationId });
+
+      // Gunakan nomor yang terlihat pada form pendaftaran agar tidak pernah tersasar
+      // ke nomor lama dari sumber data lain.
+      const number = normalizeWa(item.waStudent || item.waParent);
+      openRegistrationWhatsApp(number, result.combinedMessage);
+
+      await callApi({ action:'markStudentAppGuideSent', token, registrationId:item.registrationId });
+      if (onRefresh) await onRefresh();
+    } catch (error) {
+      window.alert(error.message || 'Panduan aplikasi tidak dapat dibuat.');
     } finally {
       setWaLoading('');
     }
@@ -4652,9 +4887,12 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
         <div className="registration-admin-list">{approved.map((item) => <article key={`approved-${item.registrationId}`} className="registration-approved-card">
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
           <div className="registration-contact"><span>Student ID: <b>{item.studentId || '—'}</b></span><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
-          <div className="registration-wa-actions single">
+          <div className="registration-wa-actions registration-wa-actions-approved">
             <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'approved')} disabled={waLoading === `${item.registrationId}-approved`}>
-              {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Ucapan Selamat via WA'}
+              {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Ucapan Selamat'}
+            </button>
+            <button type="button" className={item.appGuideSentAt ? 'sent' : ''} onClick={() => sendStudentAppGuide(item)} disabled={Boolean(item.appGuideSentAt) || waLoading === `${item.registrationId}-app-guide`}>
+              {item.appGuideSentAt ? '✓ Panduan Aplikasi Sudah Dikirim' : waLoading === `${item.registrationId}-app-guide` ? 'Membuka Panduan...' : '📱 Kirim Panduan Aplikasi via WA'}
             </button>
           </div>
         </article>)}</div>
@@ -4682,6 +4920,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState('');
+  const [activationGuideLoading, setActivationGuideLoading] = useState(false);
 
   function closeStudentDetail() {
     setSelectedStudentId('');
@@ -4713,6 +4952,57 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }
 
+  async function sendLegacyStudentActivationGuide() {
+    const student = detail?.student || {};
+    const status = String(student.status || 'Aktif').trim().toLowerCase();
+    const accountStatus = String(student.accountStatus || '').trim().toLowerCase();
+
+    if (status !== '' && status !== 'aktif' && status !== 'active') {
+      window.alert('Siswa berstatus Non Aktif sehingga panduan aktivasi tidak dapat dikirim.');
+      return;
+    }
+
+    if (accountStatus === 'aktif' || accountStatus === 'active') {
+      window.alert('Akun siswa ini sudah aktif. Tidak perlu mengirim panduan aktivasi lagi.');
+      return;
+    }
+
+    if (student.activationGuideSentAt) {
+      window.alert('Panduan aktivasi akun sudah pernah dikirim kepada siswa ini.');
+      return;
+    }
+
+    setActivationGuideLoading(true);
+    try {
+      const result = await callApi({
+        action: 'getLegacyStudentActivationGuideWhatsApp',
+        token,
+        studentId: student.studentId
+      });
+
+      const number = normalizeAdminWa(result.waStudent || result.waParent);
+      if (!number) throw new Error('Nomor WhatsApp siswa maupun orang tua belum tersedia.');
+
+      window.open(
+        `https://wa.me/${number}?text=${encodeURIComponent(result.combinedMessage)}`,
+        '_blank',
+        'noopener,noreferrer'
+      );
+
+      await callApi({
+        action: 'markLegacyStudentActivationGuideSent',
+        token,
+        studentId: student.studentId
+      });
+
+      await openStudentDetail(student.studentId);
+    } catch (error) {
+      window.alert(error.message || 'Panduan aktivasi akun tidak dapat dibuat.');
+    } finally {
+      setActivationGuideLoading(false);
+    }
+  }
+
   function submitSearch(event) { event.preventDefault(); onSearch(); }
 
   async function openStudentDetail(studentId) {
@@ -4734,6 +5024,25 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
         <section className="admin-student-detail-grid">
           <article><span className="eyebrow">PROFIL</span><h3>Data Siswa</h3><div className="admin-detail-keyvalues">
             <div><span>Sekolah</span><strong>{detail.student?.school || '—'}</strong></div><div><span>Kelas</span><strong>{detail.student?.grade || '—'}</strong></div><div><span>Jadwal</span><strong>{detail.student?.schedule || '—'}</strong></div><div><span>WA Siswa</span><strong>{detail.student?.waStudent || '—'}</strong></div><div><span>WA Orang Tua</span><strong>{detail.student?.waParent || '—'}</strong></div><div><span>Status Akun</span><strong>{detail.student?.accountStatus || '—'}</strong></div>
+          </div>
+          <div className="legacy-student-activation-action">
+            {(() => {
+              const studentStatus = String(detail.student?.status || 'Aktif').trim().toLowerCase();
+              const accountStatus = String(detail.student?.accountStatus || '').trim().toLowerCase();
+              const activeStudent = studentStatus === '' || studentStatus === 'aktif' || studentStatus === 'active';
+              const accountActive = accountStatus === 'aktif' || accountStatus === 'active';
+              const hasWa = Boolean(String(detail.student?.waStudent || detail.student?.waParent || '').replace(/\D/g, ''));
+              const alreadySent = Boolean(detail.student?.activationGuideSentAt);
+
+              if (!activeStudent) return <button type="button" disabled>Siswa Non Aktif</button>;
+              if (accountActive) return <button type="button" disabled>✓ Akun Sudah Aktif</button>;
+              if (alreadySent) return <button type="button" className="sent" disabled>✓ Panduan Aktivasi Sudah Dikirim</button>;
+              if (!hasWa) return <button type="button" disabled>WA belum tersedia</button>;
+
+              return <button type="button" onClick={sendLegacyStudentActivationGuide} disabled={activationGuideLoading}>
+                {activationGuideLoading ? 'Membuka WhatsApp...' : '📱 Kirim Aktivasi Akun via WA'}
+              </button>;
+            })()}
           </div></article>
           <article><span className="eyebrow">MONTHLY REPORT</span><h3>Laporan Bulanan</h3><div className="admin-summary-stats">
             <div><strong>{detail.monthlyReport?.attendancePercentage ?? 0}%</strong><span>Kehadiran</span></div><div><strong>{detail.monthlyReport?.averageScore ?? '—'}</strong><span>Rata-rata Nilai</span></div><div><strong>{detail.monthlyReport?.completedAssignments ?? 0}</strong><span>Tugas Selesai</span></div>

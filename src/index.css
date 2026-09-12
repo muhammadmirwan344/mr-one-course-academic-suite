@@ -26277,14 +26277,38 @@ html[data-theme='light'] .admin-dashboard .system-connected {
   flex-direction:column;
   gap:6px;
 }
-.admin-tuition-watch-list > div {
+.admin-tuition-watch-list > div,
+.admin-tuition-watch-list > button {
   display:grid;
-  grid-template-columns:1fr auto auto;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
   gap:10px;
   align-items:center;
   padding:9px 10px;
   border-radius:10px;
   border:1px solid rgba(127,127,127,.1);
+}
+.admin-tuition-watch-list > button {
+  width:100%;
+  color:inherit;
+  background:transparent;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.admin-tuition-watch-list > button:hover,
+.admin-tuition-watch-list > button:focus-visible {
+  border-color:rgba(34,211,238,.55);
+  background:rgba(34,211,238,.06);
+  outline:none;
+}
+.admin-tuition-watch-list > button b {
+  color:#22d3ee;
+  font-size:.7rem;
+  white-space:nowrap;
+}
+.historical-proof-upload small {
+  color:var(--muted-text,#8d97a5);
+  font-size:.7rem;
 }
 .admin-field-help {
   display:block;
@@ -26295,7 +26319,8 @@ html[data-theme='light'] .admin-dashboard .system-connected {
 
 @media(max-width:680px){
   .admin-attendance-watch-list > article,
-  .admin-tuition-watch-list > div {
+  .admin-tuition-watch-list > div,
+  .admin-tuition-watch-list > button {
     grid-template-columns:1fr;
   }
   .admin-tuition-watch-heading {
@@ -27250,4 +27275,83 @@ html[data-theme='light'] .app-header svg,
 html[data-theme='light'] .tutor-dashboard-header svg {
   color: var(--moc-light-text) !important;
   stroke: currentColor !important;
+}
+
+
+/* V70 — Historical payment form interaction fix */
+.add-historical-button {
+  cursor:pointer !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+.add-historical-button.active {
+  border-color:#1fb9c7 !important;
+  box-shadow:0 0 0 3px rgba(31,185,199,.10) !important;
+}
+.historical-payment-form-v70 {
+  scroll-margin-top:90px;
+  animation:mocHistoricalOpen .18s ease-out;
+}
+.historical-payment-form-v70 .save-historical-payment {
+  cursor:pointer;
+  opacity:1;
+}
+.historical-payment-form-v70 .save-historical-payment:disabled {
+  cursor:wait;
+  opacity:.65;
+}
+@keyframes mocHistoricalOpen {
+  from { opacity:0; transform:translateY(-6px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+
+/* V71 — Historical payment at top + one-time app guide WA */
+.historical-payment-form-top { margin:0 0 18px; scroll-margin-top:88px; }
+.registration-wa-actions-approved { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.registration-wa-actions-approved button.sent,
+.registration-wa-actions-approved button:disabled.sent { opacity:.72; cursor:not-allowed; }
+@media(max-width:640px) { .registration-wa-actions-approved { grid-template-columns:1fr; } }
+
+
+/* V73 — Old student activation guide from Data Siswa detail */
+.legacy-student-activation-action {
+  margin-top: 14px;
+}
+.legacy-student-activation-action button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.legacy-student-activation-action button:disabled {
+  cursor: not-allowed;
+  opacity: .68;
+}
+.legacy-student-activation-action button.sent {
+  opacity: .72;
+}
+
+
+/* V77 — Transaksi Sebelum Portal: exact placement under Payment Center */
+.payment-admin-page-v77 .payment-center-heading-v77 {
+  margin-bottom: 12px;
+}
+.payment-admin-page-v77 .historical-payment-form-top-v77 {
+  display: block;
+  width: 100%;
+  margin: 0 0 18px;
+  scroll-margin-top: 88px;
+}
+.payment-admin-page-v77 .historical-payment-form-top-v77 + .error-message {
+  margin-top: 0;
+}
+
+
+/* V81 — Tuition Watch live reconciliation */
+.tuition-watch-empty {
+  margin-top: 14px;
 }
