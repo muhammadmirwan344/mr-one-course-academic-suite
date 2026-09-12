@@ -27287,3 +27287,25 @@ html[data-theme='light'] .tutor-dashboard-header svg {
 .registration-wa-actions-approved button.sent,
 .registration-wa-actions-approved button:disabled.sent { opacity:.72; cursor:not-allowed; }
 @media(max-width:640px) { .registration-wa-actions-approved { grid-template-columns:1fr; } }
+
+
+/* V73 — Old student activation guide from Data Siswa detail */
+.legacy-student-activation-action {
+  margin-top: 14px;
+}
+.legacy-student-activation-action button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.legacy-student-activation-action button:disabled {
+  cursor: not-allowed;
+  opacity: .68;
+}
+.legacy-student-activation-action button.sent {
+  opacity: .72;
+}
