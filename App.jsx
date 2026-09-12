@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby4K_rtq0QS2rjIIUfET9VbQRmrjFsi0G8wHWN8AdLJinPHERY9j2K0x3WwsVUKu8WjBQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwBbhhKRpvwLXY063XyKpUu8JXJbH3fizzKAsR1XZjUwJVbe6e_2BtdTZZpzRq3nPnb5g/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4629,7 +4629,13 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   function normalizeWa(value) {
     let digits = String(value || '').replace(/\D/g, '');
-    if (digits.startsWith('0')) digits = '62' + digits.slice(1);
+    if (digits.startsWith('0')) {
+      digits = '62' + digits.slice(1);
+    } else if (digits.startsWith('8')) {
+      // Form lama/baru kadang menyimpan nomor Indonesia tanpa awalan 0.
+      // Contoh: 895419666966 -> 62895419666966.
+      digits = '62' + digits;
+    }
     return digits;
   }
 
@@ -4667,7 +4673,10 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     setWaLoading(key);
     try {
       const result = await callApi({ action: 'getRegistrationWhatsAppPayload', token, registrationId: item.registrationId });
-      const number = normalizeWa(result.waStudent || result.waParent);
+
+      // Tujuan WA harus sama dengan nomor yang tampil pada kartu/form pendaftaran.
+      // Backend hanya menyediakan isi pesan; nomor tujuan tidak boleh mengganti data form.
+      const number = normalizeWa(item.waStudent || item.waParent);
       openRegistrationWhatsApp(number, result.combinedMessage);
     } catch (error) {
       window.alert(error.message || 'Pesan WhatsApp tidak dapat dibuat.');
@@ -4686,7 +4695,10 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     setWaLoading(key);
     try {
       const result = await callApi({ action:'getStudentAppGuideWhatsApp', token, registrationId:item.registrationId });
-      const number = normalizeWa(result.waStudent || result.waParent);
+
+      // Gunakan nomor yang terlihat pada form pendaftaran agar tidak pernah tersasar
+      // ke nomor lama dari sumber data lain.
+      const number = normalizeWa(item.waStudent || item.waParent);
       openRegistrationWhatsApp(number, result.combinedMessage);
 
       await callApi({ action:'markStudentAppGuideSent', token, registrationId:item.registrationId });
