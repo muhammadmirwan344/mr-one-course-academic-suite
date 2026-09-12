@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby2jWkrxa86HjjwWGtBO-3YUsK4RXkEBrFuspmKGOqmpdgVr-8xeFgtuuC5HceT6mV0Cw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby4K_rtq0QS2rjIIUfET9VbQRmrjFsi0G8wHWN8AdLJinPHERY9j2K0x3WwsVUKu8WjBQ/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4633,14 +4633,42 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     return digits;
   }
 
+  function openRegistrationWhatsApp(numberValue, messageValue) {
+    const number = normalizeWa(numberValue);
+    const message = String(messageValue || '');
+
+    if (!number) {
+      throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
+    }
+
+    // Indonesia: 62 + nomor seluler. Tolak data yang jelas tidak valid
+    // agar browser tidak menerima URL WhatsApp yang malformed.
+    if (!/^62\d{8,13}$/.test(number)) {
+      throw new Error('Format nomor WhatsApp tidak valid. Periksa kembali nomor pada form pendaftaran.');
+    }
+
+    const waUrl = 'https://api.whatsapp.com/send?phone=' +
+      encodeURIComponent(number) +
+      '&text=' +
+      encodeURIComponent(message);
+
+    try {
+      const opened = window.open(waUrl, '_blank');
+      if (!opened) {
+        window.location.href = waUrl;
+      }
+    } catch (error) {
+      window.location.href = waUrl;
+    }
+  }
+
   async function sendRegistrationWhatsApp(item, type = 'approved') {
     const key = `${item.registrationId}-${type}`;
     setWaLoading(key);
     try {
       const result = await callApi({ action: 'getRegistrationWhatsAppPayload', token, registrationId: item.registrationId });
       const number = normalizeWa(result.waStudent || result.waParent);
-      if (!number) throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
-      window.open(`https://wa.me/${number}?text=${encodeURIComponent(result.combinedMessage)}`, '_blank', 'noopener,noreferrer');
+      openRegistrationWhatsApp(number, result.combinedMessage);
     } catch (error) {
       window.alert(error.message || 'Pesan WhatsApp tidak dapat dibuat.');
     } finally {
@@ -4659,9 +4687,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     try {
       const result = await callApi({ action:'getStudentAppGuideWhatsApp', token, registrationId:item.registrationId });
       const number = normalizeWa(result.waStudent || result.waParent);
-      if (!number) throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
-
-      window.open(`https://wa.me/${number}?text=${encodeURIComponent(result.combinedMessage)}`, '_blank', 'noopener,noreferrer');
+      openRegistrationWhatsApp(number, result.combinedMessage);
 
       await callApi({ action:'markStudentAppGuideSent', token, registrationId:item.registrationId });
       if (onRefresh) await onRefresh();
