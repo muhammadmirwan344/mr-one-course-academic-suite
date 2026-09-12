@@ -27324,3 +27324,9 @@ html[data-theme='light'] .tutor-dashboard-header svg {
 .payment-admin-page-v77 .historical-payment-form-top-v77 + .error-message {
   margin-top: 0;
 }
+
+
+/* V81 — Tuition Watch live reconciliation */
+.tuition-watch-empty {
+  margin-top: 14px;
+}

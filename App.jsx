@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwBbhhKRpvwLXY063XyKpUu8JXJbH3fizzKAsR1XZjUwJVbe6e_2BtdTZZpzRq3nPnb5g/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbx-3ZB29sQk08VmWvQac6pydaCveGI_shSHNkgfQOOuv1GcfYANtNft1gFPos9EOu6txA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4478,7 +4478,73 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   const historicalFormRef = useRef(null);
   const [historical, setHistorical] = useState({ studentId: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '' });
   const pending = (confirmations || []).filter((item) => /menunggu verifikasi/i.test(item.status));
-  const tuitionTargets = attentionLists?.tuitionReminderTargets || [];
+
+  // Tuition Watch V81:
+  // tampilannya tidak hanya bergantung pada snapshot dashboard.
+  // Daftar tagihan direkonsiliasi lagi dengan data pembayaran yang sedang tampil
+  // di Payment Center, sehingga setelah Admin/siswa mencatat pembayaran periode aktif,
+  // nama siswa langsung hilang dari Tuition Watch.
+  const tuitionPeriod = String(attentionLists?.period || '').trim();
+  const baseTuitionTargets = attentionLists?.tuitionReminderTargets || [];
+
+  function normalizeTuitionStudentId(value) {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  function normalizeTuitionCategory(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized || normalized === 'tuition' || normalized.includes('les') || normalized.includes('course')) {
+      return 'Tuition';
+    }
+    return normalized;
+  }
+
+  function tuitionPaymentPeriod(item) {
+    const direct = String(item?.period || '').trim();
+    if (/^\d{4}-\d{2}$/.test(direct)) return direct;
+
+    const rawDate = String(item?.paymentDate || '').trim();
+    const match = rawDate.match(/^(\d{4})-(\d{2})/);
+    return match ? `${match[1]}-${match[2]}` : '';
+  }
+
+  const paidOrSubmittedTuitionIds = new Set();
+
+  (payments || []).forEach((item) => {
+    const id = normalizeTuitionStudentId(item.studentId);
+    const status = String(item.status || '').trim().toLowerCase();
+    const category = normalizeTuitionCategory(item.paymentCategory || item.category);
+    const period = tuitionPaymentPeriod(item);
+
+    if (
+      id &&
+      category === 'Tuition' &&
+      period === tuitionPeriod &&
+      /^(lunas|paid|verified)$/.test(status)
+    ) {
+      paidOrSubmittedTuitionIds.add(id);
+    }
+  });
+
+  (confirmations || []).forEach((item) => {
+    const id = normalizeTuitionStudentId(item.studentId);
+    const status = String(item.status || '').trim().toLowerCase();
+    const category = normalizeTuitionCategory(item.paymentCategory);
+    const period = tuitionPaymentPeriod(item);
+
+    if (
+      id &&
+      category === 'Tuition' &&
+      period === tuitionPeriod &&
+      /^(menunggu verifikasi|pending|menunggu|lunas|paid|verified)$/.test(status)
+    ) {
+      paidOrSubmittedTuitionIds.add(id);
+    }
+  });
+
+  const tuitionTargets = baseTuitionTargets.filter(
+    (item) => !paidOrSubmittedTuitionIds.has(normalizeTuitionStudentId(item.studentId))
+  );
 
   function normalizePaymentWa(value) {
     let digits = String(value || '').replace(/\D/g, '');
@@ -4581,10 +4647,12 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div className="admin-tuition-watch-summary">
         <strong>{tuitionTargets.length}</strong><span>siswa dengan tagihan aktif • {attentionLists?.period || 'periode berjalan'}</span>
       </div>
-      {(attentionLists?.unpaidAfterDaySeven || []).length > 0 && (
+      {tuitionTargets.length > 0 ? (
         <div className="admin-tuition-watch-list">
-          {attentionLists.unpaidAfterDaySeven.map((item) => <div key={`tuition-watch-${item.studentId}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong></div>)}
+          {tuitionTargets.map((item) => <div key={`tuition-watch-${item.studentId}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong></div>)}
         </div>
+      ) : (
+        <div className="empty-state tuition-watch-empty">Tidak ada tagihan les aktif untuk periode ini.</div>
       )}
     </section>
     <div className="payment-admin-tabs-heading"><h3>Perlu Verifikasi</h3><span>{pending.length} menunggu</span></div>{loading ? <div className="dashboard-loading">Memuat pembayaran...</div> : pending.length === 0 ? <div className="empty-state">Tidak ada pembayaran yang menunggu verifikasi.</div> : <div className="payment-confirmation-list">{pending.map((item) => { const cash = /^Tunai\s*-/i.test(String(item.paymentMethod || '')); return <article key={item.confirmationId}><header><div><small>{item.invoiceNumber}</small><h3>{item.studentName}</h3><p>{item.studentId} • {item.itemLabel || item.paymentCategory} • {item.period}</p></div><span>MENUNGGU</span></header><div className="payment-review-details"><div><span>Nominal</span><strong>{formatRupiah(item.amount)}</strong></div><div><span>Metode</span><strong>{item.paymentMethod}</strong></div><div><span>Tanggal Bayar</span><strong>{item.paymentDate}</strong></div></div>{!cash && <button className="view-payment-proof" type="button" onClick={() => viewProof(item)} disabled={proofLoading === item.confirmationId}>{proofLoading === item.confirmationId ? 'Membuka...' : 'Lihat Bukti Pembayaran'}</button>}{cash && <div className="cash-admin-note">Pembayaran tunai — konfirmasi langsung kepada penerima yang tertera.</div>}{proof?.confirmationId === item.confirmationId && <div className="payment-proof-preview">{proof.mimeType === 'application/pdf' ? <iframe title="Bukti pembayaran PDF" src={`data:${proof.mimeType};base64,${proof.base64}`} /> : <img src={`data:${proof.mimeType};base64,${proof.base64}`} alt="Bukti pembayaran" />}<button type="button" onClick={() => setProof(null)}>Tutup Bukti</button></div>}<label className="payment-admin-note"><span>Catatan Admin (wajib jika ditolak)</span><input value={notes[item.confirmationId] || ''} onChange={(event) => setNotes({ ...notes, [item.confirmationId]: event.target.value })} placeholder="Contoh: nominal belum sesuai" /></label><footer><button className="reject" type="button" disabled={!notes[item.confirmationId]} onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'reject', note: notes[item.confirmationId] })}>Tolak</button><button className="approve" type="button" onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'verify', note: notes[item.confirmationId] || 'Pembayaran telah diverifikasi.' })}>Verifikasi & Tandai Lunas</button></footer></article>; })}</div>}</section>;
