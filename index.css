@@ -26277,14 +26277,38 @@ html[data-theme='light'] .admin-dashboard .system-connected {
   flex-direction:column;
   gap:6px;
 }
-.admin-tuition-watch-list > div {
+.admin-tuition-watch-list > div,
+.admin-tuition-watch-list > button {
   display:grid;
-  grid-template-columns:1fr auto auto;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
   gap:10px;
   align-items:center;
   padding:9px 10px;
   border-radius:10px;
   border:1px solid rgba(127,127,127,.1);
+}
+.admin-tuition-watch-list > button {
+  width:100%;
+  color:inherit;
+  background:transparent;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+}
+.admin-tuition-watch-list > button:hover,
+.admin-tuition-watch-list > button:focus-visible {
+  border-color:rgba(34,211,238,.55);
+  background:rgba(34,211,238,.06);
+  outline:none;
+}
+.admin-tuition-watch-list > button b {
+  color:#22d3ee;
+  font-size:.7rem;
+  white-space:nowrap;
+}
+.historical-proof-upload small {
+  color:var(--muted-text,#8d97a5);
+  font-size:.7rem;
 }
 .admin-field-help {
   display:block;
@@ -26295,7 +26319,8 @@ html[data-theme='light'] .admin-dashboard .system-connected {
 
 @media(max-width:680px){
   .admin-attendance-watch-list > article,
-  .admin-tuition-watch-list > div {
+  .admin-tuition-watch-list > div,
+  .admin-tuition-watch-list > button {
     grid-template-columns:1fr;
   }
   .admin-tuition-watch-heading {

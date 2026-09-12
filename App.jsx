@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbx-3ZB29sQk08VmWvQac6pydaCveGI_shSHNkgfQOOuv1GcfYANtNft1gFPos9EOu6txA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby013IKnjaR7I5d-pJ-lycmqkAAZBtus3UCrEGhetkLfTD9hgJeb2-D7c4Brysi23AbgQ/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4476,7 +4476,8 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   const [proof, setProof] = useState(null); const [proofLoading, setProofLoading] = useState(''); const [notes, setNotes] = useState({}); const [showHistorical, setShowHistorical] = useState(false);
   const [historicalSubmitting, setHistoricalSubmitting] = useState(false);
   const historicalFormRef = useRef(null);
-  const [historical, setHistorical] = useState({ studentId: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '' });
+  const emptyHistoricalPayment = () => ({ studentId: '', studentName: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '', proof: null });
+  const [historical, setHistorical] = useState(emptyHistoricalPayment);
   const pending = (confirmations || []).filter((item) => /menunggu verifikasi/i.test(item.status));
 
   // Tuition Watch V81:
@@ -4586,6 +4587,42 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     });
   }
 
+  function openTuitionPaymentForm(item) {
+    setHistorical({
+      ...emptyHistoricalPayment(),
+      studentId: String(item.studentId || '').trim().toUpperCase(),
+      studentName: String(item.fullName || '').trim(),
+      paymentCategory: 'Tuition',
+      amount: 150000,
+      paymentMethod: 'BCA',
+      period: String(item.period || tuitionPeriod || '').trim(),
+      fulfillmentStatus: '',
+      note: 'Pembayaran periode berjalan dicatat melalui Tuition Watch.'
+    });
+    setShowHistorical(true);
+    window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
+  }
+
+  function chooseHistoricalProof(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.type)) {
+      window.alert('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      window.alert('Ukuran bukti pembayaran maksimal 4 MB.');
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setHistorical((value) => ({ ...value, proof: { fileName: file.name, mimeType: file.type, base64: String(reader.result || '') } }));
+    reader.onerror = () => window.alert('File bukti pembayaran tidak dapat dibaca.');
+    reader.readAsDataURL(file);
+  }
+
   async function submitHistorical(event) {
     event.preventDefault();
 
@@ -4602,13 +4639,17 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       window.alert('Pilih periode les.');
       return;
     }
+    if (!historical.proof) {
+      window.alert('Upload bukti pembayaran terlebih dahulu.');
+      return;
+    }
 
     setHistoricalSubmitting(true);
     try {
       const success = await onAddHistorical({ ...historical, studentId: studentId.toUpperCase() });
       if (success) {
         setShowHistorical(false);
-        setHistorical({ studentId: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '' });
+        setHistorical(emptyHistoricalPayment());
       }
     } finally {
       setHistoricalSubmitting(false);
@@ -4628,12 +4669,14 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       </header>
       <div className="historical-payment-grid">
         <label><span>Student ID</span><input value={historical.studentId} onChange={(event) => setHistorical({ ...historical, studentId: event.target.value.toUpperCase() })} placeholder="MOC001" required /></label>
+        {historical.studentName && <label><span>Nama Siswa</span><input value={historical.studentName} readOnly /></label>}
         <label><span>Jenis Pembayaran</span><select value={historical.paymentCategory} onChange={(event) => chooseCategory(event.target.value)}><option value="Book Package">Paket 4 Buku</option><option value="ID Card">ID Card</option><option value="Tuition">Les Bulanan</option></select></label>
         <label><span>Nominal</span><input type="number" value={historical.amount} onChange={(event) => setHistorical({ ...historical, amount: Number(event.target.value) })} required /></label>
         <label><span>Tanggal Pembayaran</span><input type="date" value={historical.paymentDate} onChange={(event) => setHistorical({ ...historical, paymentDate: event.target.value })} required /></label>
         <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label>
         {historical.paymentCategory === 'Tuition' && <label><span>Periode Les</span><input type="month" value={historical.period} onChange={(event) => setHistorical({ ...historical, period: event.target.value })} required /></label>}
         {historical.paymentCategory !== 'Tuition' && <label><span>Status Penyerahan</span><select value={historical.fulfillmentStatus} onChange={(event) => setHistorical({ ...historical, fulfillmentStatus: event.target.value })}><option>Sedang Disiapkan</option><option>Siap Diambil</option><option>Sudah Diterima Siswa</option></select></label>}
+        <label className="wide historical-proof-upload"><span>Bukti Pembayaran</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={chooseHistoricalProof} required /><small>{historical.proof?.fileName || 'Upload JPG, PNG, WEBP, atau PDF • Maks. 4 MB'}</small></label>
         <label className="wide"><span>Catatan</span><input value={historical.note} onChange={(event) => setHistorical({ ...historical, note: event.target.value })} placeholder="Opsional" /></label>
       </div>
       <button className="save-historical-payment" type="submit" disabled={historicalSubmitting}>{historicalSubmitting ? 'Menyimpan...' : 'Simpan sebagai Lunas'}</button>
@@ -4649,7 +4692,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       </div>
       {tuitionTargets.length > 0 ? (
         <div className="admin-tuition-watch-list">
-          {tuitionTargets.map((item) => <div key={`tuition-watch-${item.studentId}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong></div>)}
+          {tuitionTargets.map((item) => <button type="button" key={`tuition-watch-${item.studentId}`} onClick={() => openTuitionPaymentForm(item)} aria-label={`Catat pembayaran ${item.fullName}`}><span>{item.fullName}</span><small>{item.studentId} • {item.program || '—'}</small><strong>{formatBillingPeriod(item.period)}</strong><b>Tambah Pembayaran →</b></button>)}
         </div>
       ) : (
         <div className="empty-state tuition-watch-empty">Tidak ada tagihan les aktif untuk periode ini.</div>
