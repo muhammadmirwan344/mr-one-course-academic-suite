@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbybttvYanjYCUT78NF5Ks13bAR6AeykVbxFpxA6yKntQFdF3jPyCPP2-ZHeGv-4f84e-Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxb4AgjH8T4BKLJvs2PHwUSfr_6c2jmoQloefsSmQvuxD1MTlvS_XjSX3NGxQtivzG6rg/exec';
 
 function PaperPlaneLogo() {
   return (
