@@ -4675,18 +4675,78 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     const amountLabel = 'Rp150.000';
 
     if (status.key === 'window') {
-      return `Halo, kami dari Mr One Course. Kami mengingatkan pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel}. Periode pembayaran reguler adalah tanggal 1–7 setiap bulan. Jika pembayaran sudah dilakukan, mohon abaikan pesan ini atau kirimkan bukti pembayaran kepada Admin. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin mengingatkan pembayaran les untuk *${name}*.`,
+        '',
+        `*Periode:* ${periodLabel}`,
+        `*Nominal:* ${amountLabel}`,
+        '*Waktu pembayaran:* tanggal 1–7 setiap bulan',
+        '',
+        'Jika pembayaran sudah dilakukan, pesan ini dapat diabaikan. Bila ada yang ingin dikonfirmasi, silakan hubungi Admin.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'late') {
-      return `Halo, kami dari Mr One Course. Pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} belum tercatat dalam sistem. Batas pembayaran reguler tanggal 7 telah lewat. Mohon dapat melakukan pembayaran atau konfirmasi kepada Admin apabila pembayaran sudah dilakukan. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin menginformasikan bahwa pembayaran les untuk *${name}* periode *${periodLabel}* belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek kembali pembayaran periode ini. Jika pembayaran sudah dilakukan, silakan kirimkan bukti pembayaran kepada Admin.',
+        '',
+        'Jika ada kendala atau hal yang ingin dikonfirmasi, silakan menghubungi Admin. Kami dengan senang hati akan membantu.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'follow-up') {
-      return `Selamat pagi/siang, kami dari Mr One Course ingin mengingatkan kembali bahwa pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih belum tercatat. Mohon dapat ditindaklanjuti agar administrasi periode berjalan tetap tertib. Jika terdapat kendala pembayaran, silakan menghubungi Admin Mr One Course. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Izin mengingatkan kembali pembayaran les untuk *${name}* periode *${periodLabel}*. Sampai saat ini pembayarannya belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek pembayaran tersebut. Jika sudah melakukan pembayaran, silakan kirimkan bukti pembayaran kepada Admin.',
+        '',
+        'Apabila ada kendala atau membutuhkan waktu, silakan kabari Admin agar dapat kami catat dengan baik.',
+        '',
+        '_Terima kasih banyak atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'outstanding') {
-      return `Selamat pagi/siang, kami dari Mr One Course menginformasikan bahwa pembayaran les periode ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih tercatat sebagai outstanding balance. Mohon dapat diselesaikan atau dikonfirmasikan kepada Admin apabila pembayaran sudah dilakukan. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin menyampaikan bahwa pembayaran les untuk *${name}* periode *${periodLabel}* masih belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek kembali. Jika pembayaran sudah dilakukan, silakan kirimkan bukti pembayaran kepada Admin agar dapat kami perbarui.',
+        '',
+        'Jika ada kendala terkait pembayaran, silakan menghubungi Admin. Kami siap membantu dan menyesuaikan pencatatan administrasinya.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
-    return `Selamat pagi/siang, kami dari Mr One Course mengingatkan bahwa pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih berstatus overdue dan belum tercatat dalam sistem. Mohon dapat diselesaikan atau dikonfirmasikan kepada Admin apabila pembayaran sudah dilakukan. Terima kasih atas perhatian dan kerja samanya. 🙏`;
+    return [
+      'Halo 👋',
+      '',
+      `Kami dari *Mr One Course* ingin mengingatkan dengan baik bahwa pembayaran les untuk *${name}* periode *${periodLabel}* masih belum tercatat di sistem kami.`,
+      '',
+      `*Nominal:* ${amountLabel}`,
+      '',
+      'Mohon bantuannya untuk mengecek pembayaran tersebut. Jika sudah melakukan pembayaran, silakan kirimkan bukti pembayaran kepada Admin.',
+      '',
+      'Apabila ada kendala atau hal yang ingin dikonfirmasi, silakan menghubungi Admin. Kami akan dengan senang hati membantu.',
+      '',
+      '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+    ].join('\r\n');
   }
 
   function sendTuitionReminder(item) {
@@ -4985,9 +5045,16 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   function openRegistrationWhatsApp(numberValue, messageValue) {
     const number = normalizeWa(numberValue);
-    // V90: normalize hanya pesan WA pendaftaran. Jika backend lama masih
-    // mengirim \n literal, ubah menjadi line break asli sebelum membuka WhatsApp.
-    const message = String(messageValue || '').replace(/\\n/g, '\n');
+
+    // V95: pertahankan line break WA secara eksplisit sebagai CRLF.
+    // Juga tetap kompatibel jika backend lama mengirim \\n sebagai teks literal.
+    const normalizedMessage = String(messageValue || '')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\r\n|\r|\n/g, '\n')
+      .trim();
+
+    const message = normalizedMessage.replace(/\n/g, '\r\n');
 
     if (!number) {
       throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
@@ -4999,13 +5066,11 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
       throw new Error('Format nomor WhatsApp tidak valid. Periksa kembali nomor pada form pendaftaran.');
     }
 
-    const waUrl = 'https://api.whatsapp.com/send?phone=' +
-      encodeURIComponent(number) +
-      '&text=' +
-      encodeURIComponent(message);
+    // wa.me mempertahankan line break pada pesan prefilled lebih konsisten.
+    const waUrl = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 
     try {
-      const opened = window.open(waUrl, '_blank');
+      const opened = window.open(waUrl, '_blank', 'noopener,noreferrer');
       if (!opened) {
         window.location.href = waUrl;
       }
@@ -5254,10 +5319,9 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     setStudentAccountMessage('');
     try {
       await callApi({
-        action: 'adminSetStudentAccount',
+        action: 'adminResetStudentPassword',
         token,
         studentId: student.studentId,
-        password: defaultPassword,
       });
       setStudentAccountMessage(`Password ${student.studentId || 'siswa'} berhasil direset ke ${defaultPassword}.`);
       await openStudentDetail(student.studentId);
