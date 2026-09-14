@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxbJDCidNT6NV9T0iliArlRLO9Kx69DnZrnI7dy8KcqNw2DUs3Jr0ZzbuzGq4kUn8nK/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyhuNaXrLyuYFxOJHFRFh4D_T2zgycZUSfgahfotpn90LYd2MXTqZy8Z88LwBv-iVv5vQ/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4985,7 +4985,9 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   function openRegistrationWhatsApp(numberValue, messageValue) {
     const number = normalizeWa(numberValue);
-    const message = String(messageValue || '');
+    // V90: normalize hanya pesan WA pendaftaran. Jika backend lama masih
+    // mengirim \n literal, ubah menjadi line break asli sebelum membuka WhatsApp.
+    const message = String(messageValue || '').replace(/\\n/g, '\n');
 
     if (!number) {
       throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
