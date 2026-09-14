@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyhuNaXrLyuYFxOJHFRFh4D_T2zgycZUSfgahfotpn90LYd2MXTqZy8Z88LwBv-iVv5vQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyKi5w0Fl1mncF9TgYNmQEuxYsX7ELwCK-WLBVgy101HKdTXN5W8MJsRaXTSRQhtyssmA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -5156,7 +5156,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState('');
   const [activationGuideLoading, setActivationGuideLoading] = useState(false);
-  const [studentAccountPassword, setStudentAccountPassword] = useState('');
   const [studentAccountLoading, setStudentAccountLoading] = useState(false);
   const [studentAccountMessage, setStudentAccountMessage] = useState('');
   const [bulkAccountPassword, setBulkAccountPassword] = useState('');
@@ -5167,7 +5166,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     setSelectedStudentId('');
     setDetail(null);
     setDetailMessage('');
-    setStudentAccountPassword('');
     setStudentAccountMessage('');
   }
 
@@ -5248,29 +5246,23 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
 
   async function saveStudentAccount() {
     const student = detail?.student || {};
-    const password = String(studentAccountPassword || '');
-    if (password.length < 8) {
-      setStudentAccountMessage('Password awal minimal 8 karakter.');
-      return;
-    }
-
-    const confirmed = window.confirm(`Aktifkan/reset akun ${student.fullName || student.studentId} dengan password awal yang baru? Session siswa lama akan dibatalkan.`);
+    const defaultPassword = 'Siswa123';
+    const confirmed = window.confirm(`Reset password ${student.fullName || student.studentId} ke ${defaultPassword}? Session siswa lama akan dibatalkan.`);
     if (!confirmed) return;
 
     setStudentAccountLoading(true);
     setStudentAccountMessage('');
     try {
-      const result = await callApi({
+      await callApi({
         action: 'adminSetStudentAccount',
         token,
         studentId: student.studentId,
-        password,
+        password: defaultPassword,
       });
-      setStudentAccountMessage(result.message || 'Akun siswa berhasil disiapkan.');
-      setStudentAccountPassword('');
+      setStudentAccountMessage(`Password ${student.studentId || 'siswa'} berhasil direset ke ${defaultPassword}.`);
       await openStudentDetail(student.studentId);
     } catch (error) {
-      setStudentAccountMessage(error.message || 'Akun siswa gagal disiapkan.');
+      setStudentAccountMessage(error.message || 'Password siswa gagal direset.');
     } finally {
       setStudentAccountLoading(false);
     }
@@ -5328,18 +5320,17 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
           </div>
           <div className="admin-student-account-control">
             <div>
-              <strong>Kontrol Akun Siswa</strong>
-              <small>Username selalu sama dengan Student ID. Password awal boleh sama dengan siswa lain dan dapat diganti sendiri secara opsional dari Profil.</small>
+              <strong>Reset Password Siswa</strong>
+              <small>Username tetap Student ID. Jika direset, password kembali ke <b>Siswa123</b>. Siswa tetap boleh mengganti password sendiri dari Profil.</small>
             </div>
             {(() => {
               const studentStatus = String(detail.student?.status || 'Aktif').trim().toLowerCase();
               const activeStudent = studentStatus === '' || studentStatus === 'aktif' || studentStatus === 'active';
               if (!activeStudent) return <button type="button" disabled>Siswa Non Aktif</button>;
               return <>
-                <label><span>Password awal / password reset</span><input type="password" minLength="8" value={studentAccountPassword} onChange={(event) => setStudentAccountPassword(event.target.value)} placeholder="Minimal 8 karakter" /></label>
                 {studentAccountMessage && <div className="admin-student-account-message">{studentAccountMessage}</div>}
-                <button type="button" onClick={saveStudentAccount} disabled={studentAccountLoading || String(studentAccountPassword).length < 8}>
-                  {studentAccountLoading ? 'Menyimpan...' : (String(detail.student?.accountStatus || '').toLowerCase() === 'aktif' ? 'Reset Password & Aktifkan Ulang' : 'Aktifkan Akun Siswa')}
+                <button type="button" onClick={saveStudentAccount} disabled={studentAccountLoading}>
+                  {studentAccountLoading ? 'Mereset...' : 'Reset Password ke Siswa123'}
                 </button>
               </>;
             })()}
