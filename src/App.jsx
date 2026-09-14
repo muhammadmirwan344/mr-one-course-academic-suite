@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby013IKnjaR7I5d-pJ-lycmqkAAZBtus3UCrEGhetkLfTD9hgJeb2-D7c4Brysi23AbgQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyKi5w0Fl1mncF9TgYNmQEuxYsX7ELwCK-WLBVgy101HKdTXN5W8MJsRaXTSRQhtyssmA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4675,18 +4675,78 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     const amountLabel = 'Rp150.000';
 
     if (status.key === 'window') {
-      return `Halo, kami dari Mr One Course. Kami mengingatkan pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel}. Periode pembayaran reguler adalah tanggal 1–7 setiap bulan. Jika pembayaran sudah dilakukan, mohon abaikan pesan ini atau kirimkan bukti pembayaran kepada Admin. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin mengingatkan pembayaran les untuk *${name}*.`,
+        '',
+        `*Periode:* ${periodLabel}`,
+        `*Nominal:* ${amountLabel}`,
+        '*Waktu pembayaran:* tanggal 1–7 setiap bulan',
+        '',
+        'Jika pembayaran sudah dilakukan, pesan ini dapat diabaikan. Bila ada yang ingin dikonfirmasi, silakan hubungi Admin.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'late') {
-      return `Halo, kami dari Mr One Course. Pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} belum tercatat dalam sistem. Batas pembayaran reguler tanggal 7 telah lewat. Mohon dapat melakukan pembayaran atau konfirmasi kepada Admin apabila pembayaran sudah dilakukan. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin menginformasikan bahwa pembayaran les untuk *${name}* periode *${periodLabel}* belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek kembali pembayaran periode ini. Jika pembayaran sudah dilakukan, silakan kirimkan bukti pembayaran kepada Admin.',
+        '',
+        'Jika ada kendala atau hal yang ingin dikonfirmasi, silakan menghubungi Admin. Kami dengan senang hati akan membantu.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'follow-up') {
-      return `Selamat pagi/siang, kami dari Mr One Course ingin mengingatkan kembali bahwa pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih belum tercatat. Mohon dapat ditindaklanjuti agar administrasi periode berjalan tetap tertib. Jika terdapat kendala pembayaran, silakan menghubungi Admin Mr One Course. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Izin mengingatkan kembali pembayaran les untuk *${name}* periode *${periodLabel}*. Sampai saat ini pembayarannya belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek pembayaran tersebut. Jika sudah melakukan pembayaran, silakan kirimkan bukti pembayaran kepada Admin.',
+        '',
+        'Apabila ada kendala atau membutuhkan waktu, silakan kabari Admin agar dapat kami catat dengan baik.',
+        '',
+        '_Terima kasih banyak atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
     if (status.key === 'outstanding') {
-      return `Selamat pagi/siang, kami dari Mr One Course menginformasikan bahwa pembayaran les periode ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih tercatat sebagai outstanding balance. Mohon dapat diselesaikan atau dikonfirmasikan kepada Admin apabila pembayaran sudah dilakukan. Terima kasih. 🙏`;
+      return [
+        'Halo 👋',
+        '',
+        `Kami dari *Mr One Course* ingin menyampaikan bahwa pembayaran les untuk *${name}* periode *${periodLabel}* masih belum tercatat di sistem kami.`,
+        '',
+        `*Nominal:* ${amountLabel}`,
+        '',
+        'Mohon bantuannya untuk mengecek kembali. Jika pembayaran sudah dilakukan, silakan kirimkan bukti pembayaran kepada Admin agar dapat kami perbarui.',
+        '',
+        'Jika ada kendala terkait pembayaran, silakan menghubungi Admin. Kami siap membantu dan menyesuaikan pencatatan administrasinya.',
+        '',
+        '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+      ].join('\r\n');
     }
-    return `Selamat pagi/siang, kami dari Mr One Course mengingatkan bahwa pembayaran les ${periodLabel} atas nama ${name} sebesar ${amountLabel} masih berstatus overdue dan belum tercatat dalam sistem. Mohon dapat diselesaikan atau dikonfirmasikan kepada Admin apabila pembayaran sudah dilakukan. Terima kasih atas perhatian dan kerja samanya. 🙏`;
+    return [
+      'Halo 👋',
+      '',
+      `Kami dari *Mr One Course* ingin mengingatkan dengan baik bahwa pembayaran les untuk *${name}* periode *${periodLabel}* masih belum tercatat di sistem kami.`,
+      '',
+      `*Nominal:* ${amountLabel}`,
+      '',
+      'Mohon bantuannya untuk mengecek pembayaran tersebut. Jika sudah melakukan pembayaran, silakan kirimkan bukti pembayaran kepada Admin.',
+      '',
+      'Apabila ada kendala atau hal yang ingin dikonfirmasi, silakan menghubungi Admin. Kami akan dengan senang hati membantu.',
+      '',
+      '_Terima kasih atas perhatian dan kerja samanya._ 🙏'
+    ].join('\r\n');
   }
 
   function sendTuitionReminder(item) {
@@ -4985,7 +5045,16 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   function openRegistrationWhatsApp(numberValue, messageValue) {
     const number = normalizeWa(numberValue);
-    const message = String(messageValue || '');
+
+    // V95: pertahankan line break WA secara eksplisit sebagai CRLF.
+    // Juga tetap kompatibel jika backend lama mengirim \\n sebagai teks literal.
+    const normalizedMessage = String(messageValue || '')
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\r\n|\r|\n/g, '\n')
+      .trim();
+
+    const message = normalizedMessage.replace(/\n/g, '\r\n');
 
     if (!number) {
       throw new Error('Nomor WhatsApp pendaftar belum tersedia.');
@@ -4997,13 +5066,11 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
       throw new Error('Format nomor WhatsApp tidak valid. Periksa kembali nomor pada form pendaftaran.');
     }
 
-    const waUrl = 'https://api.whatsapp.com/send?phone=' +
-      encodeURIComponent(number) +
-      '&text=' +
-      encodeURIComponent(message);
+    // wa.me mempertahankan line break pada pesan prefilled lebih konsisten.
+    const waUrl = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
 
     try {
-      const opened = window.open(waUrl, '_blank');
+      const opened = window.open(waUrl, '_blank', 'noopener,noreferrer');
       if (!opened) {
         window.location.href = waUrl;
       }
@@ -5116,13 +5183,13 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
         })}</div>}
 
       {approved.length > 0 && <div className="registration-approved-section">
-        <div className="registration-approved-heading"><div><span className="eyebrow">SUDAH DISETUJUI</span><h3>Kirim Informasi ke Pendaftar</h3></div><small>Link grup + informasi akses akun</small></div>
+        <div className="registration-approved-heading"><div><span className="eyebrow">SUDAH DIVERIFIKASI</span><h3>Kirim Hasil Verifikasi</h3></div><small>Status pendaftaran + pembayaran + data siswa</small></div>
         <div className="registration-admin-list">{approved.map((item) => <article key={`approved-${item.registrationId}`} className="registration-approved-card">
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
           <div className="registration-contact"><span>Student ID: <b>{item.studentId || '—'}</b></span><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
           <div className="registration-wa-actions registration-wa-actions-approved">
             <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'approved')} disabled={waLoading === `${item.registrationId}-approved`}>
-              {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Ucapan Selamat'}
+              {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Hasil Verifikasi'}
             </button>
             <button type="button" className={item.appGuideSentAt ? 'sent' : ''} onClick={() => sendStudentAppGuide(item)} disabled={Boolean(item.appGuideSentAt) || waLoading === `${item.registrationId}-app-guide`}>
               {item.appGuideSentAt ? '✓ Panduan Aplikasi Sudah Dikirim' : waLoading === `${item.registrationId}-app-guide` ? 'Membuka Panduan...' : '📱 Kirim Panduan Aplikasi via WA'}
@@ -5154,7 +5221,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailMessage, setDetailMessage] = useState('');
   const [activationGuideLoading, setActivationGuideLoading] = useState(false);
-  const [studentAccountPassword, setStudentAccountPassword] = useState('');
   const [studentAccountLoading, setStudentAccountLoading] = useState(false);
   const [studentAccountMessage, setStudentAccountMessage] = useState('');
   const [bulkAccountPassword, setBulkAccountPassword] = useState('');
@@ -5165,7 +5231,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     setSelectedStudentId('');
     setDetail(null);
     setDetailMessage('');
-    setStudentAccountPassword('');
     setStudentAccountMessage('');
   }
 
@@ -5246,29 +5311,22 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
 
   async function saveStudentAccount() {
     const student = detail?.student || {};
-    const password = String(studentAccountPassword || '');
-    if (password.length < 8) {
-      setStudentAccountMessage('Password awal minimal 8 karakter.');
-      return;
-    }
-
-    const confirmed = window.confirm(`Aktifkan/reset akun ${student.fullName || student.studentId} dengan password awal yang baru? Session siswa lama akan dibatalkan.`);
+    const defaultPassword = 'Siswa123';
+    const confirmed = window.confirm(`Reset password ${student.fullName || student.studentId} ke ${defaultPassword}? Session siswa lama akan dibatalkan.`);
     if (!confirmed) return;
 
     setStudentAccountLoading(true);
     setStudentAccountMessage('');
     try {
-      const result = await callApi({
-        action: 'adminSetStudentAccount',
+      await callApi({
+        action: 'adminResetStudentPassword',
         token,
         studentId: student.studentId,
-        password,
       });
-      setStudentAccountMessage(result.message || 'Akun siswa berhasil disiapkan.');
-      setStudentAccountPassword('');
+      setStudentAccountMessage(`Password ${student.studentId || 'siswa'} berhasil direset ke ${defaultPassword}.`);
       await openStudentDetail(student.studentId);
     } catch (error) {
-      setStudentAccountMessage(error.message || 'Akun siswa gagal disiapkan.');
+      setStudentAccountMessage(error.message || 'Password siswa gagal direset.');
     } finally {
       setStudentAccountLoading(false);
     }
@@ -5326,18 +5384,17 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
           </div>
           <div className="admin-student-account-control">
             <div>
-              <strong>Kontrol Akun Siswa</strong>
-              <small>Username selalu sama dengan Student ID. Password awal boleh sama dengan siswa lain dan dapat diganti sendiri secara opsional dari Profil.</small>
+              <strong>Reset Password Siswa</strong>
+              <small>Username tetap Student ID. Jika direset, password kembali ke <b>Siswa123</b>. Siswa tetap boleh mengganti password sendiri dari Profil.</small>
             </div>
             {(() => {
               const studentStatus = String(detail.student?.status || 'Aktif').trim().toLowerCase();
               const activeStudent = studentStatus === '' || studentStatus === 'aktif' || studentStatus === 'active';
               if (!activeStudent) return <button type="button" disabled>Siswa Non Aktif</button>;
               return <>
-                <label><span>Password awal / password reset</span><input type="password" minLength="8" value={studentAccountPassword} onChange={(event) => setStudentAccountPassword(event.target.value)} placeholder="Minimal 8 karakter" /></label>
                 {studentAccountMessage && <div className="admin-student-account-message">{studentAccountMessage}</div>}
-                <button type="button" onClick={saveStudentAccount} disabled={studentAccountLoading || String(studentAccountPassword).length < 8}>
-                  {studentAccountLoading ? 'Menyimpan...' : (String(detail.student?.accountStatus || '').toLowerCase() === 'aktif' ? 'Reset Password & Aktifkan Ulang' : 'Aktifkan Akun Siswa')}
+                <button type="button" onClick={saveStudentAccount} disabled={studentAccountLoading}>
+                  {studentAccountLoading ? 'Mereset...' : 'Reset Password ke Siswa123'}
                 </button>
               </>;
             })()}
