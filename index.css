@@ -27355,3 +27355,465 @@ html[data-theme='light'] .tutor-dashboard-header svg {
 .tuition-watch-empty {
   margin-top: 14px;
 }
+
+/* =========================================================
+   V84 — ADMIN CONTROLLED STUDENT ACCOUNTS
+   Scoped additions only; existing layout/visual rules untouched.
+   ========================================================= */
+.student-account-managed-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  background: rgba(148, 163, 184, 0.08);
+  text-align: left;
+}
+
+.student-account-managed-note strong {
+  font-size: 0.82rem;
+}
+
+.student-account-managed-note span {
+  font-size: 0.72rem;
+  opacity: 0.72;
+  line-height: 1.45;
+}
+
+.admin-student-account-bulk-card {
+  margin-bottom: 22px;
+  padding: 20px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 20px;
+  background: rgba(37, 99, 235, 0.045);
+}
+
+.admin-student-account-bulk-card .section-heading {
+  margin-bottom: 14px;
+}
+
+.admin-student-account-bulk-card .section-heading p {
+  margin: 5px 0 0;
+  opacity: 0.72;
+  line-height: 1.5;
+}
+
+.admin-student-account-bulk-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.admin-student-account-bulk-form label,
+.admin-student-account-control label,
+.student-change-password-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-student-account-bulk-form label span,
+.admin-student-account-control label span,
+.student-change-password-card label span {
+  font-size: 0.74rem;
+  font-weight: 700;
+  opacity: 0.78;
+}
+
+.admin-student-account-bulk-form input,
+.admin-student-account-control input,
+.student-change-password-card input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: var(--surface, rgba(255,255,255,0.78));
+  color: inherit;
+}
+
+.admin-student-account-bulk-form button,
+.admin-student-account-control > button,
+.student-change-password-card > button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.admin-student-account-bulk-form button:disabled,
+.admin-student-account-control > button:disabled,
+.student-change-password-card > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-student-account-message {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.admin-student-account-message.bulk {
+  margin-top: 12px;
+}
+
+.admin-student-account-warning {
+  display: block;
+  margin-top: 10px;
+  opacity: 0.68;
+  line-height: 1.5;
+}
+
+.admin-student-account-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.admin-student-account-control > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-student-account-control > div:first-child small {
+  opacity: 0.68;
+  line-height: 1.45;
+}
+
+.student-change-password-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 18px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.student-change-password-card > div:first-child p {
+  margin: 5px 0 0;
+  font-size: 0.78rem;
+  opacity: 0.7;
+  line-height: 1.5;
+}
+
+.student-change-password-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.student-password-message {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.08);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .admin-student-account-bulk-form,
+  .student-change-password-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   V85 — TUITION WATCH PAYMENT DEADLINE STATUS
+   Scoped only to Payment Center / Tuition Watch.
+   Existing V81 live reconciliation and V84 account controls remain untouched.
+   ========================================================= */
+.admin-tuition-watch-v85 {
+  overflow: hidden;
+}
+
+.tuition-policy-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 14px 0 10px;
+}
+
+.tuition-policy-stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 11px;
+  background: rgba(148, 163, 184, 0.05);
+  opacity: .7;
+}
+
+.tuition-policy-stage small {
+  font-size: .59rem;
+  color: var(--muted-text, #8d97a5);
+  font-weight: 800;
+}
+
+.tuition-policy-stage strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: .68rem;
+  line-height: 1.25;
+}
+
+.tuition-policy-stage.active {
+  opacity: 1;
+  border-color: rgba(22, 155, 155, .42);
+  box-shadow: 0 0 0 1px rgba(22, 155, 155, .08) inset;
+}
+
+.tuition-current-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0 12px;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.tuition-current-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+}
+
+.tuition-current-status span {
+  font-size: .56rem;
+  letter-spacing: .08em;
+  color: var(--muted-text, #8d97a5);
+  font-weight: 900;
+}
+
+.tuition-current-status strong {
+  font-size: .86rem;
+}
+
+.tuition-current-status p {
+  margin: 0;
+  font-size: .7rem;
+  line-height: 1.45;
+  color: var(--muted-text, #8d97a5);
+}
+
+.tuition-status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 10px;
+}
+
+.tuition-status-summary > span,
+.tuition-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  border: 1px solid rgba(148, 163, 184, .18);
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: rgba(148, 163, 184, .07);
+  font-size: .58rem;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tuition-watch-row-v85 {
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.tuition-watch-row-v85:hover,
+.tuition-watch-row-v85:focus-visible {
+  border-color: rgba(34, 211, 238, .55);
+  background: rgba(34, 211, 238, .055);
+  outline: none;
+}
+
+.tuition-watch-row-v85:active {
+  transform: translateY(1px);
+}
+
+.tuition-watch-student-v85 {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tuition-watch-name-line-v85 {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tuition-watch-name-line-v85 > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 800;
+}
+
+.tuition-watch-student-v85 > small {
+  color: var(--muted-text, #8d97a5);
+  font-size: .66rem;
+}
+
+.tuition-watch-wa-v85 {
+  border: 1px solid rgba(37, 211, 102, .30);
+  background: rgba(37, 211, 102, .10);
+  color: #178f47;
+  border-radius: 9px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: .65rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tuition-watch-wa-v85:hover:not(:disabled),
+.tuition-watch-wa-v85:focus-visible:not(:disabled) {
+  background: rgba(37, 211, 102, .16);
+  outline: none;
+}
+
+.tuition-watch-wa-v85:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.tuition-status-window.active,
+.tuition-current-status.tuition-status-window,
+.tuition-status-summary .tuition-status-window,
+.tuition-status-badge.tuition-status-window {
+  border-color: rgba(22, 155, 155, .28);
+  background: rgba(22, 155, 155, .08);
+}
+
+.tuition-status-late.active,
+.tuition-current-status.tuition-status-late,
+.tuition-status-summary .tuition-status-late,
+.tuition-status-badge.tuition-status-late {
+  border-color: rgba(217, 119, 6, .28);
+  background: rgba(217, 119, 6, .08);
+}
+
+.tuition-status-follow-up.active,
+.tuition-current-status.tuition-status-follow-up,
+.tuition-status-summary .tuition-status-follow-up,
+.tuition-status-badge.tuition-status-follow-up {
+  border-color: rgba(234, 88, 12, .30);
+  background: rgba(234, 88, 12, .08);
+}
+
+.tuition-status-overdue.active,
+.tuition-current-status.tuition-status-overdue,
+.tuition-status-summary .tuition-status-overdue,
+.tuition-status-badge.tuition-status-overdue,
+.tuition-status-outstanding.active,
+.tuition-current-status.tuition-status-outstanding,
+.tuition-status-summary .tuition-status-outstanding,
+.tuition-status-badge.tuition-status-outstanding {
+  border-color: rgba(220, 38, 38, .28);
+  background: rgba(220, 38, 38, .08);
+}
+
+@media (max-width: 860px) {
+  .tuition-policy-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tuition-policy-stage:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .tuition-current-status {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  .tuition-current-status > div {
+    min-width: 0;
+  }
+  .tuition-watch-row-v85 {
+    gap: 8px !important;
+  }
+  .tuition-watch-row-v85 > strong,
+  .tuition-watch-row-v85 > b {
+    justify-self: start;
+  }
+  .tuition-watch-wa-v85 {
+    width: fit-content;
+  }
+}
+
+/* V85 row-action finishing rules */
+.tuition-watch-row-v85 > strong {
+  font-size: .7rem;
+  white-space: nowrap;
+}
+.tuition-watch-row-v85 > b {
+  color: #22d3ee;
+  font-size: .7rem;
+  white-space: nowrap;
+}
+
+/* V86 — make the individual WhatsApp action unmistakable in Active Tuition Bills.
+   Only visual clarity is changed; Tuition Watch/payment logic remains V85. */
+.tuition-watch-wa-v86 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  min-width: 92px;
+  padding: 8px 11px;
+  border-width: 1px;
+  font-size: .68rem;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(37, 211, 102, .08);
+}
+
+.tuition-watch-wa-v86:not(:disabled) {
+  border-color: rgba(37, 211, 102, .42);
+  background: rgba(37, 211, 102, .14);
+}
+
+.tuition-watch-wa-v86:disabled {
+  min-width: 118px;
+  box-shadow: none;
+}
+
+@media (max-width: 680px) {
+  .tuition-watch-wa-v86 {
+    width: 100%;
+    min-width: 0;
+    justify-self: stretch;
+  }
+}
