@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwFOau2g_imm9J5FxrcrOkOR17yl-O0vLXUpFJCDaDQd60gQ5mx0399rf9O8vshGANCIQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby5QvN6TfF4qCdve9pKrAkan_69NKkbLiToEBAXAbEmBPrYo96NGS3f53-cU1jWlKld0Q/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4496,10 +4496,34 @@ function Dashboard({
             })}
           </section>
 
-          {user.role === 'Admin' && (Number(metrics?.pendingRegistrations || 0) + Number(metrics?.pendingPayments || 0) === 0) && (
+          {user.role === 'Admin' && (Number(metrics?.pendingRegistrations || 0) + Number(metrics?.pendingPayments || 0) + Number(attentionLists?.absentMoreThanFour?.length || 0) === 0) && (
             <section className="admin-today-clear">
               <span>✓</span>
-              <div><strong>Tidak ada tindakan mendesak hari ini</strong><small>Pendaftaran dan pembayaran tidak memiliki antrean verifikasi.</small></div>
+              <div><strong>Tidak ada tindakan mendesak hari ini</strong><small>Pendaftaran, pembayaran, dan Attendance Watch tidak memiliki antrean tindak lanjut.</small></div>
+            </section>
+          )}
+
+          {user.role === 'Admin' && (
+            <section className="admin-attendance-watch admin-home-attendance-todo">
+              <div className="section-heading">
+                <div><span className="eyebrow">TO DO LIST • ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2><p>Tindak lanjut siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</p></div>
+                <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
+              </div>
+              {(attentionLists?.absentMoreThanFour || []).length ? (
+                <div className="admin-attendance-watch-list">
+                  {attentionLists.absentMoreThanFour.slice(0, 5).map((item) => (
+                    <article key={`home-attendance-watch-${item.studentId}`}>
+                      <div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.classId || '—'} • Tidak hadir {item.absentCount}x</small></div>
+                      <button type="button" onClick={() => onNavigate('students')}>Tindak Lanjuti</button>
+                    </article>
+                  ))}
+                  {attentionLists.absentMoreThanFour.length > 5 && (
+                    <div className="admin-home-todo-more">+{attentionLists.absentMoreThanFour.length - 5} siswa lainnya tersedia di Attendance Watch.</div>
+                  )}
+                </div>
+              ) : (
+                <div className="admin-watch-empty">Tidak ada Attendance Watch yang perlu ditindaklanjuti saat ini.</div>
+              )}
             </section>
           )}
 
@@ -4632,6 +4656,7 @@ function Dashboard({
           message={message}
           token={token}
           attentionLists={attentionLists}
+          userRole={user.role}
           onBack={() => onNavigate('home')}
         />
       ) : activePage === 'registrations' ? (
@@ -5363,7 +5388,10 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
   </section>;
 }
 
-function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists, onBack }) {
+function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists, userRole, onBack }) {
+  const normalizedUserRole = String(userRole || '').trim().toLowerCase();
+  const isCEOStudentManager = normalizedUserRole === 'ceo';
+  const isAdminStudentManager = normalizedUserRole === 'admin';
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -5374,8 +5402,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [bulkAccountPassword, setBulkAccountPassword] = useState('');
   const [bulkAccountLoading, setBulkAccountLoading] = useState(false);
   const [bulkAccountMessage, setBulkAccountMessage] = useState('');
-  const [legacyPaidLoading, setLegacyPaidLoading] = useState(false);
-  const [legacyPaidMessage, setLegacyPaidMessage] = useState('');
   const [studentLeaveForm, setStudentLeaveForm] = useState(() => {
     const date = new Date();
     return { period: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`, note: '' };
@@ -5385,6 +5411,12 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [studentStopNote, setStudentStopNote] = useState('');
   const [studentStopLoading, setStudentStopLoading] = useState(false);
   const [studentStopMessage, setStudentStopMessage] = useState('');
+  const [studentArchiveLoading, setStudentArchiveLoading] = useState(false);
+  const [studentArchiveMessage, setStudentArchiveMessage] = useState('');
+  const [alumniOpen, setAlumniOpen] = useState(false);
+  const [alumniLoading, setAlumniLoading] = useState(false);
+  const [alumniStudents, setAlumniStudents] = useState([]);
+  const [alumniMessage, setAlumniMessage] = useState('');
 
   function closeStudentDetail() {
     setSelectedStudentId('');
@@ -5393,6 +5425,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     setStudentAccountMessage('');
     setStudentLeaveMessage('');
     setStudentStopMessage('');
+    setStudentArchiveMessage('');
   }
 
   useEdgeSwipeBack(
@@ -5608,28 +5641,52 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     }
   }
 
-  async function markLegacyJanJunPaid() {
+  async function archiveStoppedStudent() {
+    const student = detail?.student || {};
+    const studentName = student.fullName || student.studentId || 'siswa ini';
     const confirmed = window.confirm(
-      'Konfirmasi Januari–Juni 2026 sebagai LUNAS untuk seluruh siswa lama? Siswa yang berasal dari pendaftaran baru tidak akan diubah. Status CUTI tetap dipertahankan, dan Juli serta bulan setelahnya tidak disentuh.'
+      `Pindahkan ${studentName} ke Daftar Alumni? Data siswa akan dipindahkan dari Siswa Aktif, riwayat pembayaran dipindahkan ke Data Pembayaran Alumni, dan slot Student ID ${student.studentId || ''} akan dikosongkan untuk siswa baru. Tindakan ini tidak dapat dibatalkan dari halaman ini.`
     );
     if (!confirmed) return;
 
-    setLegacyPaidLoading(true);
-    setLegacyPaidMessage('');
+    setStudentArchiveLoading(true);
+    setStudentArchiveMessage('');
     try {
       const result = await callApi({
-        action: 'adminMarkLegacyJanJunPaid',
+        action: 'adminArchiveStudentToAlumni',
         token,
+        studentId: student.studentId,
       });
-      setLegacyPaidMessage(
-        `${result.message || 'Riwayat pembayaran berhasil diperbarui.'} ${result.legacyStudents || 0} siswa lama diproses.`
-      );
+      setStudentArchiveMessage(result.message || 'Siswa berhasil dipindahkan ke Daftar Alumni.');
+      setSelectedStudentId('');
+      setDetail(null);
       if (onSearch) await onSearch();
+      if (alumniOpen) await loadAlumniStudents();
+      window.alert(result.message || 'Siswa berhasil dipindahkan ke Daftar Alumni Mr One Course.');
     } catch (error) {
-      setLegacyPaidMessage(error.message || 'Riwayat pembayaran siswa lama gagal diperbarui.');
+      setStudentArchiveMessage(error.message || 'Siswa gagal dipindahkan ke Daftar Alumni.');
     } finally {
-      setLegacyPaidLoading(false);
+      setStudentArchiveLoading(false);
     }
+  }
+
+  async function loadAlumniStudents() {
+    setAlumniLoading(true);
+    setAlumniMessage('');
+    try {
+      const result = await callApi({ action: 'getAlumniStudents', token });
+      setAlumniStudents(result.alumni || []);
+    } catch (error) {
+      setAlumniMessage(error.message || 'Daftar alumni gagal dimuat.');
+    } finally {
+      setAlumniLoading(false);
+    }
+  }
+
+  async function toggleAlumniList() {
+    const nextOpen = !alumniOpen;
+    setAlumniOpen(nextOpen);
+    if (nextOpen) await loadAlumniStudents();
   }
 
   async function resetAllStudentAccounts() {
@@ -5751,13 +5808,15 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
                     <span>Dikonfirmasi</span><strong>{detail.stopInfo?.date || '—'}</strong>
                     <span>Keterangan</span><strong>{detail.stopInfo?.note || 'Tanpa keterangan'}</strong>
                   </div>
-                  <button type="button" className="reactivate-stopped-student" onClick={reactivateStoppedStudent} disabled={studentStopLoading}>{studentStopLoading ? 'Memproses...' : 'Aktifkan Kembali'}</button>
+                  <button type="button" className="reactivate-stopped-student" onClick={reactivateStoppedStudent} disabled={studentStopLoading || studentArchiveLoading}>{studentStopLoading ? 'Memproses...' : 'Aktifkan Kembali'}</button>
+                  <button type="button" className="confirm-stop-student" onClick={archiveStoppedStudent} disabled={studentArchiveLoading || studentStopLoading}>{studentArchiveLoading ? 'Memindahkan ke Alumni...' : 'Pindahkan ke Alumni & Kosongkan Slot ID'}</button>
+                  {studentArchiveMessage && <div className="admin-student-stop-message">{studentArchiveMessage}</div>}
                 </> : <>
                   <label><span>Keterangan (opsional)</span><input value={studentStopNote} maxLength={180} onChange={(event) => setStudentStopNote(event.target.value)} placeholder="Contoh: pindah kota / tidak melanjutkan program" /></label>
                   <button type="button" className="confirm-stop-student" onClick={stopStudent} disabled={studentStopLoading}>{studentStopLoading ? 'Memproses...' : 'Konfirmasi Berhenti Les'}</button>
                 </>}
                 {studentStopMessage && <div className="admin-student-stop-message">{studentStopMessage}</div>}
-                <small className="admin-student-stop-note">Setelah dikonfirmasi, siswa tidak masuk daftar tagihan aktif berikutnya dan akun Sign In dinonaktifkan. Pembayaran, absensi, nilai, EXP, dan laporan lama tetap tersimpan.</small>
+                <small className="admin-student-stop-note">Langkah 1: konfirmasi Berhenti Les. Langkah 2: jika data sudah final, gunakan <b>Pindahkan ke Alumni & Kosongkan Slot ID</b>. Data siswa dan pembayaran dipindahkan ke arsip Alumni sebelum slot Student ID tersedia untuk siswa baru.</small>
               </>;
             })()}
           </div></article>
@@ -5779,9 +5838,9 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   }
 
   return <section className="students-page">
-    <section className="admin-student-account-bulk-card">
+    {isCEOStudentManager && <section className="admin-student-account-bulk-card">
       <div className="section-heading">
-        <div><span className="eyebrow">STUDENT ACCOUNT CONTROL — V84</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Hanya siswa berstatus aktif. CEO, Admin, Tutor, pembayaran, absensi, EXP, badge, dan data akademik tidak diubah.</p></div>
+        <div><span className="eyebrow">CEO • STUDENT ACCOUNT CONTROL</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Kontrol massal akun siswa dipusatkan di CEO. Hanya siswa berstatus aktif yang diproses; data pembayaran, absensi, EXP, badge, dan akademik tidak diubah.</p></div>
       </div>
       <div className="admin-student-account-bulk-form">
         <label><span>Password awal yang sama untuk semua siswa</span><input type="password" minLength="8" value={bulkAccountPassword} onChange={(event) => setBulkAccountPassword(event.target.value)} placeholder="Minimal 8 karakter" /></label>
@@ -5789,19 +5848,9 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
       </div>
       {bulkAccountMessage && <div className="admin-student-account-message bulk">{bulkAccountMessage}</div>}
       <small className="admin-student-account-warning">Tindakan ini membatalkan session siswa lama sehingga mereka harus Sign In kembali menggunakan Student ID dan password awal baru.</small>
-    </section>
+    </section>}
 
-    <section className="admin-student-account-bulk-card">
-      <div className="section-heading">
-        <div><span className="eyebrow">HISTORICAL TUITION — V99</span><h2>Lunas Jan–Jun Siswa Lama</h2><p>Penyesuaian satu kali untuk siswa lama. Siswa dari pendaftaran baru, status CUTI, bulan Juli, dan bulan setelahnya tidak diubah.</p></div>
-      </div>
-      <div className="admin-student-account-bulk-form">
-        <button type="button" onClick={markLegacyJanJunPaid} disabled={legacyPaidLoading}>{legacyPaidLoading ? 'Memproses...' : 'Konfirmasi Lunas Jan–Jun Siswa Lama'}</button>
-      </div>
-      {legacyPaidMessage && <div className="admin-student-account-message bulk">{legacyPaidMessage}</div>}
-    </section>
-
-    <section className="admin-attendance-watch">
+    {isAdminStudentManager && <section className="admin-attendance-watch">
       <div className="section-heading">
         <div><span className="eyebrow">ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2></div>
         <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
@@ -5817,6 +5866,22 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
           })}
         </div>
       ) : <div className="admin-watch-empty">Tidak ada siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</div>}
+    </section>}
+
+    <section className="admin-student-account-bulk-card">
+      <div className="section-heading">
+        <div><span className="eyebrow">ALUMNI</span><h2>Daftar Alumni Mr One Course</h2><p>Siswa yang sudah berhenti dan telah diarsipkan tidak lagi tampil di Siswa Aktif. Slot Student ID-nya dapat dipakai untuk pendaftar baru.</p></div>
+        <button type="button" onClick={toggleAlumniList}>{alumniOpen ? 'Tutup Daftar Alumni' : 'Lihat Daftar Alumni'}</button>
+      </div>
+      {alumniOpen && <>
+        {alumniMessage && <div className="error-message">{alumniMessage}</div>}
+        {alumniLoading ? <div className="dashboard-loading">Memuat daftar alumni...</div> : alumniStudents.length === 0 ? <div className="empty-state">Belum ada siswa yang dipindahkan ke alumni.</div> : <div className="student-list">
+          {alumniStudents.map((student, index) => <div className="student-card" key={`${student.alumniId || student.studentId}-${index}`}>
+            <div className="student-avatar">{String(student.fullName || 'A').charAt(0).toUpperCase()}</div>
+            <div className="student-info"><div className="student-name-row"><strong>{student.fullName || 'Alumni'}</strong><span className="student-status">ALUMNI</span></div><span>{student.studentId || '—'}</span><p>{student.program || 'Program tidak tercatat'} • {student.className || student.classId || 'Kelas tidak tercatat'}</p><small>Diarsipkan {student.archivedAt || '—'}{student.stopNote ? ` • ${student.stopNote}` : ''}</small></div>
+          </div>)}
+        </div>}
+      </>}
     </section>
 
     <div className="page-heading"><div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>{pagination.totalData || 0} siswa ditemukan</p></div></div>
