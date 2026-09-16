@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxZxwKZJLu6TVuSSSMqMq4xL2dVMHoBrjflmo-CGYgna1p6znnUqKfK_aw6mplzKmTXTQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycby5QvN6TfF4qCdve9pKrAkan_69NKkbLiToEBAXAbEmBPrYo96NGS3f53-cU1jWlKld0Q/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -4496,10 +4496,34 @@ function Dashboard({
             })}
           </section>
 
-          {user.role === 'Admin' && (Number(metrics?.pendingRegistrations || 0) + Number(metrics?.pendingPayments || 0) === 0) && (
+          {user.role === 'Admin' && (Number(metrics?.pendingRegistrations || 0) + Number(metrics?.pendingPayments || 0) + Number(attentionLists?.absentMoreThanFour?.length || 0) === 0) && (
             <section className="admin-today-clear">
               <span>✓</span>
-              <div><strong>Tidak ada tindakan mendesak hari ini</strong><small>Pendaftaran dan pembayaran tidak memiliki antrean verifikasi.</small></div>
+              <div><strong>Tidak ada tindakan mendesak hari ini</strong><small>Pendaftaran, pembayaran, dan Attendance Watch tidak memiliki antrean tindak lanjut.</small></div>
+            </section>
+          )}
+
+          {user.role === 'Admin' && (
+            <section className="admin-attendance-watch admin-home-attendance-todo">
+              <div className="section-heading">
+                <div><span className="eyebrow">TO DO LIST • ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2><p>Tindak lanjut siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</p></div>
+                <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
+              </div>
+              {(attentionLists?.absentMoreThanFour || []).length ? (
+                <div className="admin-attendance-watch-list">
+                  {attentionLists.absentMoreThanFour.slice(0, 5).map((item) => (
+                    <article key={`home-attendance-watch-${item.studentId}`}>
+                      <div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.classId || '—'} • Tidak hadir {item.absentCount}x</small></div>
+                      <button type="button" onClick={() => onNavigate('students')}>Tindak Lanjuti</button>
+                    </article>
+                  ))}
+                  {attentionLists.absentMoreThanFour.length > 5 && (
+                    <div className="admin-home-todo-more">+{attentionLists.absentMoreThanFour.length - 5} siswa lainnya tersedia di Attendance Watch.</div>
+                  )}
+                </div>
+              ) : (
+                <div className="admin-watch-empty">Tidak ada Attendance Watch yang perlu ditindaklanjuti saat ini.</div>
+              )}
             </section>
           )}
 
@@ -4632,6 +4656,7 @@ function Dashboard({
           message={message}
           token={token}
           attentionLists={attentionLists}
+          userRole={user.role}
           onBack={() => onNavigate('home')}
         />
       ) : activePage === 'registrations' ? (
@@ -5363,7 +5388,10 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
   </section>;
 }
 
-function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists, onBack }) {
+function StudentsPage({ students, loading, search, onSearchChange, onSearch, pagination, onPageChange, message, token, attentionLists, userRole, onBack }) {
+  const normalizedUserRole = String(userRole || '').trim().toLowerCase();
+  const isCEOStudentManager = normalizedUserRole === 'ceo';
+  const isAdminStudentManager = normalizedUserRole === 'admin';
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -5374,8 +5402,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   const [bulkAccountPassword, setBulkAccountPassword] = useState('');
   const [bulkAccountLoading, setBulkAccountLoading] = useState(false);
   const [bulkAccountMessage, setBulkAccountMessage] = useState('');
-  const [legacyPaidLoading, setLegacyPaidLoading] = useState(false);
-  const [legacyPaidMessage, setLegacyPaidMessage] = useState('');
   const [studentLeaveForm, setStudentLeaveForm] = useState(() => {
     const date = new Date();
     return { period: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`, note: '' };
@@ -5663,30 +5689,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     if (nextOpen) await loadAlumniStudents();
   }
 
-  async function markLegacyJanJunPaid() {
-    const confirmed = window.confirm(
-      'Konfirmasi Januari–Juni 2026 sebagai LUNAS untuk seluruh siswa lama? Siswa yang berasal dari pendaftaran baru tidak akan diubah. Status CUTI tetap dipertahankan, dan Juli serta bulan setelahnya tidak disentuh.'
-    );
-    if (!confirmed) return;
-
-    setLegacyPaidLoading(true);
-    setLegacyPaidMessage('');
-    try {
-      const result = await callApi({
-        action: 'adminMarkLegacyJanJunPaid',
-        token,
-      });
-      setLegacyPaidMessage(
-        `${result.message || 'Riwayat pembayaran berhasil diperbarui.'} ${result.legacyStudents || 0} siswa lama diproses.`
-      );
-      if (onSearch) await onSearch();
-    } catch (error) {
-      setLegacyPaidMessage(error.message || 'Riwayat pembayaran siswa lama gagal diperbarui.');
-    } finally {
-      setLegacyPaidLoading(false);
-    }
-  }
-
   async function resetAllStudentAccounts() {
     const password = String(bulkAccountPassword || '');
     if (password.length < 8) {
@@ -5836,9 +5838,9 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
   }
 
   return <section className="students-page">
-    <section className="admin-student-account-bulk-card">
+    {isCEOStudentManager && <section className="admin-student-account-bulk-card">
       <div className="section-heading">
-        <div><span className="eyebrow">STUDENT ACCOUNT CONTROL — V84</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Hanya siswa berstatus aktif. CEO, Admin, Tutor, pembayaran, absensi, EXP, badge, dan data akademik tidak diubah.</p></div>
+        <div><span className="eyebrow">CEO • STUDENT ACCOUNT CONTROL</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Kontrol massal akun siswa dipusatkan di CEO. Hanya siswa berstatus aktif yang diproses; data pembayaran, absensi, EXP, badge, dan akademik tidak diubah.</p></div>
       </div>
       <div className="admin-student-account-bulk-form">
         <label><span>Password awal yang sama untuk semua siswa</span><input type="password" minLength="8" value={bulkAccountPassword} onChange={(event) => setBulkAccountPassword(event.target.value)} placeholder="Minimal 8 karakter" /></label>
@@ -5846,19 +5848,9 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
       </div>
       {bulkAccountMessage && <div className="admin-student-account-message bulk">{bulkAccountMessage}</div>}
       <small className="admin-student-account-warning">Tindakan ini membatalkan session siswa lama sehingga mereka harus Sign In kembali menggunakan Student ID dan password awal baru.</small>
-    </section>
+    </section>}
 
-    <section className="admin-student-account-bulk-card">
-      <div className="section-heading">
-        <div><span className="eyebrow">HISTORICAL TUITION — V99</span><h2>Lunas Jan–Jun Siswa Lama</h2><p>Penyesuaian satu kali untuk siswa lama. Siswa dari pendaftaran baru, status CUTI, bulan Juli, dan bulan setelahnya tidak diubah.</p></div>
-      </div>
-      <div className="admin-student-account-bulk-form">
-        <button type="button" onClick={markLegacyJanJunPaid} disabled={legacyPaidLoading}>{legacyPaidLoading ? 'Memproses...' : 'Konfirmasi Lunas Jan–Jun Siswa Lama'}</button>
-      </div>
-      {legacyPaidMessage && <div className="admin-student-account-message bulk">{legacyPaidMessage}</div>}
-    </section>
-
-    <section className="admin-attendance-watch">
+    {isAdminStudentManager && <section className="admin-attendance-watch">
       <div className="section-heading">
         <div><span className="eyebrow">ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2></div>
         <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
@@ -5874,7 +5866,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
           })}
         </div>
       ) : <div className="admin-watch-empty">Tidak ada siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</div>}
-    </section>
+    </section>}
 
     <section className="admin-student-account-bulk-card">
       <div className="section-heading">
