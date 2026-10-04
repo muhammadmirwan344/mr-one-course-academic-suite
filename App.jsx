@@ -1,6 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
+// MR ONE COURSE — APP V31 FOCUSED PAYMENT WORKFLOWS — 4 OCTOBER 2026
+import React, { useEffect, useRef, useState } from 'react';
 
-const API_URL = 'https://script.google.com/macros/s/AKfycby5QvN6TfF4qCdve9pKrAkan_69NKkbLiToEBAXAbEmBPrYo96NGS3f53-cU1jWlKld0Q/exec';
+class PaymentPageErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('Payment Centre render error:', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return <section className="payment-admin-page"><div className="error-message"><strong>Payment Centre belum dapat dibuka.</strong><br />{String(this.state.error?.message || 'Terjadi kesalahan tampilan.')}</div><button type="button" className="refresh-button" onClick={() => window.location.reload()}>Muat Ulang</button></section>;
+    }
+    return this.props.children;
+  }
+}
+
+const API_URL = 'https://script.google.com/macros/s/AKfycbzW1OE9jpdAFPgDJsYEc361m8PKB9mNtPuopgrVWHeT0HdC1em2crf-Am3DKxUIRle1PA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -695,6 +718,7 @@ function App() {
     totalPages: 1,
   });
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const studentsCacheRef = useRef({ key: '', loadedAt: 0 });
   const [registrations, setRegistrations] = useState([]);
   const [registrationsLoading, setRegistrationsLoading] = useState(false);
   const [paymentConfirmations, setPaymentConfirmations] = useState([]);
@@ -1029,13 +1053,36 @@ function App() {
     catch (error) { setMessage(error.message || 'Pembayaran lama gagal dicatat.'); setPaymentConfirmationsLoading(false); return false; }
   }
 
+  async function bulkMarkTuitionPaid(payment) {
+    setPaymentConfirmationsLoading(true); setMessage('');
+    try {
+      const result = await callApi({ action: 'adminBulkMarkTuitionPaid', token, payment });
+      setMessage(result.message);
+      await loadPaymentConfirmations();
+      await loadDashboard(token);
+      return true;
+    } catch (error) {
+      setMessage(error.message || 'Pembayaran massal gagal disimpan.');
+      setPaymentConfirmationsLoading(false);
+      return false;
+    }
+  }
+
   async function updatePaymentFulfillment(fulfillment) {
     setPaymentConfirmationsLoading(true); setMessage('');
     try { const result = await callApi({ action: 'updatePaymentFulfillment', token, fulfillment }); setMessage(result.message); await loadPaymentConfirmations(); return true; }
     catch (error) { setMessage(error.message || 'Status penyerahan gagal diperbarui.'); setPaymentConfirmationsLoading(false); return false; }
   }
 
-  async function loadStudents(search = '', page = 1) {
+  async function loadStudents(search = '', page = 1, force = false) {
+    const normalizedSearch = search.trim();
+    const cacheKey = `${normalizedSearch.toLowerCase()}|${page}`;
+    const cacheIsFresh = studentsCacheRef.current.key === cacheKey &&
+      Date.now() - studentsCacheRef.current.loadedAt < 60000 &&
+      students.length > 0;
+
+    if (!force && cacheIsFresh) return;
+
     setStudentsLoading(true);
     setMessage('');
 
@@ -1043,7 +1090,7 @@ function App() {
       const result = await callApi({
         action: 'getStudents',
         token,
-        search: search.trim(),
+        search: normalizedSearch,
         page,
         limit: 20,
       });
@@ -1056,6 +1103,7 @@ function App() {
           totalPages: 1,
         }
       );
+      studentsCacheRef.current = { key: cacheKey, loadedAt: Date.now() };
     } catch (error) {
       setMessage(error.message || 'Data siswa gagal dimuat.');
     } finally {
@@ -1181,6 +1229,7 @@ function App() {
         paymentConfirmationsLoading={paymentConfirmationsLoading}
         onReviewPayment={reviewPaymentConfirmation}
         onAddHistoricalPayment={addHistoricalPayment}
+        onBulkPayment={bulkMarkTuitionPaid}
         onUpdateFulfillment={updatePaymentFulfillment}
         token={token}
         theme={theme}
@@ -3185,6 +3234,7 @@ function QrisPaymentDisplay({ isID }) {
             ? 'Pindai barcode QRIS menggunakan aplikasi bank atau e-wallet, lalu masukkan nominal sesuai tagihan.'
             : 'Scan the QRIS barcode using your banking or e-wallet app, then enter the invoice amount.'}
         </p>
+        {qrisAvailable && <a className="qris-save-button" href="/qris-mr-one-course.jpeg" download="QRIS-Mr-One-Course.jpeg">{isID ? 'Simpan QRIS' : 'Save QRIS'}</a>}
       </div>
     </div>
   );
@@ -3654,13 +3704,13 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
 
                 <p className="payment-document-note">
                   {isID
-                    ? 'Silakan selesaikan pembayaran melalui metode yang tersedia pada Academic Suite. Simpan invoice ini sebagai referensi pembayaran.'
-                    : 'Please complete payment using an available method in Academic Suite. Keep this invoice as your payment reference.'}
+                    ? 'Terima kasih atas kepercayaan Anda kepada Mr One Course. Mohon melakukan pembayaran sesuai jumlah dan batas waktu yang tercantum. Jika pembayaran telah dilakukan, silakan abaikan tagihan ini dan konfirmasikan kepada Admin.'
+                    : 'Thank you for trusting Mr One Course. Please complete payment according to the amount and due date shown. If payment has already been made, please disregard this invoice and confirm it with the Admin.'}
                 </p>
 
                 <footer>
                   <strong>Mr One Course</strong>
-                  <span>{isID ? 'Invoice resmi pembayaran Mr One Course Academic Suite.' : 'Official payment invoice from Mr One Course Academic Suite.'}</span>
+                  <span>{isID ? 'Terima kasih telah menjadi bagian dari perjalanan belajar bersama Mr One Course.' : 'Thank you for being part of the learning journey with Mr One Course.'}</span>
                 </footer>
               </article>
               <div className="tuition-actions">
@@ -3668,25 +3718,48 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
                 <button type="button" onClick={() => window.print()}>⤓ {isID ? 'Cetak / Simpan Invoice' : 'Print / Save Invoice'}</button>
               </div>
               {paymentMessage && <div className="payment-form-message">{paymentMessage}</div>}
-              {showPaymentForm && <form className="payment-confirmation-form" onSubmit={submitPaymentProof}>
-                <div className="selected-payment-summary"><span>{selectedPaymentItem.icon}</span><div><small>{isID ? 'PEMBAYARAN UNTUK' : 'PAYMENT FOR'}</small><strong>{selectedPaymentItem.label}</strong></div><b>{formatRupiah(selectedPaymentItem.amount)}</b></div>
-                <div className="payment-form-heading"><span>1</span><div><h2>{isID ? 'Pilih Metode Pembayaran' : 'Choose Payment Method'}</h2><p>{isID ? `Total pembayaran: ${formatRupiah(selectedPaymentItem.amount)}` : `Payment total: ${formatRupiah(selectedPaymentItem.amount)}`}</p></div></div>
-                <div className="payment-method-grid">
+              {showPaymentForm && <form className="payment-confirmation-form payment-checkout-flow" onSubmit={submitPaymentProof}>
+                <header className="payment-checkout-header">
+                  <span>{isID ? 'CHECKOUT PEMBAYARAN' : 'PAYMENT CHECKOUT'}</span>
+                  <h2>{isID ? 'Selesaikan Pembayaran' : 'Complete Payment'}</h2>
+                  <p>{isID ? 'Periksa tagihan, pilih metode, lalu kirim konfirmasi pembayaran.' : 'Review the bill, choose a method, then submit your payment confirmation.'}</p>
+                </header>
+                <div className="payment-stepper" aria-label={isID ? 'Tahapan pembayaran' : 'Payment steps'}>
+                  <div className="active"><b>1</b><span>{isID ? 'Ringkasan' : 'Summary'}</span></div>
+                  <i />
+                  <div className={paymentForm.paymentMethod ? 'active' : ''}><b>2</b><span>{isID ? 'Metode' : 'Method'}</span></div>
+                  <i />
+                  <div className={paymentForm.paymentMethod && (paymentForm.paymentMethod === 'Tunai' || paymentForm.proof) ? 'active' : ''}><b>3</b><span>{isID ? 'Konfirmasi' : 'Confirm'}</span></div>
+                </div>
+
+                <section className="checkout-summary-card">
+                  <div className="selected-payment-summary"><span>{selectedPaymentItem.icon}</span><div><small>{isID ? 'TAGIHAN UNTUK' : 'BILL FOR'}</small><strong>{selectedPaymentItem.label}</strong><em>{paymentPeriodLabel(selectedPaymentItem.period)}</em></div><b>{formatRupiah(selectedPaymentItem.amount)}</b></div>
+                  <div className="checkout-student-row"><span>{isID ? 'Siswa' : 'Student'}</span><strong>{overview?.profile?.fullName || '—'} <small>• {overview?.profile?.studentId || '—'}</small></strong></div>
+                  <div className="checkout-price-row"><span>Subtotal</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong></div>
+                  <div className="checkout-price-row"><span>{isID ? 'Biaya layanan' : 'Service fee'}</span><strong>{formatRupiah(0)}</strong></div>
+                  <div className="checkout-total-row"><span>TOTAL</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong></div>
+                </section>
+
+                <div className="payment-form-heading"><span>2</span><div><h2>{isID ? 'Pilih Metode Pembayaran' : 'Choose Payment Method'}</h2><p>{isID ? 'Tidak menggunakan virtual account dan tidak ada biaya tambahan.' : 'No virtual account and no additional fee.'}</p></div></div>
+                <div className="payment-method-grid checkout-method-grid">
                   {[
-                    ['GoPay / DANA', '085249684865', 'Muhammad Mirwan Salmani'],
-                    ['BPD Kaltimtara', '1022075914', 'Muhammad Mirwan Salmani'],
-                    ['BCA', '1912628901', 'Muhammad Mirwan Salmani'],
-                    ['SeaBank', '901182598278', 'Muhammad Mirwan Salmani, S.Pd.'],
-                    ['QRIS Mr One Course', 'Scan QRIS yang tersedia', 'MR ONE COURSE'],
-                    ['Tunai', isID ? 'Bayar langsung' : 'Pay in person', isID ? 'Pilih penerima di bawah' : 'Choose the recipient below'],
-                  ].map(([name, number, owner]) => <label className={paymentForm.paymentMethod === name ? 'selected' : ''} key={name}><input type="radio" name="payment-method" value={name} checked={paymentForm.paymentMethod === name} onChange={(event) => setPaymentForm({ ...paymentForm, paymentMethod: event.target.value, proof: event.target.value === 'Tunai' ? null : paymentForm.proof })} /><span><b>{name}</b><strong>{number}</strong><small>{name === 'Tunai' ? owner : `a.n. ${owner}`}</small></span>{number.match(/^\d+$/) && <button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button>}</label>)}
+                    ['GoPay / DANA', '085249684865', 'Muhammad Mirwan Salmani', 'EW'],
+                    ['BPD Kaltimtara', '1022075914', 'Muhammad Mirwan Salmani', 'BK'],
+                    ['BCA', '1912628901', 'Muhammad Mirwan Salmani', 'BCA'],
+                    ['SeaBank', '901182598278', 'Muhammad Mirwan Salmani, S.Pd.', 'SB'],
+                    ['QRIS Mr One Course', isID ? 'Pindai QRIS' : 'Scan QRIS', 'MR ONE COURSE', 'QR'],
+                    ['Tunai', isID ? 'Bayar langsung' : 'Pay in person', isID ? 'Pilih penerima di bawah' : 'Choose the recipient below', 'CA'],
+                  ].map(([name, number, owner, badge]) => <label className={paymentForm.paymentMethod === name ? 'selected' : ''} key={name}><input type="radio" name="payment-method" value={name} checked={paymentForm.paymentMethod === name} onChange={(event) => setPaymentForm({ ...paymentForm, paymentMethod: event.target.value, proof: event.target.value === 'Tunai' ? null : paymentForm.proof })} /><i>{badge}</i><span><b>{name}</b><strong>{number}</strong><small>{name === 'Tunai' ? owner : `a.n. ${owner}`}</small></span>{number.match(/^\d+$/) && <button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button>}</label>)}
                 </div>
                 {paymentForm.paymentMethod === 'QRIS Mr One Course' && <QrisPaymentDisplay isID={isID} />}
                 {paymentForm.paymentMethod === 'Tunai' && <div className="cash-recipient-box"><span>{isID ? 'PEMBAYARAN TUNAI DITERIMA OLEH' : 'CASH PAYMENT RECEIVED BY'}</span><div>{['Mr One', 'Miss Vita'].map((recipient) => <label className={paymentForm.cashRecipient === recipient ? 'selected' : ''} key={recipient}><input type="radio" name="cash-recipient" value={recipient} checked={paymentForm.cashRecipient === recipient} onChange={(event) => setPaymentForm({ ...paymentForm, cashRecipient: event.target.value })} /><strong>{recipient}</strong></label>)}</div></div>}
-                <div className="payment-form-heading"><span>2</span><div><h2>{paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? 'Kirim Bukti Pembayaran' : 'Submit Payment Proof')}</h2><p>{isID ? 'Admin akan memeriksa data berikut.' : 'Admin will review these details.'}</p></div></div>
-                <div className="payment-input-grid payment-date-only"><label><span>{isID ? 'Tanggal pembayaran' : 'Payment date'}</span><input type="date" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} required /></label></div>
-                {paymentForm.paymentMethod !== 'Tunai' && <label className="payment-proof-upload"><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={choosePaymentProof} /><span>↑</span><strong>{paymentForm.proof?.fileName || (isID ? 'Pilih foto atau PDF bukti pembayaran' : 'Choose payment proof image or PDF')}</strong><small>JPG, PNG, WEBP, PDF • Maks. 4 MB</small></label>}
-                <button className="submit-payment-proof" type="submit" disabled={paymentSubmitting}>{paymentSubmitting ? (isID ? 'Mengirim...' : 'Submitting...') : (isID ? 'Kirim' : 'Send')}</button>
+                {paymentForm.paymentMethod && <section className="checkout-confirmation-section">
+                  <div className="checkout-verification-note"><span>✓</span><div><strong>{isID ? 'Verifikasi oleh Admin Mr One Course' : 'Verified by Mr One Course Admin'}</strong><p>{isID ? 'Status akan diperbarui setelah bukti pembayaran diperiksa.' : 'The status will be updated after the payment proof is reviewed.'}</p></div></div>
+                  <div className="payment-form-heading"><span>3</span><div><h2>{paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? 'Kirim Bukti Pembayaran' : 'Submit Payment Proof')}</h2><p>{isID ? 'Pastikan nominal dan tujuan pembayaran sudah benar.' : 'Make sure the amount and payment destination are correct.'}</p></div></div>
+                  <div className="payment-input-grid payment-date-only"><label><span>{isID ? 'Tanggal pembayaran' : 'Payment date'}</span><input type="date" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} required /></label></div>
+                  {paymentForm.paymentMethod !== 'Tunai' && <label className="payment-proof-upload"><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={choosePaymentProof} /><span>↑</span><strong>{paymentForm.proof?.fileName || (isID ? 'Pilih foto atau PDF bukti pembayaran' : 'Choose payment proof image or PDF')}</strong><small>JPG, PNG, WEBP, PDF • Maks. 4 MB</small></label>}
+                  <button className="submit-payment-proof checkout-submit-payment" type="submit" disabled={paymentSubmitting}>{paymentSubmitting ? (isID ? 'Mengirim...' : 'Submitting...') : paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? `Saya Sudah Membayar • ${formatRupiah(selectedPaymentItem.amount)}` : `I Have Paid • ${formatRupiah(selectedPaymentItem.amount)}`)}</button>
+                </section>}
               </form>}
             </>
           )}
@@ -4377,6 +4450,7 @@ function Dashboard({
   paymentConfirmationsLoading,
   onReviewPayment,
   onAddHistoricalPayment,
+  onBulkPayment,
   onUpdateFulfillment,
   token,
 }) {
@@ -4496,34 +4570,13 @@ function Dashboard({
             })}
           </section>
 
-          {user.role === 'Admin' && (Number(metrics?.pendingRegistrations || 0) + Number(metrics?.pendingPayments || 0) + Number(attentionLists?.absentMoreThanFour?.length || 0) === 0) && (
-            <section className="admin-today-clear">
-              <span>✓</span>
-              <div><strong>Tidak ada tindakan mendesak hari ini</strong><small>Pendaftaran, pembayaran, dan Attendance Watch tidak memiliki antrean tindak lanjut.</small></div>
-            </section>
-          )}
-
           {user.role === 'Admin' && (
-            <section className="admin-attendance-watch admin-home-attendance-todo">
+            <section className="admin-activity-panel admin-home-activity">
               <div className="section-heading">
-                <div><span className="eyebrow">TO DO LIST • ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2><p>Tindak lanjut siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</p></div>
-                <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
+                <div><span className="eyebrow">ADMIN ACTIVITY</span><h2>Aktivitas Admin Terbaru</h2></div>
+                <span className="data-count">{(adminActivities || []).length} aktivitas</span>
               </div>
-              {(attentionLists?.absentMoreThanFour || []).length ? (
-                <div className="admin-attendance-watch-list">
-                  {attentionLists.absentMoreThanFour.slice(0, 5).map((item) => (
-                    <article key={`home-attendance-watch-${item.studentId}`}>
-                      <div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.classId || '—'} • Tidak hadir {item.absentCount}x</small></div>
-                      <button type="button" onClick={() => onNavigate('students')}>Tindak Lanjuti</button>
-                    </article>
-                  ))}
-                  {attentionLists.absentMoreThanFour.length > 5 && (
-                    <div className="admin-home-todo-more">+{attentionLists.absentMoreThanFour.length - 5} siswa lainnya tersedia di Attendance Watch.</div>
-                  )}
-                </div>
-              ) : (
-                <div className="admin-watch-empty">Tidak ada Attendance Watch yang perlu ditindaklanjuti saat ini.</div>
-              )}
+              {(adminActivities || []).length ? <div className="admin-activity-list">{adminActivities.map((item,index) => <article key={`${item.type}-${item.date}-${index}`}><span>{item.type === 'payment' ? '💳' : '▤'}</span><div><strong>{item.action}</strong><small>{item.detail}</small></div><time>{item.date}</time></article>)}</div> : <div className="empty-state">Belum ada aktivitas Admin yang tercatat.</div>}
             </section>
           )}
 
@@ -4662,7 +4715,11 @@ function Dashboard({
       ) : activePage === 'registrations' ? (
         <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} token={token} onRefresh={onRefreshRegistrations} />
       ) : activePage === 'payment-confirmations' ? (
-        <PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} />
+        <PaymentPageErrorBoundary><PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onBulkPayment={onBulkPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} /></PaymentPageErrorBoundary>
+      ) : activePage === 'attendance-watch' ? (
+        <AdminAttendanceWatchPage attentionLists={attentionLists} onNavigate={onNavigate} />
+      ) : activePage === 'alumni' ? (
+        <AdminAlumniPage token={token} />
       ) : activePage === 'menu' ? (
         <section className="admin-menu-page">
           <div className="page-heading"><div><span className="eyebrow">OPERATIONS</span><h1>Menu</h1><p>Akses cepat operasional dan aktivitas Admin.</p></div></div>
@@ -4670,12 +4727,10 @@ function Dashboard({
             <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>
             <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>
             <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('attendance-watch')}><span>◷</span><div><strong>Attendance Watch</strong><small>Tindak lanjut ketidakhadiran siswa</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
             {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Monitoring Kelas</strong><small>Kelas aktif, tuition trend, buku, dan ID Card</small></div><b>→</b></button>}
           </div>
-          <section className="admin-activity-panel">
-            <div className="section-heading"><div><span className="eyebrow">ADMIN ACTIVITY</span><h2>Aktivitas Admin Terbaru</h2></div><span className="data-count">{(adminActivities || []).length} aktivitas</span></div>
-            {(adminActivities || []).length ? <div className="admin-activity-list">{adminActivities.map((item,index) => <article key={`${item.type}-${item.date}-${index}`}><span>{item.type === 'payment' ? '💳' : '▤'}</span><div><strong>{item.action}</strong><small>{item.detail}</small></div><time>{item.date}</time></article>)}</div> : <div className="empty-state">Belum ada aktivitas Admin yang tercatat.</div>}
-          </section>
         </section>
       ) : (
         <section className="coming-soon">
@@ -4719,22 +4774,59 @@ function Dashboard({
   );
 }
 
-function PaymentConfirmationsPage({ confirmations, payments, loading, message, onReview, onAddHistorical, onUpdateFulfillment, token, attentionLists }) {
+function AdminAttendanceWatchPage({ attentionLists, onNavigate }) {
+  const alerts = attentionLists?.absentMoreThanFour || [];
+  return <section className="admin-attendance-watch admin-menu-detail-page">
+    <div className="section-heading"><div><span className="eyebrow">ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2><p>Siswa dengan ketidakhadiran lebih dari 4 kali pada bulan berjalan.</p></div><span className="data-count">{alerts.length} siswa</span></div>
+    {alerts.length ? <div className="admin-attendance-watch-list">{alerts.map((item) => <article key={`attendance-watch-${item.studentId}`}><div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.classId || '—'} • Tidak hadir {item.absentCount}x</small></div><button type="button" onClick={() => onNavigate('students')}>Buka Data Siswa</button></article>)}</div> : <div className="empty-state">Tidak ada siswa yang perlu ditindaklanjuti.</div>}
+  </section>;
+}
+
+function AdminAlumniPage({ token }) {
+  const [loading, setLoading] = useState(true);
+  const [alumni, setAlumni] = useState([]);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    callApi({ action: 'getAlumniStudents', token })
+      .then((result) => { if (active) setAlumni(result.alumni || []); })
+      .catch((error) => { if (active) setMessage(error.message || 'Daftar alumni gagal dimuat.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  return <section className="admin-alumni-page admin-menu-detail-page">
+    <div className="section-heading"><div><span className="eyebrow">ALUMNI</span><h2>Daftar Alumni Mr One Course</h2><p>Arsip siswa yang sudah berhenti dan telah dipindahkan dari daftar siswa aktif.</p></div><span className="data-count">{alumni.length} alumni</span></div>
+    {message && <div className="error-message">{message}</div>}
+    {loading ? <div className="dashboard-loading">Memuat daftar alumni...</div> : alumni.length ? <div className="student-list">{alumni.map((student, index) => <article className="student-card" key={`${student.alumniId || student.studentId}-${index}`}><div className="student-avatar">{String(student.fullName || 'A').charAt(0).toUpperCase()}</div><div className="student-info"><div className="student-name-row"><strong>{student.fullName || 'Alumni'}</strong><span className="student-status">ALUMNI</span></div><span>{student.studentId || '—'}</span><p>{student.program || 'Program tidak tercatat'} • {student.className || student.classId || 'Kelas tidak tercatat'}</p><small>Diarsipkan {student.archivedAt || '—'}{student.stopNote ? ` • ${student.stopNote}` : ''}</small></div></article>)}</div> : <div className="empty-state">Belum ada siswa yang dipindahkan ke alumni.</div>}
+  </section>;
+}
+
+function PaymentConfirmationsPage({ confirmations, payments, loading, message, onReview, onAddHistorical, onBulkPayment, onUpdateFulfillment, token, attentionLists }) {
+  const safeConfirmations = Array.isArray(confirmations) ? confirmations : [];
+  const safePayments = Array.isArray(payments) ? payments : [];
+  const safeAttentionLists = attentionLists && typeof attentionLists === 'object' ? attentionLists : {};
   const [proof, setProof] = useState(null); const [proofLoading, setProofLoading] = useState(''); const [notes, setNotes] = useState({}); const [showHistorical, setShowHistorical] = useState(false);
+  const [activePaymentJob, setActivePaymentJob] = useState('');
   const [historicalSubmitting, setHistoricalSubmitting] = useState(false);
+  const [selectedTuitionIds, setSelectedTuitionIds] = useState([]);
+  const [bulkPayment, setBulkPayment] = useState({ paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', amount: 150000 });
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const [showBulkPayment, setShowBulkPayment] = useState(false);
   const historicalFormRef = useRef(null);
   const emptyHistoricalPayment = () => ({ studentId: '', studentName: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '', proof: null });
   const [historical, setHistorical] = useState(emptyHistoricalPayment);
-  const pending = (confirmations || []).filter((item) => /menunggu verifikasi/i.test(item.status));
+  const pending = safeConfirmations.filter((item) => /menunggu verifikasi/i.test(item?.status));
 
   // Tuition Watch V81:
   // tampilannya tidak hanya bergantung pada snapshot dashboard.
   // Daftar tagihan direkonsiliasi lagi dengan data pembayaran yang sedang tampil
   // di Payment Center, sehingga setelah Admin/siswa mencatat pembayaran periode aktif,
   // nama siswa langsung hilang dari Tuition Watch.
-  const tuitionPeriod = String(attentionLists?.period || '').trim();
-  const baseTuitionTargets = attentionLists?.tuitionReminderTargets || [];
-  const baseOutstandingTargets = attentionLists?.tuitionOutstandingTargets || [];
+  const tuitionPeriod = String(safeAttentionLists.period || '').trim();
+  const baseTuitionTargets = Array.isArray(safeAttentionLists.tuitionReminderTargets) ? safeAttentionLists.tuitionReminderTargets : [];
+  const baseOutstandingTargets = Array.isArray(safeAttentionLists.tuitionOutstandingTargets) ? safeAttentionLists.tuitionOutstandingTargets : [];
 
   function normalizeTuitionStudentId(value) {
     return String(value || '').trim().toUpperCase();
@@ -4763,7 +4855,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
 
   const paidOrSubmittedTuitionKeys = new Set();
 
-  (payments || []).forEach((item) => {
+  safePayments.forEach((item) => {
     const id = normalizeTuitionStudentId(item.studentId);
     const status = String(item.status || '').trim().toLowerCase();
     const category = normalizeTuitionCategory(item.paymentCategory || item.category);
@@ -4774,7 +4866,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     }
   });
 
-  (confirmations || []).forEach((item) => {
+  safeConfirmations.forEach((item) => {
     const id = normalizeTuitionStudentId(item.studentId);
     const status = String(item.status || '').trim().toLowerCase();
     const category = normalizeTuitionCategory(item.paymentCategory);
@@ -4943,26 +5035,52 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
 
   const currentTuitionStatus = getTuitionWatchStatus(tuitionPeriod);
 
-  function sendAllTuitionReminders() {
-    const targets = tuitionTargetsWithStatus.filter((item) => normalizePaymentWa(item.waStudent || item.waParent));
-    if (!targets.length) {
-      window.alert('Tidak ada tagihan aktif dengan nomor WhatsApp yang tersedia.');
-      return;
-    }
+  function toggleTuitionStudent(studentId) {
+    setSelectedTuitionIds((current) => current.includes(studentId) ? current.filter((id) => id !== studentId) : [...current, studentId]);
+  }
 
-    targets.forEach((item, index) => {
-      const number = normalizePaymentWa(item.waStudent || item.waParent);
-      const text = tuitionReminderText(item);
-      setTimeout(() => {
-        window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
-      }, index * 180);
-    });
+  async function submitBulkTuitionPayment(event) {
+    event.preventDefault();
+    if (!selectedTuitionIds.length) return window.alert('Pilih minimal satu siswa.');
+    setBulkSubmitting(true);
+    try {
+      const selected = tuitionTargetsWithStatus.filter((item) => selectedTuitionIds.includes(item.studentId));
+      const success = await onBulkPayment({ ...bulkPayment, students: selected.map((item) => ({ studentId: item.studentId, period: item.period || tuitionPeriod })) });
+      if (success) { setSelectedTuitionIds([]); setShowBulkPayment(false); setActivePaymentJob(''); }
+    } finally { setBulkSubmitting(false); }
+  }
+
+  function createInvoice() {
+    const selected = tuitionTargetsWithStatus.filter((item) => selectedTuitionIds.includes(item.studentId));
+    if (!selected.length) return window.alert('Pilih siswa terlebih dahulu untuk membuat surat tagihan.');
+    const escapeHtml = (value) => String(value ?? '—').replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+    const logoUrl = `${window.location.origin}/logo-mr-one-course.jpeg`;
+    const invoices = selected.map((item) => {
+      const period = String(item.period || tuitionPeriod || '').trim();
+      const periodLabel = formatBillingPeriod(period);
+      const invoiceNumber = `MOC-${normalizeTuitionStudentId(item.studentId)}-${period.replace('-', '') || 'TUITION'}`;
+      return `<article class="invoice-document">
+        <header><div><span>INVOICE PEMBAYARAN</span><strong>${escapeHtml(invoiceNumber)}</strong></div><div class="brand"><img src="${escapeHtml(logoUrl)}" alt="Mr One Course"><span><b>Mr One Course</b><small>Academic Suite</small></span></div></header>
+        <section class="amount"><span>BIAYA LES ${escapeHtml(periodLabel.toUpperCase())}</span><strong>${escapeHtml(formatRupiah(bulkPayment.amount || 150000))}</strong><small>Batas pembayaran: tanggal 7</small></section>
+        <section class="student"><span>INFORMASI SISWA</span><strong>${escapeHtml(item.fullName)}</strong><p>${escapeHtml(item.studentId)} • ${escapeHtml(item.program || '—')} • ${escapeHtml(item.className || item.classId || '—')}</p></section>
+        <section class="transaction"><div><span>Periode</span><strong>${escapeHtml(periodLabel)}</strong></div><div><span>Jumlah Tagihan</span><strong>${escapeHtml(formatRupiah(bulkPayment.amount || 150000))}</strong></div><div><span>Status</span><strong class="unpaid">BELUM LUNAS</strong></div></section>
+        <p class="note">Terima kasih atas kepercayaan Anda kepada Mr One Course. Mohon melakukan pembayaran sesuai jumlah dan batas waktu yang tercantum. Jika pembayaran telah dilakukan, silakan abaikan tagihan ini dan konfirmasikan kepada Admin.</p>
+        <footer><strong>Mr One Course</strong><span>Terima kasih telah menjadi bagian dari perjalanan belajar bersama Mr One Course.</span></footer>
+      </article>`;
+    }).join('');
+    const invoiceWindow = window.open('', '_blank');
+    if (!invoiceWindow) return window.alert('Izinkan pop-up untuk membuat invoice.');
+    invoiceWindow.document.write(`<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice Mr One Course</title><style>
+      *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;justify-content:space-between;gap:20px;padding:28px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:8px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:6px}.invoice-document>header span{font-size:11px;letter-spacing:.16em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:14px}.brand{display:flex;align-items:center;gap:10px;text-align:right}.brand img{width:52px;height:52px;border-radius:13px;object-fit:cover;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:16px}.brand small{color:#d7f5f6}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header,.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand{text-align:left}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
+    </style></head><body>${invoices}<div class="print-actions"><button onclick="window.print()">⤓ Cetak / Simpan Invoice</button></div></body></html>`);
+    invoiceWindow.document.close();
   }
   async function viewProof(item) { setProofLoading(item.confirmationId); try { const result = await callApi({ action: 'getPaymentProof', token, confirmationId: item.confirmationId }); setProof({ ...result, confirmationId: item.confirmationId }); } catch (error) { window.alert(error.message); } finally { setProofLoading(''); } }
 
   function toggleHistoricalForm() {
     setShowHistorical((value) => {
       const next = !value;
+      setActivePaymentJob(next ? 'historical' : '');
       if (next) {
         window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
       }
@@ -4983,6 +5101,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       note: 'Pembayaran periode berjalan dicatat melalui Tuition Watch.'
     });
     setShowHistorical(true);
+    setActivePaymentJob('historical');
     window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   }
 
@@ -5032,6 +5151,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       const success = await onAddHistorical({ ...historical, studentId: studentId.toUpperCase() });
       if (success) {
         setShowHistorical(false);
+        setActivePaymentJob('');
         setHistorical(emptyHistoricalPayment());
       }
     } finally {
@@ -5040,15 +5160,40 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   }
 
   function chooseCategory(category) { setHistorical({ ...historical, paymentCategory: category, amount: category === 'ID Card' ? 20000 : 150000, fulfillmentStatus: category === 'Tuition' ? '' : 'Sedang Disiapkan' }); }
-  return <section className="payment-admin-page payment-admin-page-v77">
-    <div className="section-heading payment-center-heading-v77">
-      <div><span className="eyebrow">PAYMENT CENTER</span><h2>Kelola Pembayaran</h2></div>
-      {!showHistorical && <button className="add-historical-button" type="button" onClick={toggleHistoricalForm}>＋ Tambah Pembayaran Lama</button>}
-    </div>
-    {showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
+  function closePaymentJob() {
+    setActivePaymentJob('');
+    setShowBulkPayment(false);
+    setShowHistorical(false);
+    setSelectedTuitionIds([]);
+    setProof(null);
+  }
+
+  const paymentJobCopy = {
+    bulk: { eyebrow: 'PEMBAYARAN MASSAL', title: 'Catat Pembayaran Siswa', description: 'Pilih siswa yang sudah membayar, tentukan tanggal dan metode, lalu tandai lunas sekaligus.' },
+    invoice: { eyebrow: 'SURAT TAGIHAN', title: 'Buat Invoice Siswa', description: 'Pilih siswa dengan tagihan aktif, lalu buat invoice profesional untuk setiap siswa.' },
+    historical: { eyebrow: 'PEMBAYARAN LAMA', title: 'Catat Transaksi Lama', description: 'Masukkan pembayaran yang diterima sebelum portal Academic Suite digunakan.' }
+  };
+
+  return <section className="payment-admin-page payment-admin-page-v77 payment-admin-page-v31">
+    {!activePaymentJob && <div className="payment-job-cards payment-job-cards-home">
+      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span>✓</span><strong>Catat Pembayaran Massal</strong><small>Pilih beberapa siswa dan tandai lunas sekaligus.</small></button>
+      <button type="button" onClick={() => setActivePaymentJob('invoice')}><span>▤</span><strong>Buat Surat Tagihan</strong><small>Buat invoice untuk siswa yang dipilih.</small></button>
+      <button type="button" onClick={() => { setActivePaymentJob('historical'); setShowHistorical(true); }}><span>＋</span><strong>Pembayaran Lama</strong><small>Catat transaksi sebelum portal digunakan.</small></button>
+    </div>}
+
+    {activePaymentJob && <div className="payment-workflow-heading">
+      <button type="button" onClick={closePaymentJob}>← Kembali ke Payment Centre</button>
+      <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
+    </div>}
+
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Tandai Lunas'}</button></form>}
+
+    {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
+
+    {activePaymentJob === 'historical' && showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
       <header>
         <div><small>TRANSAKSI SEBELUM PORTAL</small><h3>Tambah Pembayaran Lama</h3></div>
-        <button type="button" onClick={() => setShowHistorical(false)}>×</button>
+        <button type="button" onClick={closePaymentJob}>×</button>
       </header>
       <div className="historical-payment-grid">
         <label><span>Student ID</span><input value={historical.studentId} onChange={(event) => setHistorical({ ...historical, studentId: event.target.value.toUpperCase() })} placeholder="MOC001" required /></label>
@@ -5064,54 +5209,19 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       </div>
       <button className="save-historical-payment" type="submit" disabled={historicalSubmitting}>{historicalSubmitting ? 'Menyimpan...' : 'Simpan sebagai Lunas'}</button>
     </form>}
-    {message && <div className="error-message">{message}</div>}
-    <section className="admin-tuition-watch admin-tuition-watch-v85">
+    {activePaymentJob && message && <div className="error-message">{message}</div>}
+    {(activePaymentJob === 'bulk' || activePaymentJob === 'invoice') && <section className="admin-tuition-watch admin-tuition-watch-v85 payment-selection-list-v31">
       <div className="admin-tuition-watch-heading">
         <div>
-          <span className="eyebrow">TUITION WATCH</span>
-          <h3>Tagihan Les Aktif</h3>
-          <p>Deadline pembayaran rutin tanggal 1–7 setiap bulan. Status dan pesan pengingat menyesuaikan tanggal secara otomatis.</p>
+          <span className="eyebrow">{activePaymentJob === 'bulk' ? 'PILIH SISWA' : 'PILIH PENERIMA INVOICE'}</span>
+          <h3>{activePaymentJob === 'bulk' ? 'Siswa yang Sudah Membayar' : 'Siswa dengan Tagihan Aktif'}</h3>
+          <p>{activePaymentJob === 'bulk' ? 'Centang siswa yang pembayarannya akan dicatat sebagai lunas.' : 'Centang siswa yang akan dibuatkan surat tagihan.'}</p>
         </div>
-        <button type="button" className="bulk-wa-button" onClick={sendAllTuitionReminders} disabled={!tuitionTargetsWithStatus.some((item) => normalizePaymentWa(item.waStudent || item.waParent))}>💬 Kirim Pengingat WA</button>
       </div>
-
-      <div className="tuition-policy-strip" aria-label="Tahapan pembayaran les bulanan">
-        {[
-          { key: 'window', date: '1–7', label: 'Masa Pembayaran' },
-          { key: 'late', date: '8–10', label: 'Terlambat' },
-          { key: 'follow-up', date: '11–15', label: 'Tindak Lanjut' },
-          { key: 'overdue', date: '16–akhir', label: 'Overdue' },
-          { key: 'outstanding', date: 'Bulan berikut', label: 'Outstanding' }
-        ].map((stage) => (
-          <div key={stage.key} className={`tuition-policy-stage ${currentTuitionStatus.key === stage.key ? 'active' : ''} tuition-status-${stage.key}`}>
-            <small>{stage.date}</small>
-            <strong>{stage.label}</strong>
-          </div>
-        ))}
-      </div>
-
-      <div className={`tuition-current-status tuition-status-${currentTuitionStatus.key}`}>
-        <div>
-          <span>STATUS HARI INI</span>
-          <strong>{currentTuitionStatus.label}</strong>
-        </div>
-        <p>{currentTuitionStatus.description}</p>
-      </div>
-
       <div className="admin-tuition-watch-summary">
         <strong>{tuitionTargetsWithStatus.length}</strong>
-        <span>siswa dengan tagihan aktif • {attentionLists?.period || 'periode berjalan'}</span>
+        <span>siswa dengan tagihan aktif • {safeAttentionLists.period || 'periode berjalan'}</span>
       </div>
-
-      {tuitionTargetsWithStatus.length > 0 && (
-        <div className="tuition-status-summary">
-          {tuitionStatusCounts.window > 0 && <span className="tuition-status-window">1–7: <b>{tuitionStatusCounts.window}</b></span>}
-          {tuitionStatusCounts.late > 0 && <span className="tuition-status-late">Terlambat: <b>{tuitionStatusCounts.late}</b></span>}
-          {tuitionStatusCounts['follow-up'] > 0 && <span className="tuition-status-follow-up">Tindak lanjut: <b>{tuitionStatusCounts['follow-up']}</b></span>}
-          {tuitionStatusCounts.overdue > 0 && <span className="tuition-status-overdue">Overdue: <b>{tuitionStatusCounts.overdue}</b></span>}
-          {tuitionStatusCounts.outstanding > 0 && <span className="tuition-status-outstanding">Outstanding: <b>{tuitionStatusCounts.outstanding}</b></span>}
-        </div>
-      )}
 
       {tuitionTargetsWithStatus.length > 0 ? (
         <div className="admin-tuition-watch-list">
@@ -5120,19 +5230,10 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
             const hasWa = Boolean(normalizePaymentWa(item.waStudent || item.waParent));
             return (
               <div
-                className={`tuition-watch-row-v85 tuition-status-${status.key}`}
+                className={`tuition-watch-row-v85 tuition-status-${status.key} ${selectedTuitionIds.includes(item.studentId) ? 'selected' : ''}`}
                 key={`tuition-watch-${item.studentId}-${item.period || tuitionPeriod}`}
-                role="button"
-                tabIndex="0"
-                onClick={() => openTuitionPaymentForm(item)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    openTuitionPaymentForm(item);
-                  }
-                }}
-                aria-label={`Catat pembayaran ${item.fullName}`}
               >
+                <label className="tuition-select-student"><input type="checkbox" checked={selectedTuitionIds.includes(item.studentId)} onChange={() => toggleTuitionStudent(item.studentId)} /><span>Pilih</span></label>
                 <div className="tuition-watch-student-v85">
                   <div className="tuition-watch-name-line-v85">
                     <span>{item.fullName}</span>
@@ -5141,21 +5242,6 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
                   <small>{item.studentId} • {item.program || '—'}</small>
                 </div>
                 <strong>{formatBillingPeriod(item.period)}</strong>
-                <button
-                  type="button"
-                  className="tuition-watch-wa-v85 tuition-watch-wa-v86"
-                  disabled={!hasWa}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    sendTuitionReminder(item);
-                  }}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  aria-label={`Kirim pengingat WhatsApp untuk ${item.fullName}`}
-                  title={hasWa ? `Kirim pengingat WhatsApp ke ${item.fullName}` : 'Nomor WhatsApp siswa/orang tua belum tersedia'}
-                >
-                  {hasWa ? '💬 Kirim WA' : 'WA belum tersedia'}
-                </button>
-                <b>Tambah Pembayaran →</b>
               </div>
             );
           })}
@@ -5163,8 +5249,8 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       ) : (
         <div className="empty-state tuition-watch-empty">Tidak ada tagihan les aktif untuk periode ini.</div>
       )}
-    </section>
-    <div className="payment-admin-tabs-heading"><h3>Perlu Verifikasi</h3><span>{pending.length} menunggu</span></div>{loading ? <div className="dashboard-loading">Memuat pembayaran...</div> : pending.length === 0 ? <div className="empty-state">Tidak ada pembayaran yang menunggu verifikasi.</div> : <div className="payment-confirmation-list">{pending.map((item) => { const cash = /^Tunai\s*-/i.test(String(item.paymentMethod || '')); return <article key={item.confirmationId}><header><div><small>{item.invoiceNumber}</small><h3>{item.studentName}</h3><p>{item.studentId} • {item.itemLabel || item.paymentCategory} • {item.period}</p></div><span>MENUNGGU</span></header><div className="payment-review-details"><div><span>Nominal</span><strong>{formatRupiah(item.amount)}</strong></div><div><span>Metode</span><strong>{item.paymentMethod}</strong></div><div><span>Tanggal Bayar</span><strong>{item.paymentDate}</strong></div></div>{!cash && <button className="view-payment-proof" type="button" onClick={() => viewProof(item)} disabled={proofLoading === item.confirmationId}>{proofLoading === item.confirmationId ? 'Membuka...' : 'Lihat Bukti Pembayaran'}</button>}{cash && <div className="cash-admin-note">Pembayaran tunai — konfirmasi langsung kepada penerima yang tertera.</div>}{proof?.confirmationId === item.confirmationId && <div className="payment-proof-preview">{proof.mimeType === 'application/pdf' ? <iframe title="Bukti pembayaran PDF" src={`data:${proof.mimeType};base64,${proof.base64}`} /> : <img src={`data:${proof.mimeType};base64,${proof.base64}`} alt="Bukti pembayaran" />}<button type="button" onClick={() => setProof(null)}>Tutup Bukti</button></div>}<label className="payment-admin-note"><span>Catatan Admin (wajib jika ditolak)</span><input value={notes[item.confirmationId] || ''} onChange={(event) => setNotes({ ...notes, [item.confirmationId]: event.target.value })} placeholder="Contoh: nominal belum sesuai" /></label><footer><button className="reject" type="button" disabled={!notes[item.confirmationId]} onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'reject', note: notes[item.confirmationId] })}>Tolak</button><button className="approve" type="button" onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'verify', note: notes[item.confirmationId] || 'Pembayaran telah diverifikasi.' })}>Verifikasi & Tandai Lunas</button></footer></article>; })}</div>}</section>;
+    </section>}
+  </section>;
 }
 
 function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, token, onRefresh }) {
@@ -5172,6 +5258,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState('');
   const [waLoading, setWaLoading] = useState('');
+  const [statusFilter, setStatusFilter] = useState('pending');
 
   const pending = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'menunggu verifikasi');
   const approved = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'disetujui');
@@ -5305,10 +5392,15 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
 
   return <section className="registration-admin-page">
     <div className="section-heading"><div><span className="eyebrow">STUDENT ACCESS</span><h2>Pendaftaran Siswa Baru</h2></div><span className="data-count">{pending.length} menunggu</span></div>
+    <div className="registration-status-tabs" role="tablist">
+      <button type="button" className={statusFilter === 'pending' ? 'active' : ''} onClick={() => setStatusFilter('pending')}>Menunggu <b>{pending.length}</b></button>
+      <button type="button" className={statusFilter === 'approved' ? 'active' : ''} onClick={() => setStatusFilter('approved')}>Disetujui <b>{approved.length}</b></button>
+      <button type="button" className={statusFilter === 'rejected' ? 'active' : ''} onClick={() => setStatusFilter('rejected')}>Ditolak <b>{rejected.length}</b></button>
+    </div>
     {message && <div className="error-message">{message}</div>}
 
     {loading ? <div className="dashboard-loading">Memuat pendaftaran...</div> : <>
-      {pending.length === 0 ? <div className="empty-state">Tidak ada pendaftaran yang menunggu verifikasi.</div> :
+      {statusFilter === 'pending' && (pending.length === 0 ? <div className="empty-state">Tidak ada pendaftaran yang menunggu verifikasi.</div> :
         <div className="registration-admin-list">{pending.map((item) => {
           const draft = draftFor(item);
           return <article key={item.registrationId}>
@@ -5353,9 +5445,9 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
             <label className="registration-note"><span>Catatan Admin</span><input value={draft.note} onChange={(event) => update(item, 'note', event.target.value)} /></label>
             <footer><button type="button" className="reject" onClick={() => rejectRegistration(item, draft)}>Tolak</button><button type="button" className="approve" disabled={!draft.program || !draft.classId || !draft.schedule} onClick={() => onApprove(draft)}>Verifikasi & Setujui Pendaftaran</button></footer>
           </article>;
-        })}</div>}
+        })}</div>)}
 
-      {approved.length > 0 && <div className="registration-approved-section">
+      {statusFilter === 'approved' && (approved.length > 0 ? <div className="registration-approved-section">
         <div className="registration-approved-heading"><div><span className="eyebrow">SUDAH DIVERIFIKASI</span><h3>Kirim Hasil Verifikasi</h3></div><small>Status pendaftaran + pembayaran + data siswa</small></div>
         <div className="registration-admin-list">{approved.map((item) => <article key={`approved-${item.registrationId}`} className="registration-approved-card">
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
@@ -5369,9 +5461,9 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
             </button>
           </div>
         </article>)}</div>
-      </div>}
+      </div> : <div className="empty-state">Belum ada pendaftaran yang disetujui.</div>)}
 
-      {rejected.length > 0 && <div className="registration-rejected-section">
+      {statusFilter === 'rejected' && (rejected.length > 0 ? <div className="registration-rejected-section">
         <div className="registration-approved-heading"><div><span className="eyebrow">DITOLAK</span><h3>Informasikan Hasil Verifikasi</h3></div><small>Alasan penolakan + tindak lanjut</small></div>
         <div className="registration-admin-list">{rejected.map((item) => <article key={`rejected-${item.registrationId}`} className="registration-rejected-card">
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="rejected-status">DITOLAK</span></header>
@@ -5383,7 +5475,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
             </button>
           </div>
         </article>)}</div>
-      </div>}
+      </div> : <div className="empty-state">Belum ada pendaftaran yang ditolak.</div>)}
     </>}
   </section>;
 }
@@ -5849,40 +5941,6 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
       {bulkAccountMessage && <div className="admin-student-account-message bulk">{bulkAccountMessage}</div>}
       <small className="admin-student-account-warning">Tindakan ini membatalkan session siswa lama sehingga mereka harus Sign In kembali menggunakan Student ID dan password awal baru.</small>
     </section>}
-
-    {isAdminStudentManager && <section className="admin-attendance-watch">
-      <div className="section-heading">
-        <div><span className="eyebrow">ATTENDANCE WATCH</span><h2>Perlu Konfirmasi Kehadiran</h2></div>
-        <span className="data-count">{attentionLists?.absentMoreThanFour?.length || 0} siswa</span>
-      </div>
-      {(attentionLists?.absentMoreThanFour || []).length ? (
-        <div className="admin-attendance-watch-list">
-          {attentionLists.absentMoreThanFour.map((item) => {
-            const hasWa = Boolean(String(item.waStudent || item.waParent || '').replace(/\D/g, ''));
-            return <article key={`attendance-watch-${item.studentId}`}>
-              <div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.classId || '—'} • Tidak hadir {item.absentCount}x</small></div>
-              <button type="button" disabled={!hasWa} onClick={() => sendAttendanceWhatsApp(item)}>{hasWa ? 'Konfirmasi WA' : 'WA belum tersedia'}</button>
-            </article>;
-          })}
-        </div>
-      ) : <div className="admin-watch-empty">Tidak ada siswa dengan ketidakhadiran lebih dari 4 kali bulan ini.</div>}
-    </section>}
-
-    <section className="admin-student-account-bulk-card">
-      <div className="section-heading">
-        <div><span className="eyebrow">ALUMNI</span><h2>Daftar Alumni Mr One Course</h2><p>Siswa yang sudah berhenti dan telah diarsipkan tidak lagi tampil di Siswa Aktif. Slot Student ID-nya dapat dipakai untuk pendaftar baru.</p></div>
-        <button type="button" onClick={toggleAlumniList}>{alumniOpen ? 'Tutup Daftar Alumni' : 'Lihat Daftar Alumni'}</button>
-      </div>
-      {alumniOpen && <>
-        {alumniMessage && <div className="error-message">{alumniMessage}</div>}
-        {alumniLoading ? <div className="dashboard-loading">Memuat daftar alumni...</div> : alumniStudents.length === 0 ? <div className="empty-state">Belum ada siswa yang dipindahkan ke alumni.</div> : <div className="student-list">
-          {alumniStudents.map((student, index) => <div className="student-card" key={`${student.alumniId || student.studentId}-${index}`}>
-            <div className="student-avatar">{String(student.fullName || 'A').charAt(0).toUpperCase()}</div>
-            <div className="student-info"><div className="student-name-row"><strong>{student.fullName || 'Alumni'}</strong><span className="student-status">ALUMNI</span></div><span>{student.studentId || '—'}</span><p>{student.program || 'Program tidak tercatat'} • {student.className || student.classId || 'Kelas tidak tercatat'}</p><small>Diarsipkan {student.archivedAt || '—'}{student.stopNote ? ` • ${student.stopNote}` : ''}</small></div>
-          </div>)}
-        </div>}
-      </>}
-    </section>
 
     <div className="page-heading"><div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>{pagination.totalData || 0} siswa ditemukan</p></div></div>
     <form className="student-search" onSubmit={submitSearch}><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cari nama, ID, sekolah, atau kelas" /><button type="submit">Cari</button></form>
