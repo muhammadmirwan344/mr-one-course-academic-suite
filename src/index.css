@@ -24235,22 +24235,3 @@ html[data-theme='light'] .tuition-status-summary b{color:#153047}
   .tuition-watch-name-line-v85{align-items:flex-start;flex-direction:column;gap:5px}
   .tuition-status-badge{white-space:normal}
 }
-
-/* V31 — Payment Centre opens as three focused jobs. */
-.payment-admin-page-v31{align-content:start}
-.payment-job-cards-home{margin:0;align-content:start}
-.payment-job-cards-home>button{min-height:126px;padding:20px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-.payment-job-cards-home>button:hover{transform:translateY(-2px);border-color:var(--moc-primary,#22d3ee);box-shadow:0 14px 32px rgba(0,0,0,.16)}
-.payment-workflow-heading{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:18px;padding:18px;border:1px solid var(--moc-border,#284257);border-radius:20px;background:var(--moc-surface-solid,#0a1927)}
-.payment-workflow-heading>button{min-height:42px;padding:0 14px;border:1px solid var(--moc-border,#284257);border-radius:12px;color:var(--moc-text,#eef8fc);background:var(--moc-surface-soft,#0d2233);font:inherit;font-size:12px;font-weight:850;cursor:pointer}
-.payment-workflow-heading>div{display:grid;gap:5px}.payment-workflow-heading span{color:var(--moc-primary,#22d3ee);font-size:10px;font-weight:950;letter-spacing:.14em}.payment-workflow-heading h2{margin:0;font-size:clamp(22px,4vw,30px)}.payment-workflow-heading p{margin:0;color:var(--moc-muted,#91a8b9);font-size:13px;line-height:1.5}
-.invoice-selection-action{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid var(--moc-primary,#22d3ee);border-radius:18px;background:var(--moc-primary-soft,rgba(34,211,238,.09))}
-.invoice-selection-action>div{display:grid;gap:4px}.invoice-selection-action small{color:var(--moc-muted,#91a8b9)}.invoice-selection-action>button{min-height:46px;padding:0 18px;border:0;border-radius:13px;color:#04131c;background:var(--moc-primary,#22d3ee);font:inherit;font-weight:950;cursor:pointer}.invoice-selection-action>button:disabled{opacity:.45;cursor:not-allowed}
-.payment-selection-list-v31 .tuition-watch-row-v85{grid-template-columns:auto minmax(0,1fr) minmax(120px,160px)}
-html[data-theme='light'] .payment-workflow-heading{color:#153047;background:#fff;border-color:#cbdde5}
-@media(max-width:760px){
-  .payment-workflow-heading{grid-template-columns:1fr}.payment-workflow-heading>button{justify-self:start}
-  .invoice-selection-action{align-items:stretch;flex-direction:column}.invoice-selection-action>button{width:100%}
-  .payment-selection-list-v31 .tuition-watch-row-v85{grid-template-columns:auto minmax(0,1fr)!important}
-  .payment-selection-list-v31 .tuition-watch-row-v85>strong{grid-column:2!important;text-align:left}
-}
