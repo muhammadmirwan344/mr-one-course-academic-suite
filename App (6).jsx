@@ -1,4 +1,4 @@
-// MR ONE COURSE — APP V30 PAYMENT CENTRE LAYOUT — 4 OCTOBER 2026
+// MR ONE COURSE — APP V33 ADMIN MOBILE SAFE AREA — 4 OCTOBER 2026
 import React, { useEffect, useRef, useState } from 'react';
 
 class PaymentPageErrorBoundary extends React.Component {
@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxoR0qhMLoRm0T3WiyhmwQ7mfaeLGR7vltxDxgS5DAxESCwh1H1wosQeqOZV3EtDJFgag/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzUaKwNN-5wSWYC4EmxFOlE1z0ZELEaKvbYY8ykADZijJj0MhljRGVNaZnzBwogHWP8tA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -678,6 +678,25 @@ function useEdgeSwipeBack(onBack, enabled = true) {
   }, [enabled, onBack]);
 }
 
+function normalizeStudentOverviewPayload(result, fallbackUser = {}) {
+  const payload = result?.overview || result?.data?.overview || result?.data || result || {};
+  const sourceProfile = payload?.profile || payload?.studentProfile || payload?.student || {};
+  const profile = {
+    ...sourceProfile,
+    studentId: sourceProfile.studentId || sourceProfile.id || fallbackUser.studentId || fallbackUser.relatedId || fallbackUser.userId || fallbackUser.username || '',
+    fullName: sourceProfile.fullName || sourceProfile.name || fallbackUser.fullName || fallbackUser.name || '',
+    school: sourceProfile.school || sourceProfile.sekolah || fallbackUser.school || fallbackUser.sekolah || '',
+    grade: sourceProfile.grade || sourceProfile.classGrade || sourceProfile.kelas || fallbackUser.grade || fallbackUser.kelas || '',
+    dob: sourceProfile.dob || sourceProfile.dateOfBirth || sourceProfile.birthDate || fallbackUser.dob || fallbackUser.dateOfBirth || '',
+    address: sourceProfile.address || sourceProfile.alamat || fallbackUser.address || fallbackUser.alamat || '',
+    waStudent: sourceProfile.waStudent || sourceProfile.studentPhone || sourceProfile.phone || fallbackUser.waStudent || fallbackUser.phone || '',
+    waParent: sourceProfile.waParent || sourceProfile.parentPhone || fallbackUser.waParent || fallbackUser.parentPhone || '',
+    photoLink: sourceProfile.photoLink || sourceProfile.photo || sourceProfile.avatar || fallbackUser.photoLink || fallbackUser.photo || '',
+  };
+
+  return { ...payload, profile };
+}
+
 function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -764,7 +783,7 @@ function App() {
       setToken(savedToken);
       setUser(parsedUser);
       if (String(parsedUser.role).toLowerCase() === 'siswa') {
-        loadStudentOverview(savedToken);
+        loadStudentOverview(savedToken, parsedUser);
       } else if (String(parsedUser.role).toLowerCase() === 'tutor') {
         loadTutorOverview(savedToken);
       } else {
@@ -829,7 +848,7 @@ function App() {
     };
   }, [user, token, activePage]);
 
-  async function loadStudentOverview(activeToken) {
+  async function loadStudentOverview(activeToken, fallbackUser = user || {}) {
     setStudentOverviewLoading(true);
     setMessage('');
     try {
@@ -837,7 +856,7 @@ function App() {
         action: 'getStudentOverview',
         token: activeToken,
       });
-      setStudentOverview(result);
+      setStudentOverview(normalizeStudentOverviewPayload(result, fallbackUser));
     } catch (error) {
       const errorText = String(error.message || '');
       setMessage(errorText || (language === 'ID' ? 'Ringkasan akademik gagal dimuat.' : 'Academic overview could not be loaded.'));
@@ -911,7 +930,7 @@ function App() {
       setPassword('');
 
       if (String(result.user.role).toLowerCase() === 'siswa') {
-        await loadStudentOverview(result.token);
+        await loadStudentOverview(result.token, result.user);
       } else if (String(result.user.role).toLowerCase() === 'tutor') {
         await loadTutorOverview(result.token);
       } else {
@@ -960,7 +979,7 @@ function App() {
       setToken(result.token);
       setUser(result.user);
       setPassword('');
-      await loadStudentOverview(result.token);
+      await loadStudentOverview(result.token, result.user);
     } catch (error) {
       setMessage(
         error.message ||
@@ -1214,7 +1233,7 @@ function App() {
         studentsLoading={studentsLoading}
         studentSearch={studentSearch}
         onStudentSearchChange={setStudentSearch}
-        onStudentSearch={() => loadStudents(studentSearch, 1)}
+        onStudentSearch={(overrideSearch) => loadStudents(overrideSearch ?? studentSearch, 1)}
         studentPagination={studentPagination}
         onStudentPageChange={(page) =>
           loadStudents(studentSearch, page)
@@ -1413,14 +1432,14 @@ function App() {
           </button>
           <div className="student-account-managed-note">
             <strong>{language === 'ID' ? 'Akun siswa diaktifkan oleh Manajemen' : 'Student accounts are activated by Management'}</strong>
-            <span>{language === 'ID' ? 'Siswa yang sudah menerima Student ID dan password awal dapat langsung Sign In.' : 'Students who have received a Student ID and initial password can sign in directly.'}</span>
+            <p>{language === 'ID' ? 'Siswa yang sudah menerima Student ID dan password awal dapat langsung Sign In.' : 'Students who have received a Student ID and initial password can sign in directly.'}</p>
           </div>
         </div>
         {studentAccessMode && <StudentAccessModal mode={studentAccessMode} language={language} activationForm={activationForm} setActivationForm={setActivationForm} registrationForm={registrationForm} setRegistrationForm={setRegistrationForm} registrationSuccess={registrationSuccess} loading={studentAccessLoading} message={message} onClose={() => { setStudentAccessMode(''); setRegistrationSuccess(null); setMessage(''); }} onSubmit={handleStudentAccess} />}
 
         <footer className="moc-copyright-footer">
-          <span>© 2026 Mr One Course Academic Suite</span>
-          <small>Designed &amp; Developed by Novita Rohmawati, S.Pd., Gr.</small>
+          <div>© 2026 Mr One Course Academic Suite</div>
+          <div>Designed &amp; Developed by Novita Rohmawati, S.Pd., Gr.</div>
         </footer>
       </section>
     </main>
@@ -1704,11 +1723,11 @@ function StudentAccessModal({ mode, language, activationForm, setActivationForm,
 
         {!isActivation && (
           <div className="registration-stepper registration-stepper-three">
-            <span className={registrationStep === 1 ? 'active' : registrationStep > 1 ? 'done' : ''}><b>1</b>{isID ? 'Data Siswa' : 'Student Data'}</span>
+            <span className={registrationStep === 1 ? 'active' : registrationStep > 1 ? 'done' : ''}><b>1</b><span className="registration-step-label">{isID ? 'Data Siswa' : 'Student Data'}</span></span>
             <i />
-            <span className={registrationStep === 2 ? 'active' : registrationStep > 2 ? 'done' : ''}><b>2</b>{isID ? 'Program & Jadwal' : 'Program & Schedule'}</span>
+            <span className={registrationStep === 2 ? 'active' : registrationStep > 2 ? 'done' : ''}><b>2</b><span className="registration-step-label">{isID ? 'Program & Jadwal' : 'Program & Schedule'}</span></span>
             <i />
-            <span className={registrationStep === 3 ? 'active' : ''}><b>3</b>{isID ? 'Pembayaran' : 'Payment'}</span>
+            <span className={registrationStep === 3 ? 'active' : ''}><b>3</b><span className="registration-step-label">{isID ? 'Pembayaran' : 'Payment'}</span></span>
           </div>
         )}
 
@@ -2004,14 +2023,13 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [attendanceSavedModal, setAttendanceSavedModal] = useState(null);
-  const [journal, setJournal] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, title: '', activities: '', notes: '' });
+  const [journal, setJournal] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, title: '', objective: '', activities: '', notes: '' });
   const [learningPlan, setLearningPlan] = useState({
     month: new Date().toISOString().slice(0, 7), meetingNumber: 1, plannedDate: '', title: '', objective: '',
     targetCompetency: '', activities: '', status: 'Direncanakan',
     assignment: { enabled: false, title: '', instructions: '', assignedDate: '', dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [] },
     challenge: { enabled: false, title: '', instructions: '', responseType: 'text', dueDate: '', expReward: 100, gradingMode: 'review', answerKey: '' }
   });
-  const [journalStudents, setJournalStudents] = useState({});
   const [studentNote, setStudentNote] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), participation: '', strengths: '', improvements: '', comment: '', achievement: '', expAwarded: 0 });
   const [assignment, setAssignment] = useState({ title: '', instructions: '', assignedDate: new Date().toISOString().slice(0, 10), dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [createEmptyAssignmentQuestion()] });
   const [assessment, setAssessment] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), type: 'Monthly Assessment', speaking: '', writing: '', reading: '', listening: '', quizTest: '', comment: '' });
@@ -2049,43 +2067,6 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
   const selectedClass = classes.find((item) => item.classId === selectedClassId) || classes[0] || null;
 
-  useEffect(() => {
-    if (!selectedClass?.students?.length) {
-      setJournalStudents({});
-      return;
-    }
-    setJournalStudents(Object.fromEntries(selectedClass.students.map((student) => [
-      student.studentId,
-      { selected: true, achievement: 'Berkembang', comment: '' }
-    ])));
-  }, [selectedClassId, overview]);
-
-  function composeJournalComment(student, achievement) {
-    const topic = journal.title.trim() || (isID ? 'materi pada pertemuan ini' : 'today’s lesson');
-    const activity = journal.activities.trim();
-    const idTemplates = {
-      'Sangat Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} secara mandiri, aktif, dan konsisten.`,
-      'Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} dengan baik serta hanya memerlukan sedikit arahan.`,
-      'Berkembang': `${student.fullName} mulai memahami materi ${topic} dan perlu melanjutkan latihan agar lebih percaya diri dan konsisten.`,
-      'Perlu Dukungan': `${student.fullName} memerlukan pendampingan dan latihan tambahan untuk memahami serta menerapkan materi ${topic}.`
-    };
-    const enTemplates = {
-      'Sangat Baik': `${student.fullName} understood and applied ${topic} independently, actively, and consistently.`,
-      'Baik': `${student.fullName} understood and applied ${topic} well with only limited guidance.`,
-      'Berkembang': `${student.fullName} is developing an understanding of ${topic} and needs continued practice to become more confident and consistent.`,
-      'Perlu Dukungan': `${student.fullName} needs further guidance and additional practice to understand and apply ${topic}.`
-    };
-    const base = (isID ? idTemplates : enTemplates)[achievement] || (isID ? idTemplates.Berkembang : enTemplates.Berkembang);
-    return activity ? `${base} ${isID ? 'Kegiatan pembelajaran meliputi' : 'Learning activities included'} ${activity.replace(/[.!?]+$/, '')}.` : base;
-  }
-
-  function generateAllJournalComments() {
-    if (!selectedClass) return;
-    setJournalStudents((current) => Object.fromEntries(selectedClass.students.map((student) => {
-      const entry = current[student.studentId] || { selected: true, achievement: 'Berkembang' };
-      return [student.studentId, { ...entry, comment: composeJournalComment(student, entry.achievement) }];
-    })));
-  }
   const selectedStudent = selectedClass?.students?.find((item) => item.studentId === selectedStudentId) || null;
   const selectedStudentAttendance = (selectedClass?.attendanceRecords || []).filter((item) => item.studentId === selectedStudentId);
   const selectedStudentSubmissions = (selectedClass?.submissions || []).filter((item) => item.studentId === selectedStudentId);
@@ -2115,19 +2096,9 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     setSaving(true);
     setNotice('');
     try {
-      const studentEntries = (selectedClass?.students || []).map((student) => {
-        const entry = journalStudents[student.studentId] || {};
-        return {
-          studentId: student.studentId,
-          selected: entry.selected !== false,
-          achievement: entry.achievement || 'Berkembang',
-          comment: entry.comment || composeJournalComment(student, entry.achievement || 'Berkembang')
-        };
-      }).filter((entry) => entry.selected);
-      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries } });
+      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries: [] } });
       setNotice(result.message || (isID ? 'Learning Journal berhasil disimpan.' : 'Learning Journal saved successfully.'));
-      setJournal((current) => ({ ...current, title: '', activities: '', notes: '' }));
-      setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { selected: true, achievement: 'Berkembang', comment: '' }])));
+      setJournal((current) => ({ ...current, title: '', objective: '', activities: '', notes: '' }));
       await onRefresh();
     } catch (error) {
       setNotice(error.message || (isID ? 'Jurnal gagal disimpan.' : 'Journal could not be saved.'));
@@ -2312,13 +2283,13 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'home' && (
         <>
-          <section className="tutor-welcome"><span>● SYSTEM CONNECTED</span><h1>{isID ? 'Selamat datang,' : 'Welcome,'}<strong>{overview?.tutor?.name || user.fullName || 'Tutor'}</strong></h1><p>{isID ? 'Berikut kelas dan agenda mengajar Anda hari ini.' : 'Here are your classes and teaching agenda for today.'}</p></section>
+          <section className="tutor-welcome"><span>● SYSTEM CONNECTED</span><h1>{isID ? 'Selamat datang,' : 'Welcome,'}<strong>{overview?.tutor?.name || user.fullName || 'Tutor'}</strong></h1><p>{isID ? 'Berikut jadwal mengajar Anda hari ini.' : 'Here is your teaching schedule for today.'}</p></section>
           <section className="tutor-stat-grid"><article><span>▤</span><strong>{todayClasses.length}</strong><small>{isID ? 'Kelas Hari Ini' : 'Classes Today'}</small></article><article><span>⌂</span><strong>{classes.length}</strong><small>{isID ? 'Kelas Saya' : 'My Classes'}</small></article><article><span>♙</span><strong>{classes.reduce((sum, item) => sum + item.students.length, 0)}</strong><small>{isID ? 'Total Siswa' : 'Total Students'}</small></article></section>
           <section className="tutor-section"><div className="tutor-section-heading"><div><span>{isID ? 'AGENDA' : 'AGENDA'}</span><h2>{isID ? 'Kelas Hari Ini' : "Today's Classes"}</h2></div><button type="button" onClick={() => setPage('classes')}>{isID ? 'Lihat Semua' : 'View All'}</button></div>{todayClasses.length ? <div className="tutor-class-list">{todayClasses.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Tidak ada kelas yang dijadwalkan hari ini.' : 'No classes are scheduled today.'}</div>}</section>
         </>
       )}
 
-      {page === 'classes' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>{isID ? 'KELAS' : 'CLASSES'}</span><h2>{isID ? 'Semua Kelas Saya' : 'All My Classes'}</h2></div></div>{classes.length ? <div className="tutor-class-list">{classes.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Belum ada kelas yang terhubung dengan akun tutor.' : 'No classes are linked to this tutor account.'}</div>}</section>}
+      {page === 'classes' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>{isID ? 'KELAS & SISWA' : 'CLASSES & STUDENTS'}</span><h2>{isID ? 'Kelas dan Siswa Saya' : 'My Classes and Students'}</h2><p>{isID ? 'Pilih kelas untuk melihat daftar serta perkembangan setiap siswa.' : 'Select a class to view its students and their progress.'}</p></div></div>{classes.length ? <div className="tutor-class-list">{classes.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Belum ada kelas yang terhubung dengan akun tutor.' : 'No classes are linked to this tutor account.'}</div>}</section>}
 
       {page === 'class' && selectedClass && (
         <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage('classes')}>← {isID ? 'Semua Kelas' : 'All Classes'}</button><div className="tutor-class-title"><span>{selectedClass.program || 'PROGRAM'}</span><h2>{selectedClass.className}</h2><p>{selectedClass.schedules.map((schedule) => `${schedule.day} ${schedule.start}–${schedule.end}`).join(' • ')}</p></div><button className="open-attendance-control" type="button" onClick={() => openAttendanceControl(selectedClass)}><span>✓</span><div><strong>{isID ? 'Attendance Control' : 'Attendance Control'}</strong><small>{isID ? 'Periksa check-in dan lengkapi kehadiran kelas' : 'Review check-ins and complete class attendance'}</small></div><b>→</b></button><div className="tutor-student-list">{selectedClass.students.map((student, index) => <button type="button" key={student.studentId} onClick={() => { setSelectedStudentId(student.studentId); setStudentNote({ ...studentNote, studentId: student.studentId }); setPage('student'); }}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.grade || '—'}</small></div><b>→</b></button>)}</div></section>
@@ -2352,19 +2323,43 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
           <div className="tutor-academic-master-heading">
             <span>ACADEMIC</span>
             <h1>{isID ? 'Kelola Akademik' : 'Manage Academic'}</h1>
-            <p>{isID ? 'Kelola rencana dan capaian setiap pertemuan dalam satu alur. Pilih pertemuan, isi materi dan target, lalu hubungkan tugas, tantangan, assessment, serta catatan siswa bila diperlukan.' : 'Manage meeting plans and achievement in one workflow. Select the meeting, complete the material and target, then connect assignments, challenges, assessment, and student notes when needed.'}</p>
+            <p>{isID ? 'Kelola tujuan pembelajaran setiap pertemuan dalam satu alur.' : 'Manage each meeting’s learning objective in one workflow.'}</p>
           </div>
         <section className="tutor-section tutor-page-section linked-learning-package"><div className="tutor-section-heading"><div><span>{isID ? 'CAPAIAN & AKTIVITAS' : 'ACHIEVEMENT & ACTIVITIES'}</span><h2>{isID ? 'Capaian Pertemuan' : 'Meeting Achievement'}</h2><p>{isID ? 'Target capaian, tugas, dan tantangan mengikuti pertemuan yang sedang dikelola.' : 'Achievement targets, assignments, and challenges follow the meeting being managed.'}</p></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Target Capaian Siswa' : 'Student Achievement Target'}</span><textarea rows="3" value={learningPlan.targetCompetency} onChange={(event) => setLearningPlan({ ...learningPlan, targetCompetency: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat minimal lima kalimat Simple Present dengan pola yang tepat.' : 'Example: Students can write at least five accurate Simple Present sentences.'} /></label><div className="linked-package-toggle"><label><input type="checkbox" checked={learningPlan.assignment.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, enabled: event.target.checked } })} /><span><strong>Assignment</strong><small>{isID ? 'Bukti pencapaian target pembelajaran' : 'Evidence of learning-target achievement'}</small></span></label>{learningPlan.assignment.enabled && <div className="linked-package-fields"><input value={learningPlan.assignment.title} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, title: event.target.value } })} placeholder={isID ? 'Judul assignment' : 'Assignment title'} /><textarea rows="3" value={learningPlan.assignment.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, instructions: event.target.value } })} placeholder={isID ? 'Instruksi pengerjaan...' : 'Assignment instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.assignment.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="200" value={learningPlan.assignment.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.assignment.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic">{isID ? 'Otomatis' : 'Automatic'}</option></select></label>{learningPlan.assignment.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.assignment.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div><div className="linked-package-toggle challenge-link"><label><input type="checkbox" checked={learningPlan.challenge.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, enabled: event.target.checked } })} /><span><strong>Challenge</strong><small>{isID ? 'Pengayaan sesuai program dan sumber EXP' : 'Program-based enrichment and EXP source'}</small></span></label>{learningPlan.challenge.enabled && <div className="linked-package-fields"><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, ...template, enabled: true, gradingMode: template.gradingMode || (['text','speech'].includes(template.responseType) ? 'automatic' : 'review') } }); }}><option value="">{isID ? 'Pilih template sesuai program' : 'Select a program template'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option value={index} key={item.title}>{item.title}</option>)}</select><input value={learningPlan.challenge.title} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, title: event.target.value } })} placeholder={isID ? 'Judul challenge' : 'Challenge title'} /><textarea rows="3" value={learningPlan.challenge.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, instructions: event.target.value } })} placeholder={isID ? 'Instruksi challenge...' : 'Challenge instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.challenge.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="250" value={learningPlan.challenge.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.challenge.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic" disabled={!['text','speech'].includes(learningPlan.challenge.responseType)}>{isID ? 'Otomatis — teks / speaking' : 'Automatic — text / speaking'}</option></select></label>{learningPlan.challenge.responseType === 'speech' && <textarea rows="2" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'} />}{learningPlan.challenge.gradingMode === 'automatic' && learningPlan.challenge.responseType !== 'speech' && <textarea rows="3" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div></div></section>{page === 'academic' && learningPlan.assignment.enabled && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={learningPlan.assignment.questions || []} onChange={(questions) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') } })} isID={isID} /></section>}
         <section className="tutor-section tutor-page-section learning-plan-section"><div className="tutor-section-heading"><div><span>{isID ? 'PERTEMUAN' : 'MEETING'}</span><h2>{isID ? 'Rencana & Capaian Pertemuan' : 'Meeting Plan & Achievement'}</h2><p>{isID ? 'Gunakan pertemuan 1–8 sebagai satu rangkaian pembelajaran, bukan menu terpisah.' : 'Use meetings 1–8 as one learning sequence, not as a separate menu.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveLearningPlan}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Bulan Pembelajaran' : 'Learning Month'}</span><input type="month" value={learningPlan.month} onChange={(event) => setLearningPlan({ ...learningPlan, month: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={learningPlan.meetingNumber} onChange={(event) => setLearningPlan({ ...learningPlan, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Rencana Tanggal (opsional)' : 'Planned Date (optional)'}</span><input type="date" value={learningPlan.plannedDate} onChange={(event) => setLearningPlan({ ...learningPlan, plannedDate: event.target.value })} /></label><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={learningPlan.title} onChange={(event) => setLearningPlan({ ...learningPlan, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={learningPlan.objective} onChange={(event) => setLearningPlan({ ...learningPlan, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label><label><span>{isID ? 'Rencana Aktivitas' : 'Planned Activities'}</span><textarea rows="4" value={learningPlan.activities} onChange={(event) => setLearningPlan({ ...learningPlan, activities: event.target.value })} placeholder={isID ? 'Pembukaan, latihan terbimbing, praktik, dan refleksi...' : 'Warm-up, guided practice, production, and reflection...'} required /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Rencana Pertemuan' : 'Save Meeting Plan')}</button></form><div className="eight-meeting-plan-grid">{Array.from({ length: 8 }, (_, index) => { const number = index + 1; const plan = (selectedClass?.learningPlans || []).find((item) => item.month === learningPlan.month && item.meetingNumber === number); return <article className={plan ? 'planned' : ''} key={number}><span>{String(number).padStart(2, '0')}</span><div><small>{plan ? (isID ? 'SUDAH DIRENCANAKAN' : 'PLANNED') : (isID ? 'BELUM DIISI' : 'NOT PLANNED')}</small><strong>{plan?.title || (isID ? `Pertemuan ${number}` : `Meeting ${number}`)}</strong>{plan?.objective && <p>{plan.objective}</p>}</div>{plan && <button type="button" onClick={() => usePlanForJournal(plan)}>{isID ? 'Gunakan untuk Jurnal →' : 'Use for Journal →'}</button>}</article>; })}</div></section>
         </div>
         </>)}
-{page === 'journal' && (        <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Learning Journal</h2><p>{isID ? 'Isi jurnal kelas dan capaian seluruh siswa dalam satu kali simpan.' : 'Complete the class journal and every student’s progress in one save.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveJournal}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={journal.date} onChange={(event) => setJournal({ ...journal, date: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={journal.meetingNumber} onChange={(event) => setJournal({ ...journal, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={journal.title} onChange={(event) => setJournal({ ...journal, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><textarea rows="5" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Mengidentifikasi pola, latihan berpasangan, dan membuat lima kalimat.' : 'Example: Identifying patterns, pair practice, and writing five sentences.'} required /></label><label><span>{isID ? 'Catatan Kelas / Tindak Lanjut' : 'Class Notes / Follow-up'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Catatan umum kelas atau rencana pertemuan berikutnya...' : 'General class notes or next-meeting plan...'} /></label><div className="journal-roster-heading"><div><span>{isID ? 'CAPAIAN INDIVIDUAL' : 'INDIVIDUAL PROGRESS'}</span><h3>{isID ? 'Daftar Siswa' : 'Student List'}</h3><small>{isID ? 'Semua siswa otomatis dipilih. Hapus centang siswa yang tidak mengikuti pertemuan.' : 'All students are selected automatically. Uncheck students who did not attend.'}</small></div><div className="journal-roster-actions"><button type="button" onClick={() => setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { ...(journalStudents[student.studentId] || {}), selected: true, achievement: journalStudents[student.studentId]?.achievement || 'Berkembang' }])))}>{isID ? 'Pilih Semua' : 'Select All'}</button><button type="button" onClick={generateAllJournalComments} disabled={!journal.title.trim()}>{isID ? '✦ Susun Kalimat Otomatis' : '✦ Generate Comments'}</button></div></div><div className="journal-student-roster">{(selectedClass?.students || []).map((student, index) => { const entry = journalStudents[student.studentId] || { selected: true, achievement: 'Berkembang', comment: '' }; return <article className={entry.selected === false ? 'not-selected' : ''} key={student.studentId}><label className="journal-student-check"><input type="checkbox" checked={entry.selected !== false} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, selected: event.target.checked } })} /><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId}</small></div></label>{entry.selected !== false && <><label className="journal-achievement"><span>{isID ? 'Kemampuan Hari Ini' : 'Today’s Achievement'}</span><select value={entry.achievement} onChange={(event) => { const achievement = event.target.value; setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, achievement, comment: composeJournalComment(student, achievement) } }); }}><option value="Sangat Baik">{isID ? 'Sangat Baik — Mandiri' : 'Excellent — Independent'}</option><option value="Baik">{isID ? 'Baik — Sedikit Arahan' : 'Good — Limited Guidance'}</option><option value="Berkembang">{isID ? 'Berkembang — Perlu Latihan' : 'Developing — Needs Practice'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan — Pendampingan' : 'Needs Support — Guidance'}</option></select></label><label className="journal-generated-comment"><span>{isID ? 'Catatan Otomatis (boleh diedit)' : 'Generated Comment (editable)'}</span><textarea rows="3" value={entry.comment} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, comment: event.target.value } })} placeholder={isID ? 'Klik “Susun Kalimat Otomatis” atau pilih kemampuan siswa.' : 'Generate a comment or select the student achievement.'} /></label></>}</article>; })}</div><div className="journal-save-summary"><span>{Object.values(journalStudents).filter((entry) => entry.selected !== false).length} {isID ? 'siswa dipilih' : 'students selected'}</span><button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal & Capaian Siswa' : 'Save Journal & Student Progress')}</button></div></form>{selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong><small>{entry.date} • {entry.activities}</small></div></article>)}</div>}</section>)}
+{page === 'journal' && (
+        <section className="tutor-section tutor-page-section tutor-journal-simple">
+          <div className="tutor-section-heading">
+            <div>
+              <span>JURNAL MENGAJAR</span>
+              <h2>{isID ? 'Catat Pertemuan Hari Ini' : 'Record Today’s Lesson'}</h2>
+              <p>{isID ? 'Cukup isi kelas, materi, tujuan pembelajaran, kegiatan, dan catatan bila diperlukan.' : 'Simply enter the class, material, learning objective, activities, and an optional note.'}</p>
+            </div>
+          </div>
+          <form className="tutor-journal-form" onSubmit={saveJournal}>
+            <label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label>
+            <div className="tutor-form-grid">
+              <label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={journal.date} onChange={(event) => setJournal({ ...journal, date: event.target.value })} required /></label>
+              <label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={journal.meetingNumber} onChange={(event) => setJournal({ ...journal, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+            </div>
+            <label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={journal.title} onChange={(event) => setJournal({ ...journal, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label>
+            <label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={journal.objective} onChange={(event) => setJournal({ ...journal, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat tentang kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label>
+            <label><span>{isID ? 'Kegiatan Pembelajaran' : 'Learning Activities'}</span><textarea rows="4" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Apersepsi, penjelasan singkat, latihan berpasangan, dan refleksi.' : 'Example: Warm-up, short explanation, pair practice, and reflection.'} required /></label>
+            <label><span>{isID ? 'Catatan / Tindak Lanjut (opsional)' : 'Notes / Follow-up (optional)'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Isi hanya jika ada hal penting untuk pertemuan berikutnya.' : 'Complete only when there is an important follow-up.'} /></label>
+            <div className="journal-automatic-class-note"><span>✓</span><div><strong>{isID ? 'Tidak perlu mencentang siswa satu per satu' : 'No need to select students one by one'}</strong><small>{isID ? 'Jurnal disimpan sebagai catatan kelas. Penilaian siswa tetap dilakukan melalui menu Penilaian atau Perkembangan Siswa.' : 'The journal is saved as a class record. Assess students from Assessment or Student Progress.'}</small></div></div>
+            <button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.objective.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal Mengajar' : 'Save Teaching Journal')}</button>
+          </form>
+          {selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong>{entry.objective && <small><b>{isID ? 'Tujuan:' : 'Objective:'}</b> {entry.objective}</small>}<small>{entry.date} • {entry.activities}</small></div></article>)}</div>}
+        </section>
+      )}
 
       {page === 'notes' && (
         <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>INDIVIDUAL</span><h2>{isID ? 'Catatan Siswa' : 'Student Notes'}</h2></div></div><form className="tutor-journal-form" onSubmit={saveStudentNote}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => { setSelectedClassId(event.target.value); setStudentNote({ ...studentNote, studentId: '' }); }} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Pilih Siswa' : 'Select Student'}</span><select value={studentNote.studentId} onChange={(event) => setStudentNote({ ...studentNote, studentId: event.target.value })} required><option value="">—</option>{(selectedClass?.students || []).map((student) => <option key={student.studentId} value={student.studentId}>{student.fullName} — {student.studentId}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={studentNote.date} onChange={(event) => setStudentNote({ ...studentNote, date: event.target.value })} required /></label><label><span>{isID ? 'Partisipasi' : 'Participation'}</span><select value={studentNote.participation} onChange={(event) => setStudentNote({ ...studentNote, participation: event.target.value })}><option value="">—</option><option value="Sangat Aktif">{isID ? 'Sangat Aktif' : 'Highly Active'}</option><option value="Aktif">{isID ? 'Aktif' : 'Active'}</option><option value="Cukup">{isID ? 'Cukup' : 'Developing'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan' : 'Needs Support'}</option></select></label></div><label><span>{isID ? 'Kekuatan Siswa' : 'Student Strengths'}</span><textarea rows="3" value={studentNote.strengths} onChange={(event) => setStudentNote({ ...studentNote, strengths: event.target.value })} /></label><label><span>{isID ? 'Perlu Ditingkatkan' : 'Areas for Improvement'}</span><textarea rows="3" value={studentNote.improvements} onChange={(event) => setStudentNote({ ...studentNote, improvements: event.target.value })} /></label><label><span>{isID ? 'Komentar Tutor untuk Laporan' : 'Tutor Comment for Report'}</span><textarea rows="4" value={studentNote.comment} onChange={(event) => setStudentNote({ ...studentNote, comment: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>Achievement</span><input value={studentNote.achievement} onChange={(event) => setStudentNote({ ...studentNote, achievement: event.target.value })} placeholder={isID ? 'Opsional' : 'Optional'} /></label><label><span>{isID ? 'Bonus EXP (0–250)' : 'EXP Bonus (0–250)'}</span><input type="number" min="0" max="250" value={studentNote.expAwarded} onChange={(event) => setStudentNote({ ...studentNote, expAwarded: Number(event.target.value) })} /></label></div><button type="submit" disabled={saving || !selectedClassId || !studentNote.studentId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Catatan Individual' : 'Save Individual Note')}</button></form></section>
       )}
 
-      {page === 'academic' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>{isID ? 'Kelola Akademik' : 'Manage Academics'}</h2></div></div><div className="tutor-academic-menu"><button type="button" onClick={() => setPage('assignments')}><span>☑</span><div><strong>{isID ? 'Tugas' : 'Assignments'}</strong><small>{isID ? 'Buat, periksa, dan beri feedback tugas siswa' : 'Create, review, and give student assignment feedback'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('challenges')}><span>🎯</span><div><strong>{isID ? 'Tantangan' : 'Challenges'}</strong><small>{isID ? 'Buat tantangan sesuai program dan validasi progres/EXP' : 'Create program challenges and validate progress/EXP'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('assessment')}><span>★</span><div><strong>Assessment</strong><small>{isID ? 'Catat hasil penilaian sebagai bagian progres akademik siswa' : 'Record assessment results as part of student academic progress'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('notes')}><span>♙</span><div><strong>{isID ? 'Catatan Siswa' : 'Student Notes'}</strong><small>{isID ? 'Catat perkembangan individual yang melengkapi capaian dan assessment' : 'Record individual progress that complements achievement and assessment'}</small></div><b>→</b></button></div></section>}
+      {page === 'academic' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>{isID ? 'AKTIVITAS BELAJAR' : 'LEARNING ACTIVITIES'}</span><h2>{isID ? 'Tugas, Tantangan & Penilaian' : 'Tasks, Challenges & Assessment'}</h2></div></div><div className="tutor-academic-menu"><button type="button" onClick={() => setPage('assignments')}><span>☑</span><div><strong>{isID ? 'Tugas' : 'Assignments'}</strong><small>{isID ? 'Buat, periksa, dan beri feedback tugas siswa' : 'Create, review, and give student assignment feedback'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('challenges')}><span>🎯</span><div><strong>{isID ? 'Tantangan' : 'Challenges'}</strong><small>{isID ? 'Buat tantangan sesuai program dan validasi progres/EXP' : 'Create program challenges and validate progress/EXP'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('assessment')}><span>★</span><div><strong>{isID ? 'Penilaian Siswa' : 'Student Assessment'}</strong><small>{isID ? 'Catat hasil penilaian sebagai bagian perkembangan akademik siswa' : 'Record assessment results as part of student academic progress'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('notes')}><span>♙</span><div><strong>{isID ? 'Catatan Perkembangan' : 'Progress Notes'}</strong><small>{isID ? 'Catat perkembangan individual untuk melengkapi penilaian siswa' : 'Record individual progress to complement student assessment'}</small></div><b>→</b></button></div></section>}
 
       {page === 'assignments' && assignment.gradingMode === 'automatic' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') })} isID={isID} /></section>}
       {page === 'assignments' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assignments</h2></div></div><form className="tutor-journal-form" onSubmit={createAssignment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Judul Tugas' : 'Assignment Title'}</span><input value={assignment.title} onChange={(event) => setAssignment({ ...assignment, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={assignment.instructions} onChange={(event) => setAssignment({ ...assignment, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal Diberikan' : 'Assigned Date'}</span><input type="date" value={assignment.assignedDate} onChange={(event) => setAssignment({ ...assignment, assignedDate: event.target.value })} required /></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={assignment.dueDate} onChange={(event) => setAssignment({ ...assignment, dueDate: event.target.value })} required /></label></div><label><span>{isID ? 'Hadiah EXP (0–200)' : 'EXP Reward (0–200)'}</span><input type="number" min="0" max="200" value={assignment.expReward} onChange={(event) => setAssignment({ ...assignment, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Assignment' : 'Create Assignment / Challenge')}</button></form>{selectedClass?.assignments?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Tugas Kelas Ini' : 'Class Assignments'}</h3>{selectedClass.assignments.map((item) => <article key={item.assignmentId}><span>☑</span><div><strong>{item.title}</strong><small>{isID ? 'Tenggat' : 'Due'}: {item.dueDate} • +{item.expReward} EXP</small></div></article>)}</div>}{selectedClass?.submissions?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Pengumpulan Siswa' : 'Student Submissions'}</h3>{selectedClass.submissions.map((item) => <button type="button" key={item.submissionId} onClick={() => { setReviewItem({ ...item, kind: 'assignment' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
@@ -2375,7 +2370,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'assessment' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assessment</h2></div></div><form className="tutor-journal-form" onSubmit={saveAssessment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => { setSelectedClassId(event.target.value); setAssessment({ ...assessment, studentId: '' }); }} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Pilih Siswa' : 'Select Student'}</span><select value={assessment.studentId} onChange={(event) => setAssessment({ ...assessment, studentId: event.target.value })} required><option value="">—</option>{(selectedClass?.students || []).map((student) => <option key={student.studentId} value={student.studentId}>{student.fullName}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={assessment.date} onChange={(event) => setAssessment({ ...assessment, date: event.target.value })} required /></label><label><span>{isID ? 'Jenis Penilaian' : 'Assessment Type'}</span><select value={assessment.type} onChange={(event) => setAssessment({ ...assessment, type: event.target.value })}><option>Monthly Assessment</option><option>Quiz</option><option>Test</option><option>Project</option><option>Placement Test</option></select></label></div><div className="tutor-score-grid">{['speaking','writing','reading','listening','quizTest'].map((skill) => <label key={skill}><span>{skill === 'quizTest' ? 'Quiz / Test' : skill.charAt(0).toUpperCase() + skill.slice(1)}</span><input type="number" min="0" max="100" value={assessment[skill]} onChange={(event) => setAssessment({ ...assessment, [skill]: event.target.value })} placeholder="0–100" /></label>)}</div><label><span>{isID ? 'Komentar Penilaian' : 'Assessment Comment'}</span><textarea rows="3" value={assessment.comment} onChange={(event) => setAssessment({ ...assessment, comment: event.target.value })} /></label><button type="submit" disabled={saving || !selectedClassId || !assessment.studentId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Penilaian' : 'Save Assessment')}</button></form></section>}
 
-      <nav className="tutor-bottom-navigation tutor-five-navigation"><button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}><span>⌂</span>{isID ? 'Beranda' : 'Home'}</button><button className={['classes','class','student','attendance','report'].includes(page) ? 'active' : ''} onClick={() => setPage('classes')}><span>▤</span>{isID ? 'Kelas' : 'Classes'}</button><button className={page === 'journal' ? 'active' : ''} onClick={() => setPage('journal')}><span>✎</span>Journal</button><button className={['academic','assignments','assessment','notes','challenges','review'].includes(page) ? 'active' : ''} onClick={() => setPage('academic')}><span>★</span>{isID ? 'Akademik' : 'Academic'}</button><button onClick={onLogout}><span>↪</span>{isID ? 'Keluar' : 'Sign Out'}</button></nav>
+      <nav className="tutor-bottom-navigation tutor-five-navigation"><button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}><span>⌂</span>{isID ? 'Jadwal' : 'Schedule'}</button><button className={['classes','class','student','attendance','report'].includes(page) ? 'active' : ''} onClick={() => setPage('classes')}><span>▤</span>{isID ? 'Kelas' : 'Classes'}</button><button className={page === 'journal' ? 'active' : ''} onClick={() => setPage('journal')}><span>✎</span>{isID ? 'Jurnal' : 'Journal'}</button><button className={['academic','assignments','assessment','notes','challenges','review'].includes(page) ? 'active' : ''} onClick={() => setPage('academic')}><span>★</span>{isID ? 'Tugas' : 'Tasks'}</button><button onClick={onLogout}><span>↪</span>{isID ? 'Keluar' : 'Sign Out'}</button></nav>
     </main>
   );
 }
@@ -2535,6 +2530,7 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
         language={language}
         page={detailPage}
         token={token}
+        user={user}
         overview={overview}
         onRefreshOverview={onRefreshOverview}
         onBack={goBack}
@@ -2610,15 +2606,29 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
           const holiday = /^libur$/i.test(tuitionStatus);
           const onLeave = /^cuti$/i.test(tuitionStatus);
 
-          if (paid || holiday || onLeave) return null;
+          if (holiday || onLeave) return null;
+
+          const state = paid ? 'paid' : pending ? 'pending' : 'active';
+          const icon = paid ? '✓' : pending ? '◷' : '◔';
+          const label = paid
+            ? (isID ? 'PEMBAYARAN BULAN INI' : 'THIS MONTH’S PAYMENT')
+            : pending
+              ? (isID ? 'PEMBAYARAN DIPERIKSA' : 'PAYMENT IN REVIEW')
+              : (isID ? 'PENGINGAT PEMBAYARAN' : 'PAYMENT REMINDER');
+          const message = paid
+            ? (isID ? 'Terima kasih, pembayaran bulan berjalan sudah lunas.' : 'Thank you, this month’s tuition has been paid.')
+            : pending
+              ? (isID ? 'Konfirmasi sedang diperiksa oleh Admin.' : 'Your confirmation is being reviewed by Admin.')
+              : (isID ? 'Pembayaran bulan berjalan belum tercatat.' : 'This month’s tuition has not been recorded yet.');
 
           return (
-            <button type="button" className={`student-home-tuition-alert ${pending ? 'pending' : 'active'}`} onClick={() => openStudentPage('payment')}>
-              <span>{pending ? '◷' : '!'}</span>
+            <button type="button" className={`student-home-tuition-alert ${state}`} onClick={() => openStudentPage('payment')}>
+              <span>{icon}</span>
               <div>
-                <small>{pending ? (isID ? 'PEMBAYARAN DIPERIKSA' : 'PAYMENT IN REVIEW') : (isID ? 'TAGIHAN LES AKTIF' : 'ACTIVE TUITION BILL')}</small>
-                <strong>{pending ? (isID ? 'Menunggu verifikasi Admin' : 'Waiting for Admin verification') : `${formatRupiah(150000)} • ${isID ? 'Batas tanggal 7' : 'Due on the 7th'}`}</strong>
+                <small>{label}</small>
+                <strong>{message}</strong>
               </div>
+              <em>{isID ? 'Buka Tuition' : 'Open Tuition'}</em>
               <b>→</b>
             </button>
           );
@@ -3240,8 +3250,9 @@ function QrisPaymentDisplay({ isID }) {
   );
 }
 
-function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
+function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
   const isID = language === 'ID';
+  const studentProfile = normalizeStudentOverviewPayload(overview || {}, user || {}).profile;
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordChanging, setPasswordChanging] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
@@ -3820,12 +3831,17 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       {page === 'profile' && (
         <section className="detail-panel student-profile-panel">
           <div className="student-profile-identity">
-            <StudentPhoto photoLink={overview?.profile?.photoLink} fullName={overview?.profile?.fullName || 'Student'} className="student-profile-large-photo" />
-            <div><span>{isID ? 'PROFIL SISWA' : 'STUDENT PROFILE'}</span><h2>{overview?.profile?.fullName || '—'}</h2><p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'}</p></div>
+            <StudentPhoto photoLink={studentProfile.photoLink} fullName={studentProfile.fullName || 'Student'} className="student-profile-large-photo" />
+            <div><span>{isID ? 'PROFIL SISWA' : 'STUDENT PROFILE'}</span><h2>{studentProfile.fullName || '—'}</h2><p>{studentProfile.studentId || '—'} • {overview?.program?.program || '—'}</p></div>
           </div>
-          <div className="detail-row"><span>Student ID</span><strong>{overview?.profile?.studentId || '—'}</strong></div>
-          <div className="detail-row"><span>{isID ? 'Sekolah' : 'School'}</span><strong>{overview?.profile?.school || '—'}</strong></div>
-          <div className="detail-row"><span>{isID ? 'Kelas' : 'Grade'}</span><strong>{overview?.profile?.grade || '—'}</strong></div>
+          <div className="detail-row"><span>Student ID</span><strong>{studentProfile.studentId || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Nama Lengkap' : 'Full Name'}</span><strong>{studentProfile.fullName || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Tanggal Lahir' : 'Date of Birth'}</span><strong>{studentProfile.dob || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Sekolah' : 'School'}</span><strong>{studentProfile.school || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Kelas' : 'Grade'}</span><strong>{studentProfile.grade || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'WA Siswa' : 'Student WhatsApp'}</span><strong>{studentProfile.waStudent || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'WA Orang Tua' : 'Parent WhatsApp'}</span><strong>{studentProfile.waParent || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Alamat' : 'Address'}</span><strong>{studentProfile.address || '—'}</strong></div>
           <div className="detail-row"><span>{isID ? 'Level Saat Ini' : 'Current Level'}</span><strong>{overview?.program?.level || '—'}</strong></div>
 
           <div className="profile-subsection-title"><span><BadgeGlyph name="allround" /></span><h3>{isID ? 'Progress Gamifikasi' : 'Gamification Progress'}</h3></div>
@@ -4496,7 +4512,7 @@ function Dashboard({
         ];
 
   return (
-    <main className={`app-dashboard ${user.role === 'Admin' ? 'admin-dashboard' : ''}`}>
+    <main className={`app-dashboard ${user.role === 'Admin' ? 'admin-dashboard' : user.role === 'CEO' ? 'ceo-dashboard' : ''}`}>
       <header className="app-header">
         <div className="brand-small">
           <PaperPlaneLogo />
@@ -4808,6 +4824,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   const safePayments = Array.isArray(payments) ? payments : [];
   const safeAttentionLists = attentionLists && typeof attentionLists === 'object' ? attentionLists : {};
   const [proof, setProof] = useState(null); const [proofLoading, setProofLoading] = useState(''); const [notes, setNotes] = useState({}); const [showHistorical, setShowHistorical] = useState(false);
+  const [activePaymentJob, setActivePaymentJob] = useState('');
   const [historicalSubmitting, setHistoricalSubmitting] = useState(false);
   const [selectedTuitionIds, setSelectedTuitionIds] = useState([]);
   const [bulkPayment, setBulkPayment] = useState({ paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', amount: 150000 });
@@ -5045,7 +5062,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     try {
       const selected = tuitionTargetsWithStatus.filter((item) => selectedTuitionIds.includes(item.studentId));
       const success = await onBulkPayment({ ...bulkPayment, students: selected.map((item) => ({ studentId: item.studentId, period: item.period || tuitionPeriod })) });
-      if (success) { setSelectedTuitionIds([]); setShowBulkPayment(false); }
+      if (success) { setSelectedTuitionIds([]); setShowBulkPayment(false); setActivePaymentJob(''); }
     } finally { setBulkSubmitting(false); }
   }
 
@@ -5070,7 +5087,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     const invoiceWindow = window.open('', '_blank');
     if (!invoiceWindow) return window.alert('Izinkan pop-up untuk membuat invoice.');
     invoiceWindow.document.write(`<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice Mr One Course</title><style>
-      *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;justify-content:space-between;gap:20px;padding:28px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:8px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:6px}.invoice-document>header span{font-size:11px;letter-spacing:.16em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:14px}.brand{display:flex;align-items:center;gap:10px;text-align:right}.brand img{width:52px;height:52px;border-radius:13px;object-fit:cover;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:16px}.brand small{color:#d7f5f6}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header,.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand{text-align:left}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
+      *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:0;padding:20px 24px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:6px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:5px}.invoice-document>header span{font-size:10px;letter-spacing:.14em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:13px}.brand{display:flex;align-items:center;gap:9px;text-align:right}.brand img{display:block;width:44px;height:44px;max-width:44px;max-height:44px;border-radius:11px;object-fit:contain;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:15px}.brand small{color:#d7f5f6;font-size:10px}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header{padding:17px 18px}.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand img{width:38px;height:38px;max-width:38px;max-height:38px}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document>header{padding:8mm 14mm!important}.brand img{width:13mm!important;height:13mm!important;max-width:13mm!important;max-height:13mm!important}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
     </style></head><body>${invoices}<div class="print-actions"><button onclick="window.print()">⤓ Cetak / Simpan Invoice</button></div></body></html>`);
     invoiceWindow.document.close();
   }
@@ -5079,6 +5096,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   function toggleHistoricalForm() {
     setShowHistorical((value) => {
       const next = !value;
+      setActivePaymentJob(next ? 'historical' : '');
       if (next) {
         window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
       }
@@ -5099,6 +5117,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       note: 'Pembayaran periode berjalan dicatat melalui Tuition Watch.'
     });
     setShowHistorical(true);
+    setActivePaymentJob('historical');
     window.setTimeout(() => historicalFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
   }
 
@@ -5148,6 +5167,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       const success = await onAddHistorical({ ...historical, studentId: studentId.toUpperCase() });
       if (success) {
         setShowHistorical(false);
+        setActivePaymentJob('');
         setHistorical(emptyHistoricalPayment());
       }
     } finally {
@@ -5156,20 +5176,40 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   }
 
   function chooseCategory(category) { setHistorical({ ...historical, paymentCategory: category, amount: category === 'ID Card' ? 20000 : 150000, fulfillmentStatus: category === 'Tuition' ? '' : 'Sedang Disiapkan' }); }
-  return <section className="payment-admin-page payment-admin-page-v77">
-    <div className="section-heading payment-center-heading-v77">
-      <div><span className="eyebrow">PAYMENT CENTER</span><h2>Kelola Pembayaran</h2></div>
-    </div>
-    <div className="payment-job-cards">
-      <button type="button" onClick={() => setShowBulkPayment(true)}><span>✓</span><strong>Catat Pembayaran Massal</strong><small>Pilih beberapa siswa dan tandai lunas sekaligus.</small></button>
-      <button type="button" onClick={createInvoice}><span>▤</span><strong>Buat Surat Tagihan</strong><small>Buat invoice untuk siswa yang dipilih.</small></button>
-      <button type="button" onClick={toggleHistoricalForm}><span>＋</span><strong>Pembayaran Lama</strong><small>Catat transaksi sebelum portal digunakan.</small></button>
-    </div>
-    {showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Tandai Lunas'}</button><button type="button" onClick={() => setShowBulkPayment(false)}>Batal</button></form>}
-    {showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
+  function closePaymentJob() {
+    setActivePaymentJob('');
+    setShowBulkPayment(false);
+    setShowHistorical(false);
+    setSelectedTuitionIds([]);
+    setProof(null);
+  }
+
+  const paymentJobCopy = {
+    bulk: { eyebrow: 'PEMBAYARAN MASSAL', title: 'Catat Pembayaran Siswa', description: 'Pilih siswa yang sudah membayar, tentukan tanggal dan metode, lalu tandai lunas sekaligus.' },
+    invoice: { eyebrow: 'SURAT TAGIHAN', title: 'Buat Invoice Siswa', description: 'Pilih siswa dengan tagihan aktif, lalu buat invoice profesional untuk setiap siswa.' },
+    historical: { eyebrow: 'PEMBAYARAN LAMA', title: 'Catat Transaksi Lama', description: 'Masukkan pembayaran yang diterima sebelum portal Academic Suite digunakan.' }
+  };
+
+  return <section className="payment-admin-page payment-admin-page-v77 payment-admin-page-v31">
+    {!activePaymentJob && <div className="payment-job-cards payment-job-cards-home">
+      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span>✓</span><strong>Catat Pembayaran Massal</strong><small>Pilih beberapa siswa dan tandai lunas sekaligus.</small></button>
+      <button type="button" onClick={() => setActivePaymentJob('invoice')}><span>▤</span><strong>Buat Surat Tagihan</strong><small>Buat invoice untuk siswa yang dipilih.</small></button>
+      <button type="button" onClick={() => { setActivePaymentJob('historical'); setShowHistorical(true); }}><span>＋</span><strong>Pembayaran Lama</strong><small>Catat transaksi sebelum portal digunakan.</small></button>
+    </div>}
+
+    {activePaymentJob && <div className="payment-workflow-heading">
+      <button type="button" onClick={closePaymentJob}>← Kembali ke Payment Centre</button>
+      <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
+    </div>}
+
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Tandai Lunas'}</button></form>}
+
+    {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
+
+    {activePaymentJob === 'historical' && showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
       <header>
         <div><small>TRANSAKSI SEBELUM PORTAL</small><h3>Tambah Pembayaran Lama</h3></div>
-        <button type="button" onClick={() => setShowHistorical(false)}>×</button>
+        <button type="button" onClick={closePaymentJob}>×</button>
       </header>
       <div className="historical-payment-grid">
         <label><span>Student ID</span><input value={historical.studentId} onChange={(event) => setHistorical({ ...historical, studentId: event.target.value.toUpperCase() })} placeholder="MOC001" required /></label>
@@ -5185,53 +5225,19 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       </div>
       <button className="save-historical-payment" type="submit" disabled={historicalSubmitting}>{historicalSubmitting ? 'Menyimpan...' : 'Simpan sebagai Lunas'}</button>
     </form>}
-    {message && <div className="error-message">{message}</div>}
-    <section className="admin-tuition-watch admin-tuition-watch-v85">
+    {activePaymentJob && message && <div className="error-message">{message}</div>}
+    {(activePaymentJob === 'bulk' || activePaymentJob === 'invoice') && <section className="admin-tuition-watch admin-tuition-watch-v85 payment-selection-list-v31">
       <div className="admin-tuition-watch-heading">
         <div>
-          <span className="eyebrow">TUITION WATCH</span>
-          <h3>Tagihan Les Aktif</h3>
-          <p>Deadline pembayaran rutin tanggal 1–7 setiap bulan. Status dan pesan pengingat menyesuaikan tanggal secara otomatis.</p>
+          <span className="eyebrow">{activePaymentJob === 'bulk' ? 'PILIH SISWA' : 'PILIH PENERIMA INVOICE'}</span>
+          <h3>{activePaymentJob === 'bulk' ? 'Siswa yang Sudah Membayar' : 'Siswa dengan Tagihan Aktif'}</h3>
+          <p>{activePaymentJob === 'bulk' ? 'Centang siswa yang pembayarannya akan dicatat sebagai lunas.' : 'Centang siswa yang akan dibuatkan surat tagihan.'}</p>
         </div>
       </div>
-
-      <div className="tuition-policy-strip" aria-label="Tahapan pembayaran les bulanan">
-        {[
-          { key: 'window', date: '1–7', label: 'Masa Pembayaran' },
-          { key: 'late', date: '8–10', label: 'Terlambat' },
-          { key: 'follow-up', date: '11–15', label: 'Tindak Lanjut' },
-          { key: 'overdue', date: '16–akhir', label: 'Overdue' },
-          { key: 'outstanding', date: 'Bulan berikut', label: 'Outstanding' }
-        ].map((stage) => (
-          <div key={stage.key} className={`tuition-policy-stage ${currentTuitionStatus.key === stage.key ? 'active' : ''} tuition-status-${stage.key}`}>
-            <small>{stage.date}</small>
-            <strong>{stage.label}</strong>
-          </div>
-        ))}
-      </div>
-
-      <div className={`tuition-current-status tuition-status-${currentTuitionStatus.key}`}>
-        <div>
-          <span>STATUS HARI INI</span>
-          <strong>{currentTuitionStatus.label}</strong>
-        </div>
-        <p>{currentTuitionStatus.description}</p>
-      </div>
-
       <div className="admin-tuition-watch-summary">
         <strong>{tuitionTargetsWithStatus.length}</strong>
         <span>siswa dengan tagihan aktif • {safeAttentionLists.period || 'periode berjalan'}</span>
       </div>
-
-      {tuitionTargetsWithStatus.length > 0 && (
-        <div className="tuition-status-summary">
-          {tuitionStatusCounts.window > 0 && <span className="tuition-status-window">1–7: <b>{tuitionStatusCounts.window}</b></span>}
-          {tuitionStatusCounts.late > 0 && <span className="tuition-status-late">Terlambat: <b>{tuitionStatusCounts.late}</b></span>}
-          {tuitionStatusCounts['follow-up'] > 0 && <span className="tuition-status-follow-up">Tindak lanjut: <b>{tuitionStatusCounts['follow-up']}</b></span>}
-          {tuitionStatusCounts.overdue > 0 && <span className="tuition-status-overdue">Overdue: <b>{tuitionStatusCounts.overdue}</b></span>}
-          {tuitionStatusCounts.outstanding > 0 && <span className="tuition-status-outstanding">Outstanding: <b>{tuitionStatusCounts.outstanding}</b></span>}
-        </div>
-      )}
 
       {tuitionTargetsWithStatus.length > 0 ? (
         <div className="admin-tuition-watch-list">
@@ -5252,20 +5258,6 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
                   <small>{item.studentId} • {item.program || '—'}</small>
                 </div>
                 <strong>{formatBillingPeriod(item.period)}</strong>
-                <button
-                  type="button"
-                  className="tuition-watch-wa-v85 tuition-watch-wa-v86"
-                  disabled={!hasWa}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    sendTuitionReminder(item);
-                  }}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  aria-label={`Kirim pengingat WhatsApp untuk ${item.fullName}`}
-                  title={hasWa ? `Kirim pengingat WhatsApp ke ${item.fullName}` : 'Nomor WhatsApp siswa/orang tua belum tersedia'}
-                >
-                  {hasWa ? '💬 Kirim WA' : 'WA belum tersedia'}
-                </button>
               </div>
             );
           })}
@@ -5273,8 +5265,8 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       ) : (
         <div className="empty-state tuition-watch-empty">Tidak ada tagihan les aktif untuk periode ini.</div>
       )}
-    </section>
-    <div className="payment-admin-tabs-heading"><h3>Perlu Verifikasi</h3><span>{pending.length} menunggu</span></div>{loading ? <div className="dashboard-loading">Memuat pembayaran...</div> : pending.length === 0 ? <div className="empty-state">Tidak ada pembayaran yang menunggu verifikasi.</div> : <div className="payment-confirmation-list">{pending.map((item) => { const cash = /^Tunai\s*-/i.test(String(item.paymentMethod || '')); return <article key={item.confirmationId}><header><div><small>{item.invoiceNumber}</small><h3>{item.studentName}</h3><p>{item.studentId} • {item.itemLabel || item.paymentCategory} • {item.period}</p></div><span>MENUNGGU</span></header><div className="payment-review-details"><div><span>Nominal</span><strong>{formatRupiah(item.amount)}</strong></div><div><span>Metode</span><strong>{item.paymentMethod}</strong></div><div><span>Tanggal Bayar</span><strong>{item.paymentDate}</strong></div></div>{!cash && <button className="view-payment-proof" type="button" onClick={() => viewProof(item)} disabled={proofLoading === item.confirmationId}>{proofLoading === item.confirmationId ? 'Membuka...' : 'Lihat Bukti Pembayaran'}</button>}{cash && <div className="cash-admin-note">Pembayaran tunai — konfirmasi langsung kepada penerima yang tertera.</div>}{proof?.confirmationId === item.confirmationId && <div className="payment-proof-preview">{proof.mimeType === 'application/pdf' ? <iframe title="Bukti pembayaran PDF" src={`data:${proof.mimeType};base64,${proof.base64}`} /> : <img src={`data:${proof.mimeType};base64,${proof.base64}`} alt="Bukti pembayaran" />}<button type="button" onClick={() => setProof(null)}>Tutup Bukti</button></div>}<label className="payment-admin-note"><span>Catatan Admin (wajib jika ditolak)</span><input value={notes[item.confirmationId] || ''} onChange={(event) => setNotes({ ...notes, [item.confirmationId]: event.target.value })} placeholder="Contoh: nominal belum sesuai" /></label><footer><button className="reject" type="button" disabled={!notes[item.confirmationId]} onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'reject', note: notes[item.confirmationId] })}>Tolak</button><button className="approve" type="button" onClick={() => onReview({ confirmationId: item.confirmationId, decision: 'verify', note: notes[item.confirmationId] || 'Pembayaran telah diverifikasi.' })}>Verifikasi & Tandai Lunas</button></footer></article>; })}</div>}</section>;
+    </section>}
+  </section>;
 }
 
 function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, token, onRefresh }) {
@@ -5850,6 +5842,10 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     finally { setDetailLoading(false); }
   }
 
+  const activeStudentsOnPage = students.filter((student) => /^(aktif|active)$/i.test(String(student.status || 'Aktif').trim())).length;
+  const inactiveStudentsOnPage = Math.max(students.length - activeStudentsOnPage, 0);
+  const activeAccountsOnPage = students.filter((student) => /^(aktif|active)$/i.test(String(student.accountStatus || '').trim())).length;
+
   if (selectedStudentId) {
     return <section className="students-page admin-student-detail-page">
       <button type="button" className="admin-student-detail-back" onClick={closeStudentDetail}>← Kembali ke Data Siswa</button>
@@ -5953,7 +5949,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     </section>;
   }
 
-  return <section className="students-page">
+  return <section className="students-page admin-student-directory-v32">
     {isCEOStudentManager && <section className="admin-student-account-bulk-card">
       <div className="section-heading">
         <div><span className="eyebrow">CEO • STUDENT ACCOUNT CONTROL</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Kontrol massal akun siswa dipusatkan di CEO. Hanya siswa berstatus aktif yang diproses; data pembayaran, absensi, EXP, badge, dan akademik tidak diubah.</p></div>
@@ -5966,15 +5962,33 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
       <small className="admin-student-account-warning">Tindakan ini membatalkan session siswa lama sehingga mereka harus Sign In kembali menggunakan Student ID dan password awal baru.</small>
     </section>}
 
-    <div className="page-heading"><div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>{pagination.totalData || 0} siswa ditemukan</p></div></div>
-    <form className="student-search" onSubmit={submitSearch}><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cari nama, ID, sekolah, atau kelas" /><button type="submit">Cari</button></form>
+    <div className="student-directory-hero-v32">
+      <div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>Temukan siswa dan buka profil lengkap, akun, kehadiran, pembayaran, serta perkembangan belajarnya.</p></div>
+      <strong>{pagination.totalData || 0}<small>Total Siswa</small></strong>
+    </div>
+    <div className="student-directory-summary-v32">
+      <div><span>DITAMPILKAN</span><strong>{students.length}</strong><small>pada halaman ini</small></div>
+      <div><span>STATUS AKTIF</span><strong>{activeStudentsOnPage}</strong><small>siswa aktif</small></div>
+      <div><span>NONAKTIF / CUTI</span><strong>{inactiveStudentsOnPage}</strong><small>perlu diperiksa</small></div>
+      <div><span>AKUN AKTIF</span><strong>{activeAccountsOnPage}</strong><small>dapat masuk aplikasi</small></div>
+    </div>
+    <form className="student-search student-search-v32" onSubmit={submitSearch}><span>⌕</span><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cari nama, Student ID, sekolah, program, atau kelas" /><button type="submit">Cari Siswa</button>{search && <button type="button" className="student-search-clear-v32" onClick={() => { onSearchChange(''); onSearch(''); }}>Hapus</button>}</form>
     {message && <div className="error-message">{message}</div>}
-    {loading ? <div className="dashboard-loading">Memuat data siswa...</div> : students.length === 0 ? <div className="empty-state">Data siswa tidak ditemukan.</div> : <div className="student-list">
-      {students.map((student) => <button type="button" className="student-card student-card-action" key={student.studentId} onClick={() => openStudentDetail(student.studentId)}>
-        <div className="student-avatar">{String(student.fullName || 'S').charAt(0).toUpperCase()}</div>
-        <div className="student-info"><div className="student-name-row"><strong>{student.fullName || 'Tanpa nama'}</strong><span className={`student-status ${String(student.status).toLowerCase() === 'aktif' ? 'active' : ''}`}>{student.status || 'Aktif'}</span></div><span>{student.studentId || '-'}</span><p>{student.program || 'Program belum diisi'} • {student.className || student.classId || 'Kelas belum diisi'}</p><small>{student.school || 'Sekolah belum diisi'}{student.grade ? ` • ${student.grade}` : ''}</small></div>
-        <b className="student-card-open">→</b>
-      </button>)}
+    {loading ? <div className="student-directory-loading-v32">{Array.from({ length: 6 }, (_, index) => <div key={index}><i></i><span></span><span></span><span></span></div>)}</div> : students.length === 0 ? <div className="empty-state student-directory-empty-v32"><strong>Data siswa tidak ditemukan</strong><span>Periksa kembali kata pencarian atau hapus pencarian untuk melihat seluruh siswa.</span></div> : <div className="student-list student-directory-grid-v32">
+      {students.map((student) => {
+        const activeStatus = /^(aktif|active)$/i.test(String(student.status || 'Aktif').trim());
+        const activeAccount = /^(aktif|active)$/i.test(String(student.accountStatus || '').trim());
+        return <button type="button" className="student-card student-card-action student-directory-card-v32" key={student.studentId} onClick={() => openStudentDetail(student.studentId)}>
+          <header><StudentPhoto photoLink={student.photoLink} fullName={student.fullName} className="student-directory-photo-v32" /><div><small>{student.studentId || 'TANPA ID'}</small><strong>{student.fullName || 'Tanpa nama'}</strong></div><span className={`student-status ${activeStatus ? 'active' : ''}`}>{student.status || 'Aktif'}</span></header>
+          <div className="student-directory-details-v32">
+            <div><span>Program</span><strong>{student.program || 'Belum diisi'}</strong></div>
+            <div><span>Kelas</span><strong>{student.className || student.classId || 'Belum diisi'}</strong></div>
+            <div><span>Sekolah</span><strong>{student.school || 'Belum diisi'}</strong></div>
+            <div><span>Tingkat</span><strong>{student.grade || '—'}</strong></div>
+          </div>
+          <footer><span className={activeAccount ? 'account-active' : 'account-inactive'}>{activeAccount ? '● Akun Aktif' : '○ Akun Belum Aktif'}</span><b>Buka Detail <i>→</i></b></footer>
+        </button>;
+      })}
     </div>}
     {!loading && pagination.totalPages > 1 && <div className="pagination"><button disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>← Sebelumnya</button><span>Halaman {pagination.page} dari {pagination.totalPages}</span><button disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)}>Berikutnya →</button></div>}
   </section>;
