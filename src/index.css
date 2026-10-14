@@ -27506,3 +27506,154 @@ button:disabled{
 :is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page) :is(input,select,textarea){color:var(--moc-text)!important;background:var(--moc-surface-solid)!important;border-color:var(--moc-border)!important}
 :is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page) :is(input,textarea)::placeholder{color:var(--moc-muted)!important;opacity:.82!important}
 button:disabled{cursor:not-allowed!important;opacity:.52!important}
+
+/* =========================================================
+   MOC V59 — Tutor Lesson Plan assessment flow + PDF repair
+   Scoped to Tutor only.
+   ========================================================= */
+.tutor-dashboard .tutor-academic-master>.tutor-academic-master-heading{order:0}
+.tutor-dashboard .tutor-academic-master>.learning-plan-section{order:1}
+.tutor-dashboard .tutor-academic-master>.lesson-plan-assessment-launcher{order:2}
+.tutor-dashboard .tutor-academic-master>.linked-learning-package{display:none!important}
+.tutor-dashboard .tutor-academic-master>.lesson-assessment-builder{order:3}
+
+.tutor-dashboard.lang-id .learning-plan-section>.tutor-section-heading span,
+.tutor-dashboard.lang-id .learning-plan-section>.tutor-section-heading h2,
+.tutor-dashboard.lang-en .learning-plan-section>.tutor-section-heading span,
+.tutor-dashboard.lang-en .learning-plan-section>.tutor-section-heading h2{
+  font-size:0!important;
+}
+.tutor-dashboard.lang-id .learning-plan-section>.tutor-section-heading span::after{content:'PEMBELAJARAN';font-size:10px}
+.tutor-dashboard.lang-id .learning-plan-section>.tutor-section-heading h2::after{content:'Rencana dan Capaian Pembelajaran';font-size:clamp(19px,2.7vw,26px)}
+.tutor-dashboard.lang-en .learning-plan-section>.tutor-section-heading span::after{content:'LEARNING';font-size:10px}
+.tutor-dashboard.lang-en .learning-plan-section>.tutor-section-heading h2::after{content:'Learning Plan and Achievement';font-size:clamp(19px,2.7vw,26px)}
+
+.tutor-dashboard .lesson-plan-assessment-launcher{
+  display:grid;
+  gap:12px;
+  min-width:0;
+}
+.tutor-dashboard .lesson-assessment-toggle{
+  display:grid;
+  grid-template-columns:52px minmax(0,1fr) auto;
+  align-items:center;
+  gap:13px;
+  width:100%;
+  min-width:0;
+  padding:17px;
+  border:1px solid var(--moc-border-strong);
+  border-radius:19px;
+  color:var(--moc-text);
+  background:linear-gradient(145deg,var(--moc-primary-soft),var(--moc-surface-solid));
+  text-align:left;
+  cursor:pointer;
+}
+.tutor-dashboard .lesson-assessment-toggle>span{
+  display:grid;
+  place-items:center;
+  width:52px;
+  height:52px;
+  border-radius:15px;
+  color:#05202a;
+  background:var(--moc-primary);
+}
+.tutor-dashboard .lesson-assessment-toggle>span svg{width:26px;height:26px}
+.tutor-dashboard .lesson-assessment-toggle>div{display:grid;gap:3px;min-width:0}
+.tutor-dashboard .lesson-assessment-toggle :is(small,strong,p){display:block;min-width:0;margin:0;line-height:1.4;overflow-wrap:anywhere}
+.tutor-dashboard .lesson-assessment-toggle small{color:var(--moc-primary);font-size:9px;font-weight:900;letter-spacing:.1em}
+.tutor-dashboard .lesson-assessment-toggle strong{font-size:18px}
+.tutor-dashboard .lesson-assessment-toggle p{color:var(--moc-muted);font-size:11px}
+.tutor-dashboard .lesson-assessment-toggle>b{color:var(--moc-primary);font-size:24px}
+
+.tutor-dashboard .lesson-assessment-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  padding:15px;
+  border:1px solid var(--moc-border);
+  border-radius:19px;
+  background:var(--moc-surface-solid);
+}
+.tutor-dashboard .lesson-assessment-actions>button{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+  min-height:88px;
+  padding:14px;
+  border:1px solid var(--moc-border);
+  border-radius:15px;
+  color:var(--moc-text);
+  background:var(--moc-surface-soft);
+  text-align:left;
+  cursor:pointer;
+}
+.tutor-dashboard .lesson-assessment-actions>button:hover{border-color:var(--moc-primary);background:var(--moc-primary-soft)}
+.tutor-dashboard .lesson-assessment-actions>button>span{
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  border-radius:13px;
+  color:var(--moc-primary);
+  background:var(--moc-primary-soft);
+}
+.tutor-dashboard .lesson-assessment-actions>button svg{width:23px;height:23px}
+.tutor-dashboard .lesson-assessment-actions>button>div{display:grid;gap:4px;min-width:0}
+.tutor-dashboard .lesson-assessment-actions>button :is(strong,small){display:block;min-width:0;line-height:1.4;overflow-wrap:anywhere}
+.tutor-dashboard .lesson-assessment-actions>button small{color:var(--moc-muted);font-size:10px}
+.tutor-dashboard .lesson-assessment-actions>button>b{color:var(--moc-primary)}
+.tutor-dashboard .lesson-assessment-actions>.primary-score-action{grid-column:1/-1;border-color:var(--moc-primary)}
+.tutor-dashboard .primary-assessment-note{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr);
+  align-items:center;
+  gap:12px;
+  min-width:0;
+  padding:14px;
+  border:1px solid rgba(247,201,72,.38);
+  border-radius:15px;
+  background:rgba(247,201,72,.09);
+}
+.tutor-dashboard .primary-assessment-note>span{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;color:#4e3900;background:#f7c948}
+.tutor-dashboard .primary-assessment-note svg{width:25px;height:25px}
+.tutor-dashboard .primary-assessment-note>div{display:grid;gap:3px;min-width:0}
+.tutor-dashboard .primary-assessment-note :is(small,strong,p){display:block;min-width:0;margin:0;line-height:1.45;overflow-wrap:anywhere}
+.tutor-dashboard .primary-assessment-note small{color:#d9a900;font-size:9px;font-weight:900;letter-spacing:.08em}
+.tutor-dashboard .primary-assessment-note p{color:var(--moc-muted);font-size:11px}
+
+@media(max-width:620px){
+  .tutor-dashboard .lesson-assessment-actions{grid-template-columns:minmax(0,1fr);padding:12px}
+  .tutor-dashboard .lesson-assessment-actions>.primary-score-action,
+  .tutor-dashboard .primary-assessment-note{grid-column:auto}
+  .tutor-dashboard .lesson-assessment-toggle{grid-template-columns:46px minmax(0,1fr) auto;padding:14px}
+  .tutor-dashboard .lesson-assessment-toggle>span{width:46px;height:46px}
+}
+
+/* A later tuition print rule hid every Tutor report. Restore only this report. */
+@media print{
+  .tutor-printable-report,
+  .tutor-printable-report *{
+    visibility:visible!important;
+  }
+  .tutor-printable-report{
+    position:absolute!important;
+    inset:0 auto auto 0!important;
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+    padding:0!important;
+    color:#122033!important;
+    background:#fff!important;
+    border-top:6px solid #2679e8!important;
+    box-shadow:none!important;
+    print-color-adjust:exact!important;
+    -webkit-print-color-adjust:exact!important;
+  }
+  .tutor-printable-report .report-wide-table{overflow:visible!important}
+  .tutor-printable-report table{width:100%!important;min-width:0!important}
+  .tutor-report-toolbar,.tutor-dashboard-header,.tutor-bottom-navigation{display:none!important}
+}
