@@ -723,6 +723,7 @@ function App() {
   const [attendanceFollowUps, setAttendanceFollowUps] = useState([]);
   const [adminAttentionLists, setAdminAttentionLists] = useState({ absentMoreThanFour: [], unpaidAfterDaySeven: [], paymentWatchActive: false });
   const [ceoMonitoring, setCeoMonitoring] = useState(null);
+  const [managementMessages, setManagementMessages] = useState([]);
   const [adminActivities, setAdminActivities] = useState([]);
   const [studentOverview, setStudentOverview] = useState(null);
   const [studentOverviewLoading, setStudentOverviewLoading] = useState(false);
@@ -812,6 +813,7 @@ function App() {
       setAttendanceFollowUps(result.attendanceFollowUps || []);
       setAdminAttentionLists(result.attentionLists || { absentMoreThanFour: [], unpaidAfterDaySeven: [], paymentWatchActive: false });
       setCeoMonitoring(result.ceoMonitoring || null);
+      setManagementMessages(result.managementMessages || []);
       setAdminActivities(result.adminActivities || []);
     } catch (error) {
       setMessage(error.message);
@@ -1223,6 +1225,7 @@ function App() {
         attendanceFollowUps={attendanceFollowUps}
         attentionLists={adminAttentionLists}
         ceoMonitoring={ceoMonitoring}
+        managementMessages={managementMessages}
         adminActivities={adminActivities}
         message={message}
         onRefresh={() => loadDashboard(token)}
@@ -4440,6 +4443,7 @@ function Dashboard({
   attendanceFollowUps,
   attentionLists,
   ceoMonitoring,
+  managementMessages,
   adminActivities,
   message,
   onRefresh,
@@ -4471,6 +4475,44 @@ function Dashboard({
   token,
 }) {
 
+  const [selectedCeoClassId, setSelectedCeoClassId] = useState('');
+  const [ceoFinanceList, setCeoFinanceList] = useState('');
+  const [ceoAdminMessage, setCeoAdminMessage] = useState('');
+  const [ceoMessageStatus, setCeoMessageStatus] = useState('');
+  const [ceoMessageSending, setCeoMessageSending] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCeoClassId && ceoMonitoring?.classInsights?.[0]?.classId) {
+      setSelectedCeoClassId(ceoMonitoring.classInsights[0].classId);
+    }
+  }, [ceoMonitoring, selectedCeoClassId]);
+
+  const selectedCeoClass = (ceoMonitoring?.classInsights || []).find((item) => item.classId === selectedCeoClassId) || null;
+  const ceoFinanceLists = {
+    paid: ceoMonitoring?.currentPaidStudents || [],
+    unpaid: ceoMonitoring?.currentUnpaidStudents || [],
+    books: ceoMonitoring?.bookPurchases || [],
+    cards: ceoMonitoring?.idCardPurchases || [],
+  };
+  const ceoFinanceListData = ceoFinanceLists[ceoFinanceList] || [];
+
+  async function sendCeoMessage(event) {
+    event.preventDefault();
+    if (!ceoAdminMessage.trim()) return;
+    setCeoMessageSending(true);
+    setCeoMessageStatus('');
+    try {
+      const result = await callApi({ action: 'sendCeoAdminMessage', token, message: ceoAdminMessage.trim() });
+      setCeoMessageStatus(result.message || 'Pesan berhasil dikirim kepada Admin.');
+      setCeoAdminMessage('');
+      await onRefresh();
+    } catch (error) {
+      setCeoMessageStatus(error.message || 'Pesan belum berhasil dikirim.');
+    } finally {
+      setCeoMessageSending(false);
+    }
+  }
+
   useEdgeSwipeBack(
     () => onNavigate('home'),
     activePage !== 'home' && activePage !== 'students'
@@ -4483,7 +4525,7 @@ function Dashboard({
             label: 'Siswa Aktif',
             value: metrics?.activeStudents || 0,
             icon: '👥',
-            page: 'students',
+            page: 'ceo-classes',
           },
           {
             label: 'Kelas Aktif',
@@ -4492,7 +4534,7 @@ function Dashboard({
             page: 'ceo-classes',
           },
           {
-            label: 'Pendapatan',
+            label: 'Business Overview',
             value: formatRupiah(metrics?.totalRevenue || 0),
             icon: '💳',
             page: 'ceo-revenue',
@@ -4596,6 +4638,13 @@ function Dashboard({
             </section>
           )}
 
+          {user.role === 'Admin' && (managementMessages || []).length > 0 && (
+            <section className="admin-activity-panel management-message-inbox">
+              <div className="section-heading"><div><span className="eyebrow">MESSAGE FROM CEO</span><h2>Pesan Manajemen</h2></div><span className="data-count">{managementMessages.length} pesan</span></div>
+              <div className="management-message-list">{managementMessages.slice(0, 6).map((item) => <article key={item.messageId}><div><strong>{item.senderName || 'CEO'}</strong><small>{item.createdAt}</small></div><p>{item.text}</p></article>)}</div>
+            </section>
+          )}
+
           {user.role === 'CEO' && (
             <AttendanceFollowUpPanel
               alerts={attendanceFollowUps}
@@ -4681,29 +4730,21 @@ function Dashboard({
       </>
       ) : activePage === 'ceo-classes' && user.role === 'CEO' ? (
         <section className="ceo-detail-page">
-          <div className="page-heading"><div><span className="eyebrow">CEO • CLASSES</span><h1>Kelas Aktif</h1><p>{ceoMonitoring?.activeClasses?.length || 0} Class ID aktif</p></div></div>
-          <div className="ceo-active-class-list">
-            {(ceoMonitoring?.activeClasses || []).map((item) => <article key={item.classId}>
-              <div><strong>{item.className || item.classId}</strong><small>{item.classId} • {item.program || '—'} • {item.tutor || '—'}</small></div>
-              <span>{item.schedule || '—'}</span>
-            </article>)}
-          </div>
-          <section className="ceo-class-business-monitor">
-            <article className="ceo-monitor-panel">
-              <header><div><span className="eyebrow">TUITION TREND</span><h3>Pembayaran Les</h3></div><small>3 bulan terakhir</small></header>
-              <div className="ceo-tuition-trend">{(ceoMonitoring?.tuitionMonthly || []).map((item) => <div key={item.period} className="ceo-tuition-month"><div className="ceo-tuition-month-head"><strong>{item.label}</strong><span>{item.percentage}%</span></div><div className="ceo-tuition-progress"><i style={{ width: `${Math.min(100, Math.max(0, item.percentage || 0))}%` }} /></div><div className="ceo-tuition-meta"><span>{item.paidStudents}/{item.totalStudents} siswa</span><strong>{formatRupiah(item.revenue)}</strong></div></div>)}</div>
-            </article>
-            <article className="ceo-monitor-panel"><header><div><span className="eyebrow">BOOK SALES</span><h3>Penjualan Buku</h3></div><strong>{ceoMonitoring?.bookSummary?.purchased || 0}</strong></header><p>{ceoMonitoring?.bookSummary?.received || 0} sudah diterima • {ceoMonitoring?.bookSummary?.pendingDelivery || 0} masih diproses</p></article>
-            <article className="ceo-monitor-panel"><header><div><span className="eyebrow">ID CARD SALES</span><h3>Penjualan ID Card</h3></div><strong>{ceoMonitoring?.idCardSummary?.purchased || 0}</strong></header><p>Pembelian ID Card terverifikasi.</p></article>
-          </section>
+          <div className="page-heading"><div><span className="eyebrow">CEO • CLASS INTELLIGENCE</span><h1>Kelas & Perkembangan</h1><p>Ringkasan operasional dan tren akademik untuk mendukung pengambilan keputusan.</p></div></div>
+          <div className="ceo-class-summary-grid"><article><small>JUMLAH KELAS</small><strong>{ceoMonitoring?.classInsights?.length || 0}</strong><span>Kelas aktif</span></article><article><small>SISWA AKTIF</small><strong>{metrics?.activeStudents || 0}</strong><span>Sedang mengikuti program</span></article><article><small>ALUMNI</small><strong>{metrics?.alumniStudents || 0}</strong><span>Arsip alumni</span></article><article><small>CUTI SAAT INI</small><strong>{metrics?.leaveStudents || 0}</strong><span>Tidak ditagihkan bulan ini</span></article></div>
+          <div className="section-heading ceo-class-picker-heading"><div><span className="eyebrow">PILIH KELAS</span><h2>Monitoring Per Kelas</h2></div><span className="data-count">{ceoMonitoring?.classInsights?.length || 0} kelas</span></div>
+          <div className="ceo-class-card-grid">{(ceoMonitoring?.classInsights || []).map((item) => <button type="button" className={selectedCeoClassId === item.classId ? 'active' : ''} key={item.classId} onClick={() => setSelectedCeoClassId(item.classId)}><span>🏫</span><div><strong>{item.className || item.classId}</strong><small>{item.program || '—'} • {item.studentCount} siswa</small><p>{item.tutor || 'Tutor belum ditentukan'} • {item.schedule || 'Jadwal belum tersedia'}</p></div><b>→</b></button>)}</div>
+          {selectedCeoClass && <section className="ceo-selected-class-panel"><header><div><span className="eyebrow">{selectedCeoClass.classId} • {selectedCeoClass.program}</span><h2>{selectedCeoClass.className}</h2><p>{selectedCeoClass.tutor} • {selectedCeoClass.schedule}</p></div><strong>{selectedCeoClass.studentCount}<small>SISWA</small></strong></header><div className="ceo-class-kpi-grid"><article><span>Perkembangan Akademik</span><strong>{selectedCeoClass.academicProgress}%</strong><i><b style={{width:`${selectedCeoClass.academicProgress}%`}} /></i></article><article><span>Kehadiran</span><strong>{selectedCeoClass.attendance}%</strong><i><b style={{width:`${selectedCeoClass.attendance}%`}} /></i></article><article><span>Penyelesaian Tugas</span><strong>{selectedCeoClass.assignmentProgress}%</strong><i><b style={{width:`${selectedCeoClass.assignmentProgress}%`}} /></i></article><article><span>Penyelesaian Tantangan</span><strong>{selectedCeoClass.challengeProgress}%</strong><i><b style={{width:`${selectedCeoClass.challengeProgress}%`}} /></i></article></div><div className="ceo-class-trend-table"><div className="ceo-trend-head"><span>Bulan</span><span>Akademik</span><span>Kehadiran</span><span>Tugas</span><span>Tantangan</span></div>{(selectedCeoClass.trends || []).map((trend) => <div key={trend.period}><strong>{trend.label}</strong><span>{trend.academic}%</span><span>{trend.attendance}%</span><span>{trend.assignments}%</span><span>{trend.challenges}%</span></div>)}</div><div className="ceo-decision-note"><strong>Catatan pengambilan keputusan</strong><p>{selectedCeoClass.attendance < 75 ? 'Kehadiran kelas perlu ditindaklanjuti bersama tutor dan admin.' : selectedCeoClass.assignmentProgress < 70 ? 'Penyelesaian tugas perlu menjadi fokus tindak lanjut.' : selectedCeoClass.academicProgress < 70 ? 'Perlu evaluasi materi, strategi pembelajaran, atau dukungan tambahan.' : 'Tren kelas berada dalam kondisi baik. Pertahankan monitoring rutin.'}</p></div></section>}
         </section>
       ) : activePage === 'ceo-revenue' && user.role === 'CEO' ? (
-        <section className="ceo-detail-page">
-          <div className="page-heading"><div><span className="eyebrow">CEO • REVENUE</span><h1>Rincian Pendapatan</h1><p>Total 3 bulan terakhir: {formatRupiah(ceoMonitoring?.revenueLast3Months || 0)}</p></div></div>
-          <div className="ceo-revenue-method-grid">
-            {(ceoMonitoring?.revenueByMethod || []).map((item) => <article key={item.method}><span>{item.method}</span><strong>{formatRupiah(item.amount)}</strong><small>{item.transactions} transaksi</small></article>)}
-          </div>
-          <button type="button" className="ceo-detail-link-button" onClick={() => onNavigate('payment-confirmations')}>Buka Payment Center →</button>
+        <section className="ceo-detail-page ceo-business-page">
+          <div className="page-heading"><div><span className="eyebrow">CEO • BUSINESS OVERVIEW</span><h1>Ringkasan Bisnis</h1><p>Laporan eksekutif pemasukan, pembayaran siswa, penjualan produk, dan rekening penerima selama 3 bulan terakhir.</p></div></div>
+          <div className="ceo-business-kpi"><article><small>TOTAL PENDAPATAN</small><strong>{formatRupiah(ceoMonitoring?.revenueLast3Months || 0)}</strong><span>3 bulan terakhir</span></article><article><small>RATA-RATA BULANAN</small><strong>{formatRupiah(ceoMonitoring?.averageMonthlyRevenue || 0)}</strong><span>Rata-rata 3 bulan</span></article><button type="button" onClick={() => setCeoFinanceList('paid')}><small>SUDAH BAYAR BULAN INI</small><strong>{ceoMonitoring?.currentPaidStudents?.length || 0}</strong><span>Klik untuk melihat nama →</span></button><button type="button" onClick={() => setCeoFinanceList('unpaid')}><small>BELUM BAYAR BULAN INI</small><strong>{ceoMonitoring?.currentUnpaidStudents?.length || 0}</strong><span>Klik untuk melihat nama →</span></button></div>
+          {ceoFinanceList && <section className="ceo-finance-name-panel"><header><div><span className="eyebrow">DETAIL</span><h2>{ceoFinanceList === 'paid' ? 'Siswa Sudah Membayar' : ceoFinanceList === 'unpaid' ? 'Siswa Belum Membayar' : ceoFinanceList === 'books' ? 'Pembeli Paket Buku' : 'Pembeli ID Card'}</h2></div><button type="button" onClick={() => setCeoFinanceList('')}>×</button></header><div>{ceoFinanceListData.length ? ceoFinanceListData.map((item, index) => <article key={item.studentId || item.paymentId || index}><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{item.fullName || item.studentName || 'Siswa'}</strong><small>{item.studentId || '—'} • {item.classId || item.program || item.itemLabel || '—'}</small></div>{item.amount ? <b>{formatRupiah(item.amount)}</b> : <b>{item.period || ceoMonitoring?.currentPeriod}</b>}</article>) : <div className="empty-state">Belum ada data pada kelompok ini.</div>}</div></section>}
+          <section className="ceo-business-section"><div className="section-heading"><div><span className="eyebrow">REVENUE TREND</span><h2>Pendapatan 3 Bulan</h2></div></div><div className="ceo-revenue-month-grid">{(ceoMonitoring?.revenueMonthly || []).map((item) => <article key={item.period}><span>{item.label}</span><strong>{formatRupiah(item.amount)}</strong><i><b style={{width:`${Math.min(100, (item.amount / Math.max(...(ceoMonitoring?.revenueMonthly || []).map((entry) => entry.amount), 1)) * 100)}%`}} /></i></article>)}</div></section>
+          <section className="ceo-business-columns"><article><header><span className="eyebrow">INCOME SOURCES</span><h3>Sumber Pendapatan</h3></header><div className="ceo-finance-breakdown">{(ceoMonitoring?.revenueByCategory || []).map((item) => <div key={item.category}><span>{item.category}<small>{item.transactions} transaksi</small></span><strong>{formatRupiah(item.amount)}</strong></div>)}</div></article><article><header><span className="eyebrow">RECEIVING ACCOUNTS</span><h3>Rekening Penerima</h3></header><div className="ceo-finance-breakdown">{(ceoMonitoring?.revenueByMethod || []).map((item) => <div key={item.method}><span>{item.method}<small>{item.transactions} transaksi</small></span><strong>{formatRupiah(item.amount)}</strong></div>)}</div></article></section>
+          <section className="ceo-product-summary"><button type="button" onClick={() => setCeoFinanceList('books')}><span>▤</span><div><small>BOOK SALES</small><strong>{ceoMonitoring?.bookSummary?.purchased || 0} paket terjual</strong><p>{ceoMonitoring?.bookSummary?.received || 0} diterima • {ceoMonitoring?.bookSummary?.pendingDelivery || 0} diproses</p></div><b>→</b></button><button type="button" onClick={() => setCeoFinanceList('cards')}><span>◇</span><div><small>ID CARD SALES</small><strong>{ceoMonitoring?.idCardSummary?.purchased || 0} ID Card terjual</strong><p>Transaksi terverifikasi</p></div><b>→</b></button></section>
+          <section className="ceo-admin-message-card"><div><span className="eyebrow">CEO → ADMIN</span><h2>Pesan untuk Admin</h2><p>Kirim arahan atau tindak lanjut operasional langsung melalui Academic Suite.</p></div><form onSubmit={sendCeoMessage}><textarea rows="4" maxLength="1000" value={ceoAdminMessage} onChange={(event) => setCeoAdminMessage(event.target.value)} placeholder="Contoh: Mohon tindak lanjuti siswa yang belum membayar sebelum akhir pekan." /><div><small>{ceoAdminMessage.length}/1000</small><button type="submit" disabled={ceoMessageSending || !ceoAdminMessage.trim()}>{ceoMessageSending ? 'Mengirim...' : 'Kirim ke Admin'}</button></div></form>{ceoMessageStatus && <p className="ceo-message-status">{ceoMessageStatus}</p>}{(ceoMonitoring?.managementMessages || []).length > 0 && <div className="ceo-sent-message-list"><strong>Pesan terkirim terbaru</strong>{ceoMonitoring.managementMessages.slice(0,4).map((item) => <article key={item.messageId}><p>{item.text}</p><small>{item.createdAt}</small></article>)}</div>}</section>
         </section>
       ) : activePage === 'ceo-attendance' && user.role === 'CEO' ? (
         <section className="ceo-detail-page">
@@ -4713,7 +4754,7 @@ function Dashboard({
             <div><span>{ceoMonitoring?.attendanceCurrentMonth?.present || 0} hadir</span><span>dari {ceoMonitoring?.attendanceCurrentMonth?.totalRecords || 0} catatan kehadiran</span></div>
           </div>
         </section>
-      ) : activePage === 'students' ? (
+      ) : activePage === 'students' && user.role === 'Admin' ? (
         <StudentsPage
           students={students}
           loading={studentsLoading}
@@ -4740,12 +4781,13 @@ function Dashboard({
         <section className="admin-menu-page">
           <div className="page-heading"><div><span className="eyebrow">OPERATIONS</span><h1>Menu</h1><p>Akses cepat operasional dan aktivitas Admin.</p></div></div>
           <div className="admin-menu-links">
-            <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>
-            <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>
-            <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('attendance-watch')}><span>◷</span><div><strong>Attendance Watch</strong><small>Tindak lanjut ketidakhadiran siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
-            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Monitoring Kelas</strong><small>Kelas aktif, tuition trend, buku, dan ID Card</small></div><b>→</b></button>}
+            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Kelas & Perkembangan</strong><small>Tren akademik, kehadiran, tugas, dan tantangan</small></div><b>→</b></button>}
+            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-revenue')}><span>▥</span><div><strong>Business Overview</strong><small>Keuangan 3 bulan, tuition, produk, dan rekening penerima</small></div><b>→</b></button>}
           </div>
         </section>
       ) : (
@@ -4765,18 +4807,10 @@ function Dashboard({
           Beranda
         </button>
 
-        <button
-          className={activePage === 'students' ? 'active' : ''}
-          onClick={() => onNavigate('students')}
-        >
-          <span>👥</span>
-          Siswa
-        </button>
+        {user.role === 'CEO' ? <button className={activePage === 'ceo-classes' ? 'active' : ''} onClick={() => onNavigate('ceo-classes')}><span>🏫</span>Kelas</button> : <button className={activePage === 'students' ? 'active' : ''} onClick={() => onNavigate('students')}><span>👥</span>Siswa</button>}
 
         {user.role === 'Admin' && <button className={activePage === 'registrations' ? 'active' : ''} onClick={() => onNavigate('registrations')}><span>▤</span>Pendaftaran</button>}
-        <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}>
-          <span>💳</span>Pembayaran
-        </button>
+        {user.role === 'CEO' ? <button className={activePage === 'ceo-revenue' ? 'active' : ''} onClick={() => onNavigate('ceo-revenue')}><span>▥</span>Business</button> : <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}><span>💳</span>Pembayaran</button>}
 
         <button
           className={activePage === 'menu' ? 'active' : ''}
