@@ -27657,3 +27657,53 @@ button:disabled{cursor:not-allowed!important;opacity:.52!important}
   .tutor-printable-report table{width:100%!important;min-width:0!important}
   .tutor-report-toolbar,.tutor-dashboard-header,.tutor-bottom-navigation{display:none!important}
 }
+
+/* =========================================================
+   MOC V60 — Primary assessment belongs to Tutor Journal.
+   ========================================================= */
+.tutor-dashboard .journal-primary-assessment{
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr) auto;
+  align-items:center;
+  gap:13px;
+  min-width:0;
+  padding:15px;
+  border:1px solid var(--moc-primary);
+  border-radius:17px;
+  background:linear-gradient(145deg,var(--moc-primary-soft),var(--moc-surface-solid));
+}
+.tutor-dashboard .journal-primary-assessment>span{
+  display:grid;
+  place-items:center;
+  width:48px;
+  height:48px;
+  border-radius:14px;
+  color:#05202a;
+  background:var(--moc-primary);
+}
+.tutor-dashboard .journal-primary-assessment>span svg{width:25px;height:25px}
+.tutor-dashboard .journal-primary-assessment>div{display:grid;gap:3px;min-width:0}
+.tutor-dashboard .journal-primary-assessment :is(small,strong,p){display:block;min-width:0;margin:0;line-height:1.42;overflow-wrap:anywhere}
+.tutor-dashboard .journal-primary-assessment small{color:var(--moc-primary-strong);font-size:9px;font-weight:900;letter-spacing:.08em}
+.tutor-dashboard .journal-primary-assessment strong{color:var(--moc-text);font-size:15px}
+.tutor-dashboard .journal-primary-assessment p{color:var(--moc-muted);font-size:11px}
+.tutor-dashboard .journal-primary-assessment>button{
+  min-height:42px;
+  padding:10px 14px;
+  border:1px solid var(--moc-primary);
+  border-radius:12px;
+  color:var(--moc-on-primary);
+  background:var(--moc-primary);
+  font:inherit;
+  font-size:12px;
+  font-weight:900;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.tutor-dashboard .journal-primary-assessment>button b{margin-left:5px}
+
+@media(max-width:620px){
+  .tutor-dashboard .journal-primary-assessment{grid-template-columns:44px minmax(0,1fr);padding:13px}
+  .tutor-dashboard .journal-primary-assessment>span{width:44px;height:44px}
+  .tutor-dashboard .journal-primary-assessment>button{grid-column:1/-1;width:100%}
+}
