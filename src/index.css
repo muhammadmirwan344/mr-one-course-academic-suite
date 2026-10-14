@@ -25230,6 +25230,192 @@ html[data-theme='light'] .student-directory-hero-v32,html[data-theme='light'] .s
 }
 
 /* =========================================================
+   MOC V57 — LIGHT / DARK CONTROL CONSISTENCY
+   Theme-only finishing layer. No layout or workflow changes.
+   ========================================================= */
+:root,
+html[data-theme='dark']{
+  --moc-control-bg:var(--moc-surface-solid,#0d1c2d);
+  --moc-control-bg-hover:var(--moc-surface-soft,#101f31);
+  --moc-control-text:var(--moc-text,#f6f9fc);
+  --moc-control-muted:var(--moc-muted,#8ea3b7);
+  --moc-on-primary:#05202a;
+  --moc-danger-soft:rgba(251,113,133,.11);
+  --moc-danger-line:rgba(251,113,133,.34);
+  --moc-danger-text:#ff9aaa;
+}
+
+html[data-theme='light']{
+  --moc-control-bg:#ffffff;
+  --moc-control-bg-hover:#eef7f9;
+  --moc-control-text:#163047;
+  --moc-control-muted:#657b8d;
+  --moc-on-primary:#ffffff;
+  --moc-danger-soft:#fff1f3;
+  --moc-danger-line:rgba(190,48,72,.25);
+  --moc-danger-text:#b82f48;
+}
+
+/* Buttons that behave as cards or secondary controls follow the active theme. */
+:is(
+  .role-card,
+  .academic-heading>button,
+  .academic-card-grid button,
+  .student-detail-page>header button,
+  .full-menu-header>button,
+  .full-menu-grid button,
+  .scroll-report-cards>button,
+  .payment-job-cards>button,
+  .payment-workflow-heading>button,
+  .registration-status-tabs button,
+  .task-type-picker button,
+  .challenge-program-grid button,
+  .tutor-academic-menu>button,
+  .tutor-review-list>button,
+  .tutor-class-card,
+  .tutor-report-student-grid>button,
+  .student-account-popover>button,
+  .student-page-context-heading>button,
+  .badge-action-grid>button
+){
+  border-color:var(--moc-border) !important;
+  color:var(--moc-control-text) !important;
+  background-color:var(--moc-control-bg) !important;
+}
+
+:is(
+  .role-card,
+  .academic-heading>button,
+  .academic-card-grid button,
+  .student-detail-page>header button,
+  .full-menu-header>button,
+  .full-menu-grid button,
+  .scroll-report-cards>button,
+  .payment-job-cards>button,
+  .payment-workflow-heading>button,
+  .registration-status-tabs button,
+  .task-type-picker button,
+  .challenge-program-grid button,
+  .tutor-academic-menu>button,
+  .tutor-review-list>button,
+  .tutor-class-card,
+  .tutor-report-student-grid>button,
+  .student-account-popover>button,
+  .student-page-context-heading>button,
+  .badge-action-grid>button
+):hover{
+  border-color:var(--moc-border-strong) !important;
+  background-color:var(--moc-control-bg-hover) !important;
+}
+
+/* Keep selected controls visibly selected in both themes. */
+:is(
+  .role-card.active,
+  .registration-status-tabs button.active,
+  .task-type-picker button.active,
+  .theme-switch button.active
+){
+  border-color:var(--moc-primary) !important;
+  color:var(--moc-primary-strong) !important;
+  background:var(--moc-primary-soft) !important;
+}
+
+.next-class-card,
+.open-attendance-control,
+.tutor-report-launch{
+  color:var(--moc-text) !important;
+  border-color:var(--moc-border-strong) !important;
+  background:linear-gradient(135deg,var(--moc-primary-soft),var(--moc-surface-solid)) !important;
+}
+
+.next-class-card :is(p,small),
+.open-attendance-control small,
+.tutor-report-launch small,
+.academic-card-grid small,
+.full-menu-grid button>small,
+.tutor-academic-menu small,
+.tutor-review-list small{
+  color:var(--moc-control-muted) !important;
+}
+
+/* Navigation surfaces and labels must switch with the selected theme. */
+:is(.mobile-navigation,.tutor-bottom-navigation){
+  border-color:var(--moc-border) !important;
+  background:color-mix(in srgb,var(--moc-surface-solid) 94%,transparent) !important;
+  box-shadow:var(--moc-shadow) !important;
+}
+
+:is(.mobile-navigation,.tutor-bottom-navigation) button{
+  color:var(--moc-muted) !important;
+  background:transparent !important;
+}
+
+:is(.mobile-navigation,.tutor-bottom-navigation) button.active{
+  color:var(--moc-primary-strong) !important;
+  background:var(--moc-primary-soft) !important;
+}
+
+.theme-switch,
+.student-header-refresh{
+  border-color:var(--moc-border) !important;
+  color:var(--moc-primary-strong) !important;
+  background:var(--moc-control-bg) !important;
+}
+
+.theme-switch button{
+  color:var(--moc-muted) !important;
+  background:transparent !important;
+}
+
+.theme-switch button.active{
+  color:var(--moc-on-primary) !important;
+  background:var(--moc-primary) !important;
+}
+
+/* Primary actions use readable contrast in light and dark modes. */
+:is(
+  .detail-action,
+  .bulk-tuition-payment-form button[type='submit'],
+  .invoice-selection-action>button,
+  .ceo-admin-message-card form button,
+  .tutor-journal-form>button[type='submit'],
+  .attendance-save-bar button
+){
+  color:var(--moc-on-primary) !important;
+}
+
+/* Destructive actions stay clear without looking like dark-theme remnants. */
+:is(
+  .full-menu-logout,
+  .student-logout-detail,
+  .student-account-signout,
+  .cancel-verification
+){
+  border-color:var(--moc-danger-line) !important;
+  color:var(--moc-danger-text) !important;
+  background:var(--moc-danger-soft) !important;
+}
+
+/* Native form controls and disabled buttons remain legible in either mode. */
+:is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page)
+  :is(input,select,textarea){
+  color:var(--moc-text) !important;
+  background:var(--moc-surface-solid) !important;
+  border-color:var(--moc-border) !important;
+}
+
+:is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page)
+  :is(input,textarea)::placeholder{
+  color:var(--moc-muted) !important;
+  opacity:.82 !important;
+}
+
+button:disabled{
+  cursor:not-allowed !important;
+  opacity:.52 !important;
+}
+
+/* =========================================================
    MOC V42 — STUDENT PROFILE LAYOUT REPAIR
    Scoped to the student profile only. Do not reuse globally.
    ========================================================= */
@@ -27255,3 +27441,68 @@ html[data-theme='light'] .student-directory-hero-v32,html[data-theme='light'] .s
     text-align:left;
   }
 }
+
+/* V57 final cascade placement — theme controls must remain last. */
+:is(
+  .role-card,
+  .academic-heading>button,
+  .academic-card-grid button,
+  .student-detail-page>header button,
+  .full-menu-header>button,
+  .full-menu-grid button,
+  .scroll-report-cards>button,
+  .payment-job-cards>button,
+  .payment-workflow-heading>button,
+  .registration-status-tabs button,
+  .task-type-picker button,
+  .challenge-program-grid button,
+  .tutor-academic-menu>button,
+  .tutor-review-list>button,
+  .tutor-class-card,
+  .tutor-report-student-grid>button,
+  .student-account-popover>button,
+  .student-page-context-heading>button,
+  .badge-action-grid>button
+){border-color:var(--moc-border)!important;color:var(--moc-control-text)!important;background-color:var(--moc-control-bg)!important}
+
+:is(
+  .role-card,
+  .academic-heading>button,
+  .academic-card-grid button,
+  .student-detail-page>header button,
+  .full-menu-header>button,
+  .full-menu-grid button,
+  .scroll-report-cards>button,
+  .payment-job-cards>button,
+  .payment-workflow-heading>button,
+  .registration-status-tabs button,
+  .task-type-picker button,
+  .challenge-program-grid button,
+  .tutor-academic-menu>button,
+  .tutor-review-list>button,
+  .tutor-class-card,
+  .tutor-report-student-grid>button,
+  .student-account-popover>button,
+  .student-page-context-heading>button,
+  .badge-action-grid>button
+):hover{border-color:var(--moc-border-strong)!important;background-color:var(--moc-control-bg-hover)!important}
+
+:is(.role-card.active,.registration-status-tabs button.active,.task-type-picker button.active){border-color:var(--moc-primary)!important;color:var(--moc-primary-strong)!important;background:var(--moc-primary-soft)!important}
+
+.next-class-card,.open-attendance-control,.tutor-report-launch{color:var(--moc-text)!important;border-color:var(--moc-border-strong)!important;background:linear-gradient(135deg,var(--moc-primary-soft),var(--moc-surface-solid))!important}
+.next-class-card :is(p,small),.open-attendance-control small,.tutor-report-launch small,.academic-card-grid small,.full-menu-grid button>small,.tutor-academic-menu small,.tutor-review-list small{color:var(--moc-control-muted)!important}
+
+:is(.mobile-navigation,.tutor-bottom-navigation){border-color:var(--moc-border)!important;background:color-mix(in srgb,var(--moc-surface-solid) 94%,transparent)!important;box-shadow:var(--moc-shadow)!important}
+:is(.mobile-navigation,.tutor-bottom-navigation) button{color:var(--moc-muted)!important;background:transparent!important}
+:is(.mobile-navigation,.tutor-bottom-navigation) button.active{color:var(--moc-primary-strong)!important;background:var(--moc-primary-soft)!important}
+
+.theme-switch,.student-header-refresh{border-color:var(--moc-border)!important;color:var(--moc-primary-strong)!important;background:var(--moc-control-bg)!important}
+.theme-switch button{color:var(--moc-muted)!important;background:transparent!important}
+.theme-switch button.active{border-color:var(--moc-primary)!important;color:var(--moc-on-primary)!important;background:var(--moc-primary)!important}
+
+:is(.detail-action,.bulk-tuition-payment-form button[type='submit'],.invoice-selection-action>button,.ceo-admin-message-card form button,.tutor-journal-form>button[type='submit'],.attendance-save-bar button){color:var(--moc-on-primary)!important}
+:is(.full-menu-logout,.student-logout-detail,.student-account-signout,.cancel-verification){border-color:var(--moc-danger-line)!important;color:var(--moc-danger-text)!important;background:var(--moc-danger-soft)!important}
+
+:is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page) :is(input,select,textarea){color:var(--moc-text)!important;background:var(--moc-surface-solid)!important;border-color:var(--moc-border)!important}
+:is(.student-main-menu,.student-detail-page,.app-dashboard,.tutor-dashboard,.reference-login-page) :is(input,textarea)::placeholder{color:var(--moc-muted)!important;opacity:.82!important}
+button:disabled{cursor:not-allowed!important;opacity:.52!important}
