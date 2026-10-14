@@ -26804,3 +26804,454 @@ html[data-theme='light'] .student-directory-hero-v32,html[data-theme='light'] .s
     font-size:inherit!important;
   }
 }
+
+/* MOC V53 — focused Tutor Academic navigation */
+.tutor-dashboard section.tutor-academic-master{
+  display:grid !important;
+  gap:18px !important;
+  width:100% !important;
+  min-width:0 !important;
+  padding:22px !important;
+}
+.tutor-dashboard section.tutor-academic-master>.tutor-section-heading{
+  margin:0 !important;
+}
+.tutor-dashboard section.tutor-academic-master>.tutor-section-heading>div{
+  display:grid !important;
+  gap:5px !important;
+  min-width:0 !important;
+}
+.tutor-dashboard section.tutor-academic-master>.tutor-section-heading :is(span,h2,p){
+  display:block !important;
+  min-width:0 !important;
+  margin:0 !important;
+  line-height:1.4 !important;
+  overflow-wrap:anywhere !important;
+}
+.tutor-dashboard .tutor-academic-menu{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:12px !important;
+  min-width:0 !important;
+}
+.tutor-dashboard .tutor-academic-menu>button{
+  grid-template-columns:48px minmax(0,1fr) auto !important;
+  align-items:center !important;
+  min-width:0 !important;
+  min-height:112px !important;
+  padding:16px !important;
+  gap:12px !important;
+  overflow:hidden !important;
+}
+.tutor-dashboard .tutor-academic-menu>button:first-child{
+  grid-column:1/-1 !important;
+  border-color:var(--moc-primary) !important;
+  background:linear-gradient(145deg,var(--moc-primary-soft),var(--moc-surface-solid)) !important;
+}
+.tutor-dashboard .tutor-academic-menu>button>span{
+  width:48px !important;
+  height:48px !important;
+  border-radius:14px !important;
+  font-size:21px !important;
+}
+.tutor-dashboard .tutor-academic-menu>button>div{
+  display:grid !important;
+  gap:5px !important;
+  min-width:0 !important;
+}
+.tutor-dashboard .tutor-academic-menu>button :is(strong,small){
+  display:block !important;
+  min-width:0 !important;
+  margin:0 !important;
+  line-height:1.4 !important;
+  white-space:normal !important;
+  overflow-wrap:anywhere !important;
+}
+.tutor-dashboard .tutor-academic-menu>button strong{
+  color:var(--moc-text) !important;
+  font-size:15px !important;
+}
+.tutor-dashboard .tutor-academic-menu>button small{
+  color:var(--moc-muted) !important;
+  font-size:11px !important;
+}
+.tutor-dashboard div.tutor-academic-master{
+  align-content:start !important;
+  padding-bottom:12px !important;
+}
+.tutor-dashboard div.tutor-academic-master>.tutor-back{
+  justify-self:start !important;
+  margin:0 !important;
+}
+.tutor-dashboard div.tutor-academic-master>.tutor-academic-master-heading{
+  display:grid !important;
+  gap:5px !important;
+  min-width:0 !important;
+  margin:0 !important;
+}
+.tutor-dashboard div.tutor-academic-master>.tutor-academic-master-heading :is(span,h1,p){
+  display:block !important;
+  min-width:0 !important;
+  margin:0 !important;
+  line-height:1.4 !important;
+  overflow-wrap:anywhere !important;
+}
+
+@media(max-width:640px){
+  .tutor-dashboard section.tutor-academic-master{
+    gap:15px !important;
+    padding:16px !important;
+  }
+  .tutor-dashboard .tutor-academic-menu{
+    grid-template-columns:minmax(0,1fr) !important;
+  }
+  .tutor-dashboard .tutor-academic-menu>button:first-child{
+    grid-column:auto !important;
+  }
+  .tutor-dashboard .tutor-academic-menu>button{
+    min-height:96px !important;
+    padding:14px !important;
+  }
+}
+
+/* MOC V54 — Tutor Academic Overview and Reports */
+.tutor-dashboard .tutor-academic-overview{
+  display:grid;
+  gap:18px;
+  min-width:0;
+  padding-bottom:120px;
+}
+.tutor-dashboard .tutor-academic-overview-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  min-width:0;
+  padding-bottom:18px;
+  border-bottom:1px solid var(--moc-border);
+}
+.tutor-dashboard .tutor-academic-overview-heading>div{
+  display:grid;
+  gap:6px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-academic-overview-heading :is(span,h1,p){
+  display:block;
+  min-width:0;
+  margin:0;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.tutor-dashboard .tutor-academic-overview-heading>div>span{
+  color:var(--moc-primary);
+  font-size:10px;
+  font-weight:950;
+  letter-spacing:.14em;
+}
+.tutor-dashboard .tutor-academic-overview-heading h1{
+  font-size:clamp(27px,4vw,40px);
+}
+.tutor-dashboard .tutor-academic-overview-heading p{
+  color:var(--moc-muted);
+  font-size:13px;
+}
+.tutor-dashboard .tutor-academic-overview-heading>strong,
+.tutor-dashboard .tutor-academic-summary-hero>strong{
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+  min-width:92px;
+  min-height:78px;
+  padding:12px;
+  border:1px solid rgba(36,199,218,.3);
+  border-radius:18px;
+  background:var(--moc-primary-soft);
+  color:var(--moc-primary);
+  font-size:27px;
+  line-height:1;
+}
+.tutor-dashboard .tutor-academic-overview-heading>strong small,
+.tutor-dashboard .tutor-academic-summary-hero>strong small{
+  display:block;
+  margin-top:7px;
+  font-size:8px;
+  letter-spacing:.09em;
+}
+.tutor-dashboard .tutor-academic-class-picker{
+  display:grid;
+  gap:9px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-academic-class-picker>span{
+  color:var(--moc-muted);
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+.tutor-dashboard .tutor-academic-class-picker>div{
+  display:flex;
+  gap:9px;
+  min-width:0;
+  padding-bottom:4px;
+  overflow-x:auto;
+  scrollbar-width:thin;
+}
+.tutor-dashboard .tutor-academic-class-picker button{
+  display:grid;
+  gap:4px;
+  flex:0 0 min(250px,72vw);
+  min-width:0;
+  padding:13px 15px;
+  border:1px solid var(--moc-border);
+  border-radius:15px;
+  background:var(--moc-surface-solid);
+  color:var(--moc-text);
+  text-align:left;
+  cursor:pointer;
+}
+.tutor-dashboard .tutor-academic-class-picker button.active{
+  border-color:var(--moc-primary);
+  background:var(--moc-primary-soft);
+  box-shadow:inset 0 0 0 1px var(--moc-primary);
+}
+.tutor-dashboard .tutor-academic-class-picker :is(strong,small){
+  display:block;
+  min-width:0;
+  line-height:1.4;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.tutor-dashboard .tutor-academic-class-picker small{
+  color:var(--moc-muted);
+  font-size:10px;
+}
+.tutor-dashboard .tutor-academic-summary-hero{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  min-width:0;
+  padding:20px 22px;
+  border:1px solid rgba(36,199,218,.35);
+  border-radius:22px;
+  background:linear-gradient(145deg,var(--moc-primary-soft),var(--moc-surface-solid));
+}
+.tutor-dashboard .tutor-academic-summary-hero>div{
+  display:grid;
+  gap:5px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-academic-summary-hero :is(span,h2,p){
+  display:block;
+  min-width:0;
+  margin:0;
+  line-height:1.4;
+  overflow-wrap:anywhere;
+}
+.tutor-dashboard .tutor-academic-summary-hero span{
+  color:var(--moc-primary);
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.12em;
+}
+.tutor-dashboard .tutor-academic-summary-hero p{
+  color:var(--moc-muted);
+  font-size:12px;
+}
+.tutor-dashboard .tutor-academic-action-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-academic-action-grid>button{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 58px;
+  align-items:center;
+  gap:16px;
+  min-width:0;
+  min-height:170px;
+  padding:22px;
+  border:1px solid var(--moc-border);
+  border-radius:23px;
+  background:var(--moc-surface-solid);
+  color:var(--moc-text);
+  text-align:left;
+  cursor:pointer;
+  box-shadow:0 12px 28px rgba(4,18,30,.06);
+  transition:transform .18s ease,border-color .18s ease;
+}
+.tutor-dashboard .tutor-academic-action-grid>button:hover{
+  transform:translateY(-2px);
+  border-color:var(--moc-primary);
+}
+.tutor-dashboard .tutor-academic-action-grid>button>div{
+  display:grid;
+  align-content:start;
+  gap:8px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>div>:is(small,strong,p){
+  display:block;
+  min-width:0;
+  margin:0;
+  line-height:1.4;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>div>small{
+  color:var(--moc-muted);
+  font-size:12px;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>div>strong{
+  font-size:21px;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>div>p{
+  color:var(--moc-muted);
+  font-size:11px;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>span{
+  display:grid;
+  place-items:center;
+  width:58px;
+  height:58px;
+  border-radius:18px;
+  color:#061b28;
+}
+.tutor-dashboard .tutor-academic-action-grid>button>span .modern-ui-icon{
+  width:29px;
+  height:29px;
+}
+.tutor-dashboard .tutor-academic-action-grid .green{background:#23c899}
+.tutor-dashboard .tutor-academic-action-grid .teal{background:#23b7c9}
+.tutor-dashboard .tutor-academic-action-grid .blue{background:#5b70f4}
+.tutor-dashboard .tutor-academic-action-grid .purple{background:#ad43ef}
+.tutor-dashboard .tutor-academic-action-grid .indigo{background:#6575ee}
+.tutor-dashboard .tutor-academic-action-grid .red{background:#ef6671}
+
+.tutor-dashboard .tutor-report-directory{
+  display:grid;
+  gap:18px;
+  min-width:0;
+  padding-bottom:120px;
+}
+.tutor-dashboard .tutor-report-class-select{
+  display:grid;
+  gap:7px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-report-class-select>span{
+  color:var(--moc-muted);
+  font-size:11px;
+  font-weight:850;
+}
+.tutor-dashboard .tutor-report-class-select select{
+  width:100%;
+  min-height:48px;
+  padding:0 13px;
+  border:1px solid var(--moc-border);
+  border-radius:13px;
+  background:var(--moc-bg);
+  color:var(--moc-text);
+}
+.tutor-dashboard .tutor-report-student-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-report-student-grid>button{
+  display:grid;
+  grid-template-columns:44px minmax(0,1fr) auto;
+  align-items:center;
+  gap:11px;
+  min-width:0;
+  padding:13px;
+  border:1px solid var(--moc-border);
+  border-radius:16px;
+  background:var(--moc-surface-solid);
+  color:var(--moc-text);
+  text-align:left;
+  cursor:pointer;
+}
+.tutor-dashboard .tutor-report-student-grid>button>span{
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  border-radius:13px;
+  background:var(--moc-primary-soft);
+  color:var(--moc-primary);
+  font-size:11px;
+  font-weight:950;
+}
+.tutor-dashboard .tutor-report-student-grid>button>div{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+.tutor-dashboard .tutor-report-student-grid :is(strong,small,b){
+  min-width:0;
+  line-height:1.4;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.tutor-dashboard .tutor-report-student-grid small{
+  color:var(--moc-muted);
+  font-size:10px;
+}
+.tutor-dashboard .tutor-report-student-grid b{
+  color:var(--moc-primary);
+  font-size:10px;
+  text-align:right;
+}
+
+@media(max-width:700px){
+  .tutor-dashboard .tutor-academic-overview-heading,
+  .tutor-dashboard .tutor-academic-summary-hero{
+    align-items:flex-start;
+  }
+  .tutor-dashboard .tutor-academic-overview-heading>strong,
+  .tutor-dashboard .tutor-academic-summary-hero>strong{
+    min-width:76px;
+    min-height:68px;
+    font-size:23px;
+  }
+  .tutor-dashboard .tutor-academic-action-grid,
+  .tutor-dashboard .tutor-report-student-grid{
+    grid-template-columns:minmax(0,1fr);
+  }
+  .tutor-dashboard .tutor-academic-action-grid>button{
+    min-height:140px;
+    padding:18px;
+  }
+}
+
+@media(max-width:430px){
+  .tutor-dashboard .tutor-academic-overview-heading{
+    display:grid;
+  }
+  .tutor-dashboard .tutor-academic-summary-hero{
+    padding:17px;
+  }
+  .tutor-dashboard .tutor-academic-action-grid>button{
+    grid-template-columns:minmax(0,1fr) 52px;
+    min-height:128px;
+    padding:16px;
+  }
+  .tutor-dashboard .tutor-academic-action-grid>button>span{
+    width:52px;
+    height:52px;
+    border-radius:16px;
+  }
+  .tutor-dashboard .tutor-academic-action-grid>button>div>strong{
+    font-size:18px;
+  }
+  .tutor-dashboard .tutor-report-student-grid>button{
+    grid-template-columns:40px minmax(0,1fr);
+  }
+  .tutor-dashboard .tutor-report-student-grid>button>b{
+    grid-column:2;
+    text-align:left;
+  }
+}

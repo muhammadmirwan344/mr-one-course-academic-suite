@@ -1,4 +1,4 @@
-// MR ONE COURSE — APP V31 FOCUSED PAYMENT WORKFLOWS — 4 OCTOBER 2026
+// MR ONE COURSE — APP V33 ADMIN MOBILE SAFE AREA — 4 OCTOBER 2026
 import React, { useEffect, useRef, useState } from 'react';
 
 class PaymentPageErrorBoundary extends React.Component {
@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbzW1OE9jpdAFPgDJsYEc361m8PKB9mNtPuopgrVWHeT0HdC1em2crf-Am3DKxUIRle1PA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzUaKwNN-5wSWYC4EmxFOlE1z0ZELEaKvbYY8ykADZijJj0MhljRGVNaZnzBwogHWP8tA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -678,6 +678,25 @@ function useEdgeSwipeBack(onBack, enabled = true) {
   }, [enabled, onBack]);
 }
 
+function normalizeStudentOverviewPayload(result, fallbackUser = {}) {
+  const payload = result?.overview || result?.data?.overview || result?.data || result || {};
+  const sourceProfile = payload?.profile || payload?.studentProfile || payload?.student || {};
+  const profile = {
+    ...sourceProfile,
+    studentId: sourceProfile.studentId || sourceProfile.id || fallbackUser.studentId || fallbackUser.relatedId || fallbackUser.userId || fallbackUser.username || '',
+    fullName: sourceProfile.fullName || sourceProfile.name || fallbackUser.fullName || fallbackUser.name || '',
+    school: sourceProfile.school || sourceProfile.sekolah || fallbackUser.school || fallbackUser.sekolah || '',
+    grade: sourceProfile.grade || sourceProfile.classGrade || sourceProfile.kelas || fallbackUser.grade || fallbackUser.kelas || '',
+    dob: sourceProfile.dob || sourceProfile.dateOfBirth || sourceProfile.birthDate || fallbackUser.dob || fallbackUser.dateOfBirth || '',
+    address: sourceProfile.address || sourceProfile.alamat || fallbackUser.address || fallbackUser.alamat || '',
+    waStudent: sourceProfile.waStudent || sourceProfile.studentPhone || sourceProfile.phone || fallbackUser.waStudent || fallbackUser.phone || '',
+    waParent: sourceProfile.waParent || sourceProfile.parentPhone || fallbackUser.waParent || fallbackUser.parentPhone || '',
+    photoLink: sourceProfile.photoLink || sourceProfile.photo || sourceProfile.avatar || fallbackUser.photoLink || fallbackUser.photo || '',
+  };
+
+  return { ...payload, profile };
+}
+
 function App() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -704,6 +723,7 @@ function App() {
   const [attendanceFollowUps, setAttendanceFollowUps] = useState([]);
   const [adminAttentionLists, setAdminAttentionLists] = useState({ absentMoreThanFour: [], unpaidAfterDaySeven: [], paymentWatchActive: false });
   const [ceoMonitoring, setCeoMonitoring] = useState(null);
+  const [managementMessages, setManagementMessages] = useState([]);
   const [adminActivities, setAdminActivities] = useState([]);
   const [studentOverview, setStudentOverview] = useState(null);
   const [studentOverviewLoading, setStudentOverviewLoading] = useState(false);
@@ -764,7 +784,7 @@ function App() {
       setToken(savedToken);
       setUser(parsedUser);
       if (String(parsedUser.role).toLowerCase() === 'siswa') {
-        loadStudentOverview(savedToken);
+        loadStudentOverview(savedToken, parsedUser);
       } else if (String(parsedUser.role).toLowerCase() === 'tutor') {
         loadTutorOverview(savedToken);
       } else {
@@ -793,6 +813,7 @@ function App() {
       setAttendanceFollowUps(result.attendanceFollowUps || []);
       setAdminAttentionLists(result.attentionLists || { absentMoreThanFour: [], unpaidAfterDaySeven: [], paymentWatchActive: false });
       setCeoMonitoring(result.ceoMonitoring || null);
+      setManagementMessages(result.managementMessages || []);
       setAdminActivities(result.adminActivities || []);
     } catch (error) {
       setMessage(error.message);
@@ -829,7 +850,7 @@ function App() {
     };
   }, [user, token, activePage]);
 
-  async function loadStudentOverview(activeToken) {
+  async function loadStudentOverview(activeToken, fallbackUser = user || {}) {
     setStudentOverviewLoading(true);
     setMessage('');
     try {
@@ -837,7 +858,7 @@ function App() {
         action: 'getStudentOverview',
         token: activeToken,
       });
-      setStudentOverview(result);
+      setStudentOverview(normalizeStudentOverviewPayload(result, fallbackUser));
     } catch (error) {
       const errorText = String(error.message || '');
       setMessage(errorText || (language === 'ID' ? 'Ringkasan akademik gagal dimuat.' : 'Academic overview could not be loaded.'));
@@ -911,7 +932,7 @@ function App() {
       setPassword('');
 
       if (String(result.user.role).toLowerCase() === 'siswa') {
-        await loadStudentOverview(result.token);
+        await loadStudentOverview(result.token, result.user);
       } else if (String(result.user.role).toLowerCase() === 'tutor') {
         await loadTutorOverview(result.token);
       } else {
@@ -960,7 +981,7 @@ function App() {
       setToken(result.token);
       setUser(result.user);
       setPassword('');
-      await loadStudentOverview(result.token);
+      await loadStudentOverview(result.token, result.user);
     } catch (error) {
       setMessage(
         error.message ||
@@ -1023,7 +1044,9 @@ function App() {
     try {
       const request = action === 'approveStudentRegistration'
         ? { action, token, approval: payload }
-        : { action, token, rejection: payload };
+        : action === 'cancelStudentRegistrationVerification'
+          ? { action, token, registrationId: payload.registrationId }
+          : { action, token, rejection: payload };
       const result = await callApi(request);
       setMessage(result.message);
       await loadRegistrations();
@@ -1204,6 +1227,7 @@ function App() {
         attendanceFollowUps={attendanceFollowUps}
         attentionLists={adminAttentionLists}
         ceoMonitoring={ceoMonitoring}
+        managementMessages={managementMessages}
         adminActivities={adminActivities}
         message={message}
         onRefresh={() => loadDashboard(token)}
@@ -1214,7 +1238,7 @@ function App() {
         studentsLoading={studentsLoading}
         studentSearch={studentSearch}
         onStudentSearchChange={setStudentSearch}
-        onStudentSearch={() => loadStudents(studentSearch, 1)}
+        onStudentSearch={(overrideSearch) => loadStudents(overrideSearch ?? studentSearch, 1)}
         studentPagination={studentPagination}
         onStudentPageChange={(page) =>
           loadStudents(studentSearch, page)
@@ -1223,6 +1247,7 @@ function App() {
         registrationsLoading={registrationsLoading}
         onApproveRegistration={(approval) => processRegistration('approveStudentRegistration', approval)}
         onRejectRegistration={(rejection) => processRegistration('rejectStudentRegistration', rejection)}
+        onCancelRegistrationVerification={(registration) => processRegistration('cancelStudentRegistrationVerification', registration)}
         onRefreshRegistrations={loadRegistrations}
         paymentConfirmations={paymentConfirmations}
         paymentRecords={paymentRecords}
@@ -1413,14 +1438,14 @@ function App() {
           </button>
           <div className="student-account-managed-note">
             <strong>{language === 'ID' ? 'Akun siswa diaktifkan oleh Manajemen' : 'Student accounts are activated by Management'}</strong>
-            <span>{language === 'ID' ? 'Siswa yang sudah menerima Student ID dan password awal dapat langsung Sign In.' : 'Students who have received a Student ID and initial password can sign in directly.'}</span>
+            <p>{language === 'ID' ? 'Siswa yang sudah menerima Student ID dan password awal dapat langsung Sign In.' : 'Students who have received a Student ID and initial password can sign in directly.'}</p>
           </div>
         </div>
         {studentAccessMode && <StudentAccessModal mode={studentAccessMode} language={language} activationForm={activationForm} setActivationForm={setActivationForm} registrationForm={registrationForm} setRegistrationForm={setRegistrationForm} registrationSuccess={registrationSuccess} loading={studentAccessLoading} message={message} onClose={() => { setStudentAccessMode(''); setRegistrationSuccess(null); setMessage(''); }} onSubmit={handleStudentAccess} />}
 
         <footer className="moc-copyright-footer">
-          <span>© 2026 Mr One Course Academic Suite</span>
-          <small>Designed &amp; Developed by Novita Rohmawati, S.Pd., Gr.</small>
+          <div>© 2026 Mr One Course Academic Suite</div>
+          <div>Designed &amp; Developed by Novita Rohmawati, S.Pd., Gr.</div>
         </footer>
       </section>
     </main>
@@ -1704,11 +1729,11 @@ function StudentAccessModal({ mode, language, activationForm, setActivationForm,
 
         {!isActivation && (
           <div className="registration-stepper registration-stepper-three">
-            <span className={registrationStep === 1 ? 'active' : registrationStep > 1 ? 'done' : ''}><b>1</b>{isID ? 'Data Siswa' : 'Student Data'}</span>
+            <span className={registrationStep === 1 ? 'active' : registrationStep > 1 ? 'done' : ''}><b>1</b><span className="registration-step-label">{isID ? 'Data Siswa' : 'Student Data'}</span></span>
             <i />
-            <span className={registrationStep === 2 ? 'active' : registrationStep > 2 ? 'done' : ''}><b>2</b>{isID ? 'Program & Jadwal' : 'Program & Schedule'}</span>
+            <span className={registrationStep === 2 ? 'active' : registrationStep > 2 ? 'done' : ''}><b>2</b><span className="registration-step-label">{isID ? 'Program & Jadwal' : 'Program & Schedule'}</span></span>
             <i />
-            <span className={registrationStep === 3 ? 'active' : ''}><b>3</b>{isID ? 'Pembayaran' : 'Payment'}</span>
+            <span className={registrationStep === 3 ? 'active' : ''}><b>3</b><span className="registration-step-label">{isID ? 'Pembayaran' : 'Payment'}</span></span>
           </div>
         )}
 
@@ -2004,18 +2029,19 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [attendanceSavedModal, setAttendanceSavedModal] = useState(null);
-  const [journal, setJournal] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, title: '', activities: '', notes: '' });
+  const [journal, setJournal] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, title: '', objective: '', activities: '', notes: '' });
   const [learningPlan, setLearningPlan] = useState({
     month: new Date().toISOString().slice(0, 7), meetingNumber: 1, plannedDate: '', title: '', objective: '',
     targetCompetency: '', activities: '', status: 'Direncanakan',
     assignment: { enabled: false, title: '', instructions: '', assignedDate: '', dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [] },
     challenge: { enabled: false, title: '', instructions: '', responseType: 'text', dueDate: '', expReward: 100, gradingMode: 'review', answerKey: '' }
   });
-  const [journalStudents, setJournalStudents] = useState({});
   const [studentNote, setStudentNote] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), participation: '', strengths: '', improvements: '', comment: '', achievement: '', expAwarded: 0 });
   const [assignment, setAssignment] = useState({ title: '', instructions: '', assignedDate: new Date().toISOString().slice(0, 10), dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [createEmptyAssignmentQuestion()] });
+  const [assignmentType, setAssignmentType] = useState('multiple-choice');
   const [assessment, setAssessment] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), type: 'Monthly Assessment', speaking: '', writing: '', reading: '', listening: '', quizTest: '', comment: '' });
   const [challenge, setChallenge] = useState({ title: '', instructions: '', responseType: 'text', dueDate: '', expReward: 150, gradingMode: 'automatic', answerKey: '' });
+  const [selectedChallengeProgram, setSelectedChallengeProgram] = useState('');
   const [reviewItem, setReviewItem] = useState(null);
   const [review, setReview] = useState({ score: '', feedback: '', expAwarded: 0 });
   const [attendanceControl, setAttendanceControl] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, statuses: {} });
@@ -2023,7 +2049,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
   function goTutorBack() {
     if (page === 'report') {
-      setPage('student');
+      setPage('reports');
       return;
     }
     if (page === 'student') {
@@ -2034,7 +2060,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
       setPage('classes');
       return;
     }
-    if (['assignments', 'assessment', 'notes', 'challenges', 'review'].includes(page)) {
+    if (['lesson-plan', 'assignments', 'assessment', 'notes', 'challenges', 'review'].includes(page)) {
       setPage('academic');
       return;
     }
@@ -2048,44 +2074,16 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   }, [classes, selectedClassId]);
 
   const selectedClass = classes.find((item) => item.classId === selectedClassId) || classes[0] || null;
+  const tutorMonthKey = new Date().toISOString().slice(0, 7);
+  const selectedMonthPlans = (selectedClass?.learningPlans || []).filter((item) => String(item.month || item.plannedDate || '').startsWith(tutorMonthKey));
+  const selectedMonthJournals = (selectedClass?.journals || []).filter((item) => String(item.date || '').startsWith(tutorMonthKey));
+  const currentMeetingNumber = Math.min(8, Math.max(selectedMonthPlans.length, selectedMonthJournals.length) + 1);
+  const currentMeetingPlan = selectedMonthPlans.find((item) => Number(item.meetingNumber) === currentMeetingNumber) || selectedMonthPlans[selectedMonthPlans.length - 1] || null;
+  const previousJournal = selectedMonthJournals.slice().sort((a, b) => Number(b.meetingNumber || 0) - Number(a.meetingNumber || 0))[0] || null;
+  const previousAbsentees = previousJournal ? (selectedClass?.attendanceRecords || []).filter((item) => String(item.date || '') === String(previousJournal.date || '') && item.status !== 'Present').map((item) => item.studentName).filter(Boolean) : [];
+  const classSubmissionIds = new Set((selectedClass?.submissions || []).map((item) => item.studentId));
+  const classChallengeIds = new Set((selectedClass?.challengeResults || []).map((item) => item.studentId));
 
-  useEffect(() => {
-    if (!selectedClass?.students?.length) {
-      setJournalStudents({});
-      return;
-    }
-    setJournalStudents(Object.fromEntries(selectedClass.students.map((student) => [
-      student.studentId,
-      { selected: true, achievement: 'Berkembang', comment: '' }
-    ])));
-  }, [selectedClassId, overview]);
-
-  function composeJournalComment(student, achievement) {
-    const topic = journal.title.trim() || (isID ? 'materi pada pertemuan ini' : 'today’s lesson');
-    const activity = journal.activities.trim();
-    const idTemplates = {
-      'Sangat Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} secara mandiri, aktif, dan konsisten.`,
-      'Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} dengan baik serta hanya memerlukan sedikit arahan.`,
-      'Berkembang': `${student.fullName} mulai memahami materi ${topic} dan perlu melanjutkan latihan agar lebih percaya diri dan konsisten.`,
-      'Perlu Dukungan': `${student.fullName} memerlukan pendampingan dan latihan tambahan untuk memahami serta menerapkan materi ${topic}.`
-    };
-    const enTemplates = {
-      'Sangat Baik': `${student.fullName} understood and applied ${topic} independently, actively, and consistently.`,
-      'Baik': `${student.fullName} understood and applied ${topic} well with only limited guidance.`,
-      'Berkembang': `${student.fullName} is developing an understanding of ${topic} and needs continued practice to become more confident and consistent.`,
-      'Perlu Dukungan': `${student.fullName} needs further guidance and additional practice to understand and apply ${topic}.`
-    };
-    const base = (isID ? idTemplates : enTemplates)[achievement] || (isID ? idTemplates.Berkembang : enTemplates.Berkembang);
-    return activity ? `${base} ${isID ? 'Kegiatan pembelajaran meliputi' : 'Learning activities included'} ${activity.replace(/[.!?]+$/, '')}.` : base;
-  }
-
-  function generateAllJournalComments() {
-    if (!selectedClass) return;
-    setJournalStudents((current) => Object.fromEntries(selectedClass.students.map((student) => {
-      const entry = current[student.studentId] || { selected: true, achievement: 'Berkembang' };
-      return [student.studentId, { ...entry, comment: composeJournalComment(student, entry.achievement) }];
-    })));
-  }
   const selectedStudent = selectedClass?.students?.find((item) => item.studentId === selectedStudentId) || null;
   const selectedStudentAttendance = (selectedClass?.attendanceRecords || []).filter((item) => item.studentId === selectedStudentId);
   const selectedStudentSubmissions = (selectedClass?.submissions || []).filter((item) => item.studentId === selectedStudentId);
@@ -2109,25 +2107,22 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const reportPresent = reportAttendance.filter((item) => item.status === 'Present').length;
   const reportAbsent = Math.max(0, reportAttendance.length - reportPresent);
   const reportAttendancePercentage = reportAttendance.length ? Math.round(reportPresent / reportAttendance.length * 100) : null;
+  const selectedClassMonthAttendance = (selectedClass?.attendanceRecords || []).filter((item) => String(item.date || '').startsWith(tutorMonthKey));
+  const selectedClassMonthPresent = selectedClassMonthAttendance.filter((item) => item.status === 'Present').length;
+  const selectedClassAttendancePercentage = selectedClassMonthAttendance.length
+    ? Math.round(selectedClassMonthPresent / selectedClassMonthAttendance.length * 100)
+    : null;
+  const selectedClassAssignmentCount = (selectedClass?.assignments || []).length;
+  const selectedClassChallengeCount = (selectedClass?.challenges || []).length;
 
   async function saveJournal(event) {
     event.preventDefault();
     setSaving(true);
     setNotice('');
     try {
-      const studentEntries = (selectedClass?.students || []).map((student) => {
-        const entry = journalStudents[student.studentId] || {};
-        return {
-          studentId: student.studentId,
-          selected: entry.selected !== false,
-          achievement: entry.achievement || 'Berkembang',
-          comment: entry.comment || composeJournalComment(student, entry.achievement || 'Berkembang')
-        };
-      }).filter((entry) => entry.selected);
-      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries } });
+      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries: [] } });
       setNotice(result.message || (isID ? 'Learning Journal berhasil disimpan.' : 'Learning Journal saved successfully.'));
-      setJournal((current) => ({ ...current, title: '', activities: '', notes: '' }));
-      setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { selected: true, achievement: 'Berkembang', comment: '' }])));
+      setJournal((current) => ({ ...current, title: '', objective: '', activities: '', notes: '' }));
       await onRefresh();
     } catch (error) {
       setNotice(error.message || (isID ? 'Jurnal gagal disimpan.' : 'Journal could not be saved.'));
@@ -2187,7 +2182,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   async function createAssignment(event) {
     event.preventDefault(); setSaving(true); setNotice('');
     try {
-      const result = await callApi({ action: 'createTutorAssignment', token, assignment: { ...assignment, classId: selectedClassId } });
+      const result = await callApi({ action: 'createTutorAssignment', token, assignment: { ...assignment, taskType: assignmentType, classId: selectedClassId } });
       setNotice(result.message || (isID ? 'Assignment berhasil dibuat.' : 'Assignment created successfully.'));
       setAssignment((current) => ({ ...current, title: '', instructions: '', dueDate: '', answerKey: '', questions: [createEmptyAssignmentQuestion()] })); await onRefresh();
     } catch (error) { setNotice(error.message || (isID ? 'Assignment gagal dibuat.' : 'Assignment could not be created.')); }
@@ -2308,20 +2303,26 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'assignments' && <section className="tutor-section grading-settings"><div className="tutor-section-heading"><div><span>AUTO GRADING</span><h2>{isID ? 'Pengaturan Nilai Langsung' : 'Instant Grading Settings'}</h2></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Cara Penilaian Assignment' : 'Assignment Grading Method'}</span><select value={assignment.gradingMode} onChange={(event) => setAssignment({ ...assignment, gradingMode: event.target.value })}><option value="automatic">{isID ? 'Otomatis — nilai langsung keluar' : 'Automatic — instant result'}</option><option value="review">{isID ? 'Diperiksa Tutor — tugas terbuka/proyek' : 'Tutor Review — open task/project'}</option></select></label>{assignment.gradingMode === 'automatic' && <div className="grading-mode-note">{isID ? 'Kunci jawaban dan bobot ditentukan pada setiap soal pilihan ganda.' : 'Set the answer key and weight inside each multiple-choice question.'}</div>}<small className="grading-help">{isID ? 'Nilai dihitung dari jumlah jawaban benar. EXP diberikan sebanding dengan nilai.' : 'The score is based on correct answers. EXP is awarded proportionally.'}</small></div></section>}
 
+      {page === 'challenges' && !selectedChallengeProgram && <section className="tutor-section tutor-page-section challenge-program-picker"><button className="tutor-back" type="button" onClick={() => setPage('academic')}>← {isID ? 'Kembali ke Akademik' : 'Back to Academics'}</button><div className="tutor-section-heading"><div><span>PROGRAM CHALLENGE</span><h2>{isID ? 'Pilih Program' : 'Choose a Program'}</h2><p>{isID ? 'Pilih kelas/program terlebih dahulu. Form tantangan lain akan disembunyikan.' : 'Choose the class/program before creating a challenge.'}</p></div></div><div className="challenge-program-grid">{classes.map((item) => <button type="button" key={item.classId} onClick={() => { setSelectedClassId(item.classId); setSelectedChallengeProgram(item.program || item.className); }}><span>★</span><div><small>{item.program || 'PROGRAM'}</small><strong>{item.className}</strong><p>{item.students?.length || 0} siswa aktif</p></div><b>→</b></button>)}</div></section>}
+
+      {page === 'challenges' && selectedChallengeProgram && <section className="challenge-selected-program"><button type="button" onClick={() => setSelectedChallengeProgram('')}>← Ganti Program</button><div><small>PROGRAM DIPILIH</small><strong>{selectedChallengeProgram}</strong></div></section>}
+
       {page === 'challenges' && <section className="tutor-section grading-settings"><div className="tutor-section-heading"><div><span>AUTO GRADING</span><h2>{isID ? 'Pengaturan Nilai Langsung' : 'Instant Grading Settings'}</h2></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Cara Penilaian Challenge' : 'Challenge Grading Method'}</span><select value={challenge.gradingMode} onChange={(event) => setChallenge({ ...challenge, gradingMode: event.target.value })}><option value="automatic">{isID ? 'Otomatis — teks / speaking' : 'Automatic — text / speaking'}</option><option value="review">{isID ? 'Diperiksa Tutor — audio/video/proyek' : 'Tutor Review — audio/video/project'}</option></select></label>{challenge.gradingMode === 'automatic' && challenge.responseType !== 'speech' && <label><span>{isID ? 'Kunci Jawaban' : 'Answer Key'}</span><textarea rows="4" value={challenge.answerKey} onChange={(event) => setChallenge({ ...challenge, answerKey: event.target.value })} placeholder={isID ? 'Satu jawaban per baris. Alternatif dipisahkan tanda |' : 'One answer per line. Separate alternatives with |'} required /></label>}<small className="grading-help">{isID ? 'Teks dan speaking dapat dinilai otomatis. Gunakan pemeriksaan tutor untuk tautan audio/video atau proyek.' : 'Text and speaking can be graded automatically. Use tutor review for audio/video links or projects.'}</small></div></section>}
 
       {page === 'home' && (
         <>
-          <section className="tutor-welcome"><span>● SYSTEM CONNECTED</span><h1>{isID ? 'Selamat datang,' : 'Welcome,'}<strong>{overview?.tutor?.name || user.fullName || 'Tutor'}</strong></h1><p>{isID ? 'Berikut kelas dan agenda mengajar Anda hari ini.' : 'Here are your classes and teaching agenda for today.'}</p></section>
+          <section className="tutor-welcome"><span>● SYSTEM CONNECTED</span><h1>{isID ? 'Selamat datang,' : 'Welcome,'}<strong>{overview?.tutor?.name || user.fullName || 'Tutor'}</strong></h1><p>{isID ? 'Berikut jadwal mengajar Anda hari ini.' : 'Here is your teaching schedule for today.'}</p></section>
           <section className="tutor-stat-grid"><article><span>▤</span><strong>{todayClasses.length}</strong><small>{isID ? 'Kelas Hari Ini' : 'Classes Today'}</small></article><article><span>⌂</span><strong>{classes.length}</strong><small>{isID ? 'Kelas Saya' : 'My Classes'}</small></article><article><span>♙</span><strong>{classes.reduce((sum, item) => sum + item.students.length, 0)}</strong><small>{isID ? 'Total Siswa' : 'Total Students'}</small></article></section>
           <section className="tutor-section"><div className="tutor-section-heading"><div><span>{isID ? 'AGENDA' : 'AGENDA'}</span><h2>{isID ? 'Kelas Hari Ini' : "Today's Classes"}</h2></div><button type="button" onClick={() => setPage('classes')}>{isID ? 'Lihat Semua' : 'View All'}</button></div>{todayClasses.length ? <div className="tutor-class-list">{todayClasses.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Tidak ada kelas yang dijadwalkan hari ini.' : 'No classes are scheduled today.'}</div>}</section>
         </>
       )}
 
-      {page === 'classes' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>{isID ? 'KELAS' : 'CLASSES'}</span><h2>{isID ? 'Semua Kelas Saya' : 'All My Classes'}</h2></div></div>{classes.length ? <div className="tutor-class-list">{classes.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Belum ada kelas yang terhubung dengan akun tutor.' : 'No classes are linked to this tutor account.'}</div>}</section>}
+      {page === 'classes' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>{isID ? 'KELAS & SISWA' : 'CLASSES & STUDENTS'}</span><h2>{isID ? 'Kelas dan Siswa Saya' : 'My Classes and Students'}</h2><p>{isID ? 'Pilih kelas untuk melihat daftar serta perkembangan setiap siswa.' : 'Select a class to view its students and their progress.'}</p></div></div>{classes.length ? <div className="tutor-class-list">{classes.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Belum ada kelas yang terhubung dengan akun tutor.' : 'No classes are linked to this tutor account.'}</div>}</section>}
 
       {page === 'class' && selectedClass && (
-        <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage('classes')}>← {isID ? 'Semua Kelas' : 'All Classes'}</button><div className="tutor-class-title"><span>{selectedClass.program || 'PROGRAM'}</span><h2>{selectedClass.className}</h2><p>{selectedClass.schedules.map((schedule) => `${schedule.day} ${schedule.start}–${schedule.end}`).join(' • ')}</p></div><button className="open-attendance-control" type="button" onClick={() => openAttendanceControl(selectedClass)}><span>✓</span><div><strong>{isID ? 'Attendance Control' : 'Attendance Control'}</strong><small>{isID ? 'Periksa check-in dan lengkapi kehadiran kelas' : 'Review check-ins and complete class attendance'}</small></div><b>→</b></button><div className="tutor-student-list">{selectedClass.students.map((student, index) => <button type="button" key={student.studentId} onClick={() => { setSelectedStudentId(student.studentId); setStudentNote({ ...studentNote, studentId: student.studentId }); setPage('student'); }}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.grade || '—'}</small></div><b>→</b></button>)}</div></section>
+        <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage('classes')}>← {isID ? 'Semua Kelas' : 'All Classes'}</button><div className="tutor-class-title"><span>{selectedClass.program || 'PROGRAM'}</span><h2>{selectedClass.className}</h2><p>{selectedClass.schedules.map((schedule) => `${schedule.day} ${schedule.start}–${schedule.end}`).join(' • ')}</p></div>
+          <section className="tutor-class-brief"><div className="class-brief-stats"><article><small>JUMLAH SISWA</small><strong>{selectedClass.students.length}</strong></article><article><small>PERTEMUAN BULAN INI</small><strong>{currentMeetingNumber}/8</strong></article><article><small>JURNAL TERSIMPAN</small><strong>{selectedMonthJournals.length}</strong></article></div><div className="class-brief-grid"><article><small>MATERI HARI INI</small><strong>{currentMeetingPlan?.title || 'Belum direncanakan'}</strong><p>{currentMeetingPlan?.objective || 'Tujuan pembelajaran belum diisi.'}</p></article><article><small>PERTEMUAN SEBELUMNYA</small><strong>{previousJournal?.title || 'Belum ada jurnal sebelumnya'}</strong><p>{previousJournal?.notes || previousJournal?.activities || 'Belum ada catatan.'}</p></article><article><small>TIDAK HADIR SEBELUMNYA</small><strong>{previousAbsentees.length ? previousAbsentees.join(', ') : 'Tidak ada / belum tercatat'}</strong></article><article><small>TUJUAN PEMBELAJARAN SEBELUMNYA</small><strong>{previousJournal ? `${Math.round((classSubmissionIds.size / Math.max(selectedClass.students.length, 1)) * 100)}% tercapai` : 'Belum tersedia'}</strong><p>{previousJournal?.objective || 'Isi jurnal pertemuan untuk melihat capaian.'}</p></article></div><div className="class-progress-snapshot"><article><span>{classSubmissionIds.size}</span><div><strong>Siswa sudah mengerjakan tugas</strong><p>{Math.max(0, selectedClass.students.length - classSubmissionIds.size)} siswa belum mengerjakan.</p></div></article><article><span>{classChallengeIds.size}</span><div><strong>Siswa menyelesaikan tantangan</strong><p>{Math.max(0, selectedClass.students.length - classChallengeIds.size)} siswa belum menyelesaikan.</p></div></article></div></section>
+          <button className="open-attendance-control" type="button" onClick={() => openAttendanceControl(selectedClass)}><span>✓</span><div><strong>Attendance Control</strong><small>{isID ? 'Periksa check-in dan lengkapi kehadiran kelas' : 'Review check-ins and complete class attendance'}</small></div><b>→</b></button><div className="tutor-roster-heading"><span>DAFTAR SISWA AKTIF</span><strong>{selectedClass.students.length} siswa</strong></div><div className="tutor-student-list">{selectedClass.students.map((student, index) => <button type="button" key={student.studentId} onClick={() => { setSelectedStudentId(student.studentId); setStudentNote({ ...studentNote, studentId: student.studentId }); setPage('student'); }}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.grade || '—'}</small></div><b>→</b></button>)}</div></section>
       )}
 
       {page === 'attendance' && selectedClass && <section className="tutor-section tutor-page-section tutor-attendance-control"><button className="tutor-back" type="button" onClick={() => setPage('class')}>← {isID ? 'Kembali ke Kelas' : 'Back to Class'}</button><div className="tutor-section-heading"><div><span>ATTENDANCE CONTROL</span><h2>{selectedClass.className}</h2></div></div><form onSubmit={saveClassAttendance}><div className="tutor-form-grid tutor-attendance-settings"><label><span>{isID ? 'Tanggal Pertemuan' : 'Meeting Date'}</span><input type="date" value={attendanceControl.date} onChange={(event) => loadAttendanceDate(event.target.value)} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={attendanceControl.meetingNumber} onChange={(event) => setAttendanceControl({ ...attendanceControl, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><div className="attendance-bulk-actions"><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Present'])) })}>{isID ? 'Semua Hadir' : 'All Present'}</button><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Absent'])) })}>{isID ? 'Semua Tidak Hadir' : 'All Absent'}</button></div><div className="tutor-attendance-roster">{selectedClass.students.map((student, index) => { const status = attendanceControl.statuses[student.studentId] || ''; return <article key={student.studentId}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId}</small></div><div className="attendance-status-buttons"><button className={status === 'Present' ? 'selected present' : ''} type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: { ...attendanceControl.statuses, [student.studentId]: 'Present' } })}>{isID ? 'Hadir' : 'Present'}</button><button className={status === 'Absent' ? 'selected absent' : ''} type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: { ...attendanceControl.statuses, [student.studentId]: 'Absent' } })}>{isID ? 'Tidak Hadir' : 'Absent'}</button></div></article>; })}</div><div className="attendance-save-bar"><div><strong>{Object.keys(attendanceControl.statuses).length}/{selectedClass.students.length}</strong><small>{isID ? 'status telah ditetapkan' : 'statuses selected'}</small></div><button type="submit" disabled={saving}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Kehadiran' : 'Save Attendance')}</button></div></form></section>}
@@ -2332,7 +2333,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'report' && selectedStudent && (
         <section className="tutor-report-page">
-          <div className="tutor-report-toolbar"><button type="button" onClick={() => setPage('student')}>← {isID ? 'Kembali' : 'Back'}</button><label><span>{isID ? 'Periode' : 'Period'}</span><input type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label><button className="print-report-button" type="button" onClick={() => window.print()}>▣ {isID ? 'Cetak / Simpan PDF' : 'Print / Save PDF'}</button></div>
+          <div className="tutor-report-toolbar"><button type="button" onClick={() => setPage('reports')}>← {isID ? 'Daftar Siswa' : 'Student List'}</button><label><span>{isID ? 'Periode' : 'Period'}</span><input type="month" value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} /></label><button className="print-report-button" type="button" onClick={() => window.print()}>▣ {isID ? 'Cetak / Simpan PDF' : 'Print / Save PDF'}</button></div>
           <article className="tutor-printable-report detailed-monthly-report">
             <header><img className="report-brand-logo-transparent" src="/logo-mr-one-course.jpeg" alt="Mr One Course" /><div><span>MR ONE COURSE • ACADEMIC SUITE</span><h1>{isID ? 'Laporan Perkembangan Akademik Bulanan' : 'Monthly Academic Progress Report'}</h1><p>{isID ? 'PERIODE LAPORAN' : 'REPORT PERIOD'}: {new Date(`${reportMonth}-01T12:00:00`).toLocaleDateString(isID ? 'id-ID' : 'en-US', { month: 'long', year: 'numeric' })}</p></div></header>
             <section className="report-student-identity"><div><small>{isID ? 'NAMA SISWA' : 'STUDENT NAME'}</small><strong>{selectedStudent.fullName}</strong><span>{selectedStudent.studentId}</span></div><div><small>{isID ? 'PROGRAM / KELAS' : 'PROGRAM / CLASS'}</small><strong>{selectedClass.program || '—'}</strong><span>{selectedClass.className}</span></div><div><small>{isID ? 'TINGKAT SEKOLAH' : 'SCHOOL GRADE'}</small><strong>{selectedStudent.grade || '—'}</strong><span>Tutor: {overview?.tutor?.name || '—'}</span></div></section>
@@ -2346,27 +2347,80 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
         </section>
       )}
 
-      {page === 'academic' && (
+      {page === 'lesson-plan' && (
         <>
         <div className="tutor-academic-master">
+          <button className="tutor-back" type="button" onClick={() => setPage('academic')}>← {isID ? 'Kembali ke Akademik' : 'Back to Academics'}</button>
           <div className="tutor-academic-master-heading">
-            <span>ACADEMIC</span>
-            <h1>{isID ? 'Kelola Akademik' : 'Manage Academic'}</h1>
-            <p>{isID ? 'Kelola rencana dan capaian setiap pertemuan dalam satu alur. Pilih pertemuan, isi materi dan target, lalu hubungkan tugas, tantangan, assessment, serta catatan siswa bila diperlukan.' : 'Manage meeting plans and achievement in one workflow. Select the meeting, complete the material and target, then connect assignments, challenges, assessment, and student notes when needed.'}</p>
+            <span>LESSON PLAN</span>
+            <h1>{isID ? 'Rencana Pembelajaran' : 'Learning Plan'}</h1>
+            <p>{isID ? 'Susun materi, tujuan pembelajaran, dan aktivitas setiap pertemuan dalam satu alur.' : 'Plan each meeting’s material, learning objective, and activities in one workflow.'}</p>
           </div>
-        <section className="tutor-section tutor-page-section linked-learning-package"><div className="tutor-section-heading"><div><span>{isID ? 'CAPAIAN & AKTIVITAS' : 'ACHIEVEMENT & ACTIVITIES'}</span><h2>{isID ? 'Capaian Pertemuan' : 'Meeting Achievement'}</h2><p>{isID ? 'Target capaian, tugas, dan tantangan mengikuti pertemuan yang sedang dikelola.' : 'Achievement targets, assignments, and challenges follow the meeting being managed.'}</p></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Target Capaian Siswa' : 'Student Achievement Target'}</span><textarea rows="3" value={learningPlan.targetCompetency} onChange={(event) => setLearningPlan({ ...learningPlan, targetCompetency: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat minimal lima kalimat Simple Present dengan pola yang tepat.' : 'Example: Students can write at least five accurate Simple Present sentences.'} /></label><div className="linked-package-toggle"><label><input type="checkbox" checked={learningPlan.assignment.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, enabled: event.target.checked } })} /><span><strong>Assignment</strong><small>{isID ? 'Bukti pencapaian target pembelajaran' : 'Evidence of learning-target achievement'}</small></span></label>{learningPlan.assignment.enabled && <div className="linked-package-fields"><input value={learningPlan.assignment.title} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, title: event.target.value } })} placeholder={isID ? 'Judul assignment' : 'Assignment title'} /><textarea rows="3" value={learningPlan.assignment.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, instructions: event.target.value } })} placeholder={isID ? 'Instruksi pengerjaan...' : 'Assignment instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.assignment.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="200" value={learningPlan.assignment.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.assignment.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic">{isID ? 'Otomatis' : 'Automatic'}</option></select></label>{learningPlan.assignment.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.assignment.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div><div className="linked-package-toggle challenge-link"><label><input type="checkbox" checked={learningPlan.challenge.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, enabled: event.target.checked } })} /><span><strong>Challenge</strong><small>{isID ? 'Pengayaan sesuai program dan sumber EXP' : 'Program-based enrichment and EXP source'}</small></span></label>{learningPlan.challenge.enabled && <div className="linked-package-fields"><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, ...template, enabled: true, gradingMode: template.gradingMode || (['text','speech'].includes(template.responseType) ? 'automatic' : 'review') } }); }}><option value="">{isID ? 'Pilih template sesuai program' : 'Select a program template'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option value={index} key={item.title}>{item.title}</option>)}</select><input value={learningPlan.challenge.title} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, title: event.target.value } })} placeholder={isID ? 'Judul challenge' : 'Challenge title'} /><textarea rows="3" value={learningPlan.challenge.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, instructions: event.target.value } })} placeholder={isID ? 'Instruksi challenge...' : 'Challenge instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.challenge.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="250" value={learningPlan.challenge.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.challenge.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic" disabled={!['text','speech'].includes(learningPlan.challenge.responseType)}>{isID ? 'Otomatis — teks / speaking' : 'Automatic — text / speaking'}</option></select></label>{learningPlan.challenge.responseType === 'speech' && <textarea rows="2" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'} />}{learningPlan.challenge.gradingMode === 'automatic' && learningPlan.challenge.responseType !== 'speech' && <textarea rows="3" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div></div></section>{page === 'academic' && learningPlan.assignment.enabled && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={learningPlan.assignment.questions || []} onChange={(questions) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') } })} isID={isID} /></section>}
+        <section className="tutor-section tutor-page-section linked-learning-package"><div className="tutor-section-heading"><div><span>{isID ? 'TUJUAN & AKTIVITAS' : 'OBJECTIVES & ACTIVITIES'}</span><h2>{isID ? 'Tujuan Pembelajaran' : 'Learning Objectives'}</h2><p>{isID ? 'Tujuan pembelajaran, tugas, dan tantangan mengikuti pertemuan yang sedang dikelola.' : 'Learning objectives, assignments, and challenges follow the meeting being managed.'}</p></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Target Tujuan Pembelajaran' : 'Learning Objective Target'}</span><textarea rows="3" value={learningPlan.targetCompetency} onChange={(event) => setLearningPlan({ ...learningPlan, targetCompetency: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat minimal lima kalimat Simple Present dengan pola yang tepat.' : 'Example: Students can write at least five accurate Simple Present sentences.'} /></label><div className="linked-package-toggle"><label><input type="checkbox" checked={learningPlan.assignment.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, enabled: event.target.checked } })} /><span><strong>Assignment</strong><small>{isID ? 'Bukti pencapaian tujuan pembelajaran' : 'Evidence of learning-objective achievement'}</small></span></label>{learningPlan.assignment.enabled && <div className="linked-package-fields"><input value={learningPlan.assignment.title} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, title: event.target.value } })} placeholder={isID ? 'Judul assignment' : 'Assignment title'} /><textarea rows="3" value={learningPlan.assignment.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, instructions: event.target.value } })} placeholder={isID ? 'Instruksi pengerjaan...' : 'Assignment instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.assignment.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="200" value={learningPlan.assignment.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.assignment.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic">{isID ? 'Otomatis' : 'Automatic'}</option></select></label>{learningPlan.assignment.gradingMode === 'automatic' && <textarea rows="3" value={learningPlan.assignment.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div><div className="linked-package-toggle challenge-link"><label><input type="checkbox" checked={learningPlan.challenge.enabled} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, enabled: event.target.checked } })} /><span><strong>Challenge</strong><small>{isID ? 'Pengayaan sesuai program dan sumber EXP' : 'Program-based enrichment and EXP source'}</small></span></label>{learningPlan.challenge.enabled && <div className="linked-package-fields"><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, ...template, enabled: true, gradingMode: template.gradingMode || (['text','speech'].includes(template.responseType) ? 'automatic' : 'review') } }); }}><option value="">{isID ? 'Pilih template sesuai program' : 'Select a program template'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option value={index} key={item.title}>{item.title}</option>)}</select><input value={learningPlan.challenge.title} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, title: event.target.value } })} placeholder={isID ? 'Judul challenge' : 'Challenge title'} /><textarea rows="3" value={learningPlan.challenge.instructions} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, instructions: event.target.value } })} placeholder={isID ? 'Instruksi challenge...' : 'Challenge instructions...'} /><div className="tutor-form-grid"><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={learningPlan.challenge.dueDate} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, dueDate: event.target.value } })} /></label><label><span>EXP</span><input type="number" min="0" max="250" value={learningPlan.challenge.expReward} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, expReward: Number(event.target.value) } })} /></label></div><label><span>{isID ? 'Cara Penilaian' : 'Grading Method'}</span><select value={learningPlan.challenge.gradingMode} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, gradingMode: event.target.value } })}><option value="review">{isID ? 'Diperiksa Tutor' : 'Tutor Review'}</option><option value="automatic" disabled={!['text','speech'].includes(learningPlan.challenge.responseType)}>{isID ? 'Otomatis — teks / speaking' : 'Automatic — text / speaking'}</option></select></label>{learningPlan.challenge.responseType === 'speech' && <textarea rows="2" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'} />}{learningPlan.challenge.gradingMode === 'automatic' && learningPlan.challenge.responseType !== 'speech' && <textarea rows="3" value={learningPlan.challenge.answerKey} onChange={(event) => setLearningPlan({ ...learningPlan, challenge: { ...learningPlan.challenge, answerKey: event.target.value } })} placeholder={isID ? 'Kunci jawaban, satu jawaban per baris' : 'Answer key, one answer per line'} />}</div>}</div></div></section>{page === 'academic' && learningPlan.assignment.enabled && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={learningPlan.assignment.questions || []} onChange={(questions) => setLearningPlan({ ...learningPlan, assignment: { ...learningPlan.assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') } })} isID={isID} /></section>}
         <section className="tutor-section tutor-page-section learning-plan-section"><div className="tutor-section-heading"><div><span>{isID ? 'PERTEMUAN' : 'MEETING'}</span><h2>{isID ? 'Rencana & Capaian Pertemuan' : 'Meeting Plan & Achievement'}</h2><p>{isID ? 'Gunakan pertemuan 1–8 sebagai satu rangkaian pembelajaran, bukan menu terpisah.' : 'Use meetings 1–8 as one learning sequence, not as a separate menu.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveLearningPlan}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Bulan Pembelajaran' : 'Learning Month'}</span><input type="month" value={learningPlan.month} onChange={(event) => setLearningPlan({ ...learningPlan, month: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={learningPlan.meetingNumber} onChange={(event) => setLearningPlan({ ...learningPlan, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Rencana Tanggal (opsional)' : 'Planned Date (optional)'}</span><input type="date" value={learningPlan.plannedDate} onChange={(event) => setLearningPlan({ ...learningPlan, plannedDate: event.target.value })} /></label><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={learningPlan.title} onChange={(event) => setLearningPlan({ ...learningPlan, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={learningPlan.objective} onChange={(event) => setLearningPlan({ ...learningPlan, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label><label><span>{isID ? 'Rencana Aktivitas' : 'Planned Activities'}</span><textarea rows="4" value={learningPlan.activities} onChange={(event) => setLearningPlan({ ...learningPlan, activities: event.target.value })} placeholder={isID ? 'Pembukaan, latihan terbimbing, praktik, dan refleksi...' : 'Warm-up, guided practice, production, and reflection...'} required /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Rencana Pertemuan' : 'Save Meeting Plan')}</button></form><div className="eight-meeting-plan-grid">{Array.from({ length: 8 }, (_, index) => { const number = index + 1; const plan = (selectedClass?.learningPlans || []).find((item) => item.month === learningPlan.month && item.meetingNumber === number); return <article className={plan ? 'planned' : ''} key={number}><span>{String(number).padStart(2, '0')}</span><div><small>{plan ? (isID ? 'SUDAH DIRENCANAKAN' : 'PLANNED') : (isID ? 'BELUM DIISI' : 'NOT PLANNED')}</small><strong>{plan?.title || (isID ? `Pertemuan ${number}` : `Meeting ${number}`)}</strong>{plan?.objective && <p>{plan.objective}</p>}</div>{plan && <button type="button" onClick={() => usePlanForJournal(plan)}>{isID ? 'Gunakan untuk Jurnal →' : 'Use for Journal →'}</button>}</article>; })}</div></section>
         </div>
         </>)}
-{page === 'journal' && (        <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Learning Journal</h2><p>{isID ? 'Isi jurnal kelas dan capaian seluruh siswa dalam satu kali simpan.' : 'Complete the class journal and every student’s progress in one save.'}</p></div></div><form className="tutor-journal-form" onSubmit={saveJournal}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={journal.date} onChange={(event) => setJournal({ ...journal, date: event.target.value })} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={journal.meetingNumber} onChange={(event) => setJournal({ ...journal, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={journal.title} onChange={(event) => setJournal({ ...journal, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label><label><span>{isID ? 'Aktivitas Pembelajaran' : 'Learning Activities'}</span><textarea rows="5" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Mengidentifikasi pola, latihan berpasangan, dan membuat lima kalimat.' : 'Example: Identifying patterns, pair practice, and writing five sentences.'} required /></label><label><span>{isID ? 'Catatan Kelas / Tindak Lanjut' : 'Class Notes / Follow-up'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Catatan umum kelas atau rencana pertemuan berikutnya...' : 'General class notes or next-meeting plan...'} /></label><div className="journal-roster-heading"><div><span>{isID ? 'CAPAIAN INDIVIDUAL' : 'INDIVIDUAL PROGRESS'}</span><h3>{isID ? 'Daftar Siswa' : 'Student List'}</h3><small>{isID ? 'Semua siswa otomatis dipilih. Hapus centang siswa yang tidak mengikuti pertemuan.' : 'All students are selected automatically. Uncheck students who did not attend.'}</small></div><div className="journal-roster-actions"><button type="button" onClick={() => setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { ...(journalStudents[student.studentId] || {}), selected: true, achievement: journalStudents[student.studentId]?.achievement || 'Berkembang' }])))}>{isID ? 'Pilih Semua' : 'Select All'}</button><button type="button" onClick={generateAllJournalComments} disabled={!journal.title.trim()}>{isID ? '✦ Susun Kalimat Otomatis' : '✦ Generate Comments'}</button></div></div><div className="journal-student-roster">{(selectedClass?.students || []).map((student, index) => { const entry = journalStudents[student.studentId] || { selected: true, achievement: 'Berkembang', comment: '' }; return <article className={entry.selected === false ? 'not-selected' : ''} key={student.studentId}><label className="journal-student-check"><input type="checkbox" checked={entry.selected !== false} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, selected: event.target.checked } })} /><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId}</small></div></label>{entry.selected !== false && <><label className="journal-achievement"><span>{isID ? 'Kemampuan Hari Ini' : 'Today’s Achievement'}</span><select value={entry.achievement} onChange={(event) => { const achievement = event.target.value; setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, achievement, comment: composeJournalComment(student, achievement) } }); }}><option value="Sangat Baik">{isID ? 'Sangat Baik — Mandiri' : 'Excellent — Independent'}</option><option value="Baik">{isID ? 'Baik — Sedikit Arahan' : 'Good — Limited Guidance'}</option><option value="Berkembang">{isID ? 'Berkembang — Perlu Latihan' : 'Developing — Needs Practice'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan — Pendampingan' : 'Needs Support — Guidance'}</option></select></label><label className="journal-generated-comment"><span>{isID ? 'Catatan Otomatis (boleh diedit)' : 'Generated Comment (editable)'}</span><textarea rows="3" value={entry.comment} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, comment: event.target.value } })} placeholder={isID ? 'Klik “Susun Kalimat Otomatis” atau pilih kemampuan siswa.' : 'Generate a comment or select the student achievement.'} /></label></>}</article>; })}</div><div className="journal-save-summary"><span>{Object.values(journalStudents).filter((entry) => entry.selected !== false).length} {isID ? 'siswa dipilih' : 'students selected'}</span><button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal & Capaian Siswa' : 'Save Journal & Student Progress')}</button></div></form>{selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong><small>{entry.date} • {entry.activities}</small></div></article>)}</div>}</section>)}
+{page === 'journal' && (
+        <section className="tutor-section tutor-page-section tutor-journal-simple">
+          <div className="tutor-section-heading">
+            <div>
+              <span>JURNAL MENGAJAR</span>
+              <h2>{isID ? 'Catat Pertemuan Hari Ini' : 'Record Today’s Lesson'}</h2>
+              <p>{isID ? 'Cukup isi kelas, materi, tujuan pembelajaran, kegiatan, dan catatan bila diperlukan.' : 'Simply enter the class, material, learning objective, activities, and an optional note.'}</p>
+            </div>
+          </div>
+          <form className="tutor-journal-form" onSubmit={saveJournal}>
+            <label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label>
+            <div className="tutor-form-grid">
+              <label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={journal.date} onChange={(event) => setJournal({ ...journal, date: event.target.value })} required /></label>
+              <label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={journal.meetingNumber} onChange={(event) => setJournal({ ...journal, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+            </div>
+            <label><span>{isID ? 'Materi / Topik' : 'Material / Topic'}</span><input value={journal.title} onChange={(event) => setJournal({ ...journal, title: event.target.value })} placeholder={isID ? 'Contoh: Simple Present Tense' : 'Example: Simple Present Tense'} required /></label>
+            <label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={journal.objective} onChange={(event) => setJournal({ ...journal, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat tentang kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label>
+            <label><span>{isID ? 'Kegiatan Pembelajaran' : 'Learning Activities'}</span><textarea rows="4" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Apersepsi, penjelasan singkat, latihan berpasangan, dan refleksi.' : 'Example: Warm-up, short explanation, pair practice, and reflection.'} required /></label>
+            <label><span>{isID ? 'Catatan / Tindak Lanjut (opsional)' : 'Notes / Follow-up (optional)'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Isi hanya jika ada hal penting untuk pertemuan berikutnya.' : 'Complete only when there is an important follow-up.'} /></label>
+            <div className="journal-automatic-class-note"><span>✓</span><div><strong>{isID ? 'Tidak perlu mencentang siswa satu per satu' : 'No need to select students one by one'}</strong><small>{isID ? 'Jurnal disimpan sebagai catatan kelas. Penilaian siswa tetap dilakukan melalui menu Penilaian atau Perkembangan Siswa.' : 'The journal is saved as a class record. Assess students from Assessment or Student Progress.'}</small></div></div>
+            <button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.objective.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal Mengajar' : 'Save Teaching Journal')}</button>
+          </form>
+          {selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong>{entry.objective && <small><b>{isID ? 'Tujuan:' : 'Objective:'}</b> {entry.objective}</small>}<small>{entry.date} • {entry.activities}</small></div></article>)}</div>}
+        </section>
+      )}
 
       {page === 'notes' && (
         <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>INDIVIDUAL</span><h2>{isID ? 'Catatan Siswa' : 'Student Notes'}</h2></div></div><form className="tutor-journal-form" onSubmit={saveStudentNote}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => { setSelectedClassId(event.target.value); setStudentNote({ ...studentNote, studentId: '' }); }} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Pilih Siswa' : 'Select Student'}</span><select value={studentNote.studentId} onChange={(event) => setStudentNote({ ...studentNote, studentId: event.target.value })} required><option value="">—</option>{(selectedClass?.students || []).map((student) => <option key={student.studentId} value={student.studentId}>{student.fullName} — {student.studentId}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={studentNote.date} onChange={(event) => setStudentNote({ ...studentNote, date: event.target.value })} required /></label><label><span>{isID ? 'Partisipasi' : 'Participation'}</span><select value={studentNote.participation} onChange={(event) => setStudentNote({ ...studentNote, participation: event.target.value })}><option value="">—</option><option value="Sangat Aktif">{isID ? 'Sangat Aktif' : 'Highly Active'}</option><option value="Aktif">{isID ? 'Aktif' : 'Active'}</option><option value="Cukup">{isID ? 'Cukup' : 'Developing'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan' : 'Needs Support'}</option></select></label></div><label><span>{isID ? 'Kekuatan Siswa' : 'Student Strengths'}</span><textarea rows="3" value={studentNote.strengths} onChange={(event) => setStudentNote({ ...studentNote, strengths: event.target.value })} /></label><label><span>{isID ? 'Perlu Ditingkatkan' : 'Areas for Improvement'}</span><textarea rows="3" value={studentNote.improvements} onChange={(event) => setStudentNote({ ...studentNote, improvements: event.target.value })} /></label><label><span>{isID ? 'Komentar Tutor untuk Laporan' : 'Tutor Comment for Report'}</span><textarea rows="4" value={studentNote.comment} onChange={(event) => setStudentNote({ ...studentNote, comment: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>Achievement</span><input value={studentNote.achievement} onChange={(event) => setStudentNote({ ...studentNote, achievement: event.target.value })} placeholder={isID ? 'Opsional' : 'Optional'} /></label><label><span>{isID ? 'Bonus EXP (0–250)' : 'EXP Bonus (0–250)'}</span><input type="number" min="0" max="250" value={studentNote.expAwarded} onChange={(event) => setStudentNote({ ...studentNote, expAwarded: Number(event.target.value) })} /></label></div><button type="submit" disabled={saving || !selectedClassId || !studentNote.studentId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Catatan Individual' : 'Save Individual Note')}</button></form></section>
       )}
 
-      {page === 'academic' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>{isID ? 'Kelola Akademik' : 'Manage Academics'}</h2></div></div><div className="tutor-academic-menu"><button type="button" onClick={() => setPage('assignments')}><span>☑</span><div><strong>{isID ? 'Tugas' : 'Assignments'}</strong><small>{isID ? 'Buat, periksa, dan beri feedback tugas siswa' : 'Create, review, and give student assignment feedback'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('challenges')}><span>🎯</span><div><strong>{isID ? 'Tantangan' : 'Challenges'}</strong><small>{isID ? 'Buat tantangan sesuai program dan validasi progres/EXP' : 'Create program challenges and validate progress/EXP'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('assessment')}><span>★</span><div><strong>Assessment</strong><small>{isID ? 'Catat hasil penilaian sebagai bagian progres akademik siswa' : 'Record assessment results as part of student academic progress'}</small></div><b>→</b></button><button type="button" onClick={() => setPage('notes')}><span>♙</span><div><strong>{isID ? 'Catatan Siswa' : 'Student Notes'}</strong><small>{isID ? 'Catat perkembangan individual yang melengkapi capaian dan assessment' : 'Record individual progress that complements achievement and assessment'}</small></div><b>→</b></button></div></section>}
+      {page === 'academic' && <section className="tutor-academic-overview tutor-page-section">
+        <div className="tutor-academic-overview-heading"><div><span>AREA TUTOR</span><h1>Ringkasan Akademik</h1><p>Pilih kelas yang diajar, lalu kelola kehadiran, pembelajaran, tugas, tantangan, dan hasil siswa.</p></div><strong>{classes.length}<small>KELAS DIAMPU</small></strong></div>
+        {classes.length ? <>
+          <div className="tutor-academic-class-picker"><span>PILIH KELAS</span><div>{classes.map((item) => <button type="button" className={selectedClassId === item.classId ? 'active' : ''} key={item.classId} onClick={() => setSelectedClassId(item.classId)}><strong>{item.className}</strong><small>{item.program || 'Program'} • {item.students?.length || 0} siswa</small></button>)}</div></div>
+          {selectedClass && <>
+            <section className="tutor-academic-summary-hero"><div><span>RINGKASAN KELAS</span><h2>{selectedClass.className}</h2><p>{selectedClass.program || 'Program belum diisi'} • {selectedClass.schedules?.map((schedule) => `${schedule.day} ${schedule.start}–${schedule.end}`).join(' • ') || 'Jadwal belum tersedia'}</p></div><strong>{selectedClass.students?.length || 0}<small>SISWA AKTIF</small></strong></section>
+            <div className="tutor-academic-action-grid">
+              <button type="button" onClick={() => openAttendanceControl(selectedClass)}><div><small>Kehadiran</small><strong>{selectedClassAttendancePercentage == null ? 'Belum ada data' : `${selectedClassAttendancePercentage}%`}</strong><p>{selectedClassMonthAttendance.length ? `${selectedClassMonthPresent} catatan hadir bulan ini` : 'Periksa dan lengkapi kehadiran kelas'}</p></div><span className="green"><ModernUiIcon name="attendance" /></span></button>
+              <button type="button" onClick={() => setPage('lesson-plan')}><div><small>Pembelajaran</small><strong>{selectedMonthPlans.length}/8 pertemuan</strong><p>Buat lesson plan, materi, tujuan, dan aktivitas pembelajaran</p></div><span className="teal"><ModernUiIcon name="journal" /></span></button>
+              <button type="button" onClick={() => setPage('assignments')}><div><small>Tugas</small><strong>{selectedClassAssignmentCount} tugas dibuat</strong><p>Buat tugas dan pantau pengumpulan siswa</p></div><span className="blue"><ModernUiIcon name="assignment" /></span></button>
+              <button type="button" onClick={() => { setSelectedChallengeProgram(selectedClass.program || selectedClass.className); setPage('challenges'); }}><div><small>Tantangan</small><strong>{selectedClassChallengeCount} tantangan dibuat</strong><p>Buat challenge sesuai program dan atur EXP</p></div><span className="purple"><ModernUiIcon name="challenge" /></span></button>
+              <button type="button" onClick={() => setPage('assessment')}><div><small>Nilai & Penyelesaian</small><strong>{classSubmissionIds.size}/{selectedClass.students?.length || 0} mengumpulkan</strong><p>Lihat nilai serta siswa yang belum menyelesaikan tugas</p></div><span className="indigo"><ModernUiIcon name="score" /></span></button>
+              <button type="button" onClick={() => setPage('reports')}><div><small>Laporan Perkembangan</small><strong>Laporan Akademik Siswa</strong><p>Pilih siswa, periksa perkembangan, lalu cetak laporan</p></div><span className="red"><ModernUiIcon name="report" /></span></button>
+            </div>
+          </>}
+        </> : <div className="tutor-empty">Belum ada kelas yang terhubung dengan akun Tutor.</div>}
+      </section>}
 
-      {page === 'assignments' && assignment.gradingMode === 'automatic' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') })} isID={isID} /></section>}
+      {page === 'reports' && <section className="tutor-section tutor-page-section tutor-report-directory">
+        <div className="tutor-section-heading"><div><span>LAPORAN PERKEMBANGAN</span><h2>Pilih Siswa</h2><p>Pilih kelas dan siswa untuk melihat perkembangan akademik serta mencetak laporan bulanan.</p></div></div>
+        <label className="tutor-report-class-select"><span>Kelas yang Diajar</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)}>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className} — {item.program || 'Program'}</option>)}</select></label>
+        {selectedClass?.students?.length ? <div className="tutor-report-student-grid">{selectedClass.students.map((student) => {
+          const studentScores = (selectedClass.assessments || []).filter((item) => item.studentId === student.studentId).map((item) => Number(item.average)).filter((value) => Number.isFinite(value));
+          const average = studentScores.length ? Math.round(studentScores.reduce((sum, value) => sum + value, 0) / studentScores.length) : null;
+          return <button type="button" key={student.studentId} onClick={() => { setSelectedStudentId(student.studentId); setPage('report'); }}><span>{getInitials(student.fullName)}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.grade || '—'}</small></div><b>{average == null ? 'Belum dinilai' : `${average}/100`} →</b></button>;
+        })}</div> : <div className="tutor-empty">Belum ada siswa aktif pada kelas ini.</div>}
+      </section>}
+
+      {page === 'assignments' && <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage('academic')}>← Kembali ke Akademik</button><div className="task-type-picker"><span>PILIH BENTUK TUGAS</span>{[['multiple-choice','Pilihan Ganda'],['fill-blank','Fill in the Blank'],['matching','Matching'],['short-answer','Uraian'],['essay','Essay']].map(([value,label]) => <button type="button" className={assignmentType === value ? 'active' : ''} key={value} onClick={() => setAssignmentType(value)}>{label}</button>)}</div></section>}
+      {page === 'assignments' && assignmentType !== 'multiple-choice' && <section className="tutor-section tutor-page-section question-answer-key"><label><span>{assignmentType === 'matching' ? 'Pasangan jawaban / kunci' : 'Kunci jawaban atau pedoman penilaian'}</span><textarea rows="5" value={assignment.answerKey} onChange={(event) => setAssignment({ ...assignment, answerKey: event.target.value, questions: [] })} placeholder="Tuliskan satu jawaban atau pasangan per baris." /></label><small>Uraian dan essay dapat dipilih untuk diperiksa Tutor. Fill in the blank dan matching dapat memakai kunci jawaban otomatis.</small></section>}
+      {page === 'assignments' && assignment.gradingMode === 'automatic' && assignmentType === 'multiple-choice' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') })} isID={isID} /></section>}
       {page === 'assignments' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assignments</h2></div></div><form className="tutor-journal-form" onSubmit={createAssignment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Judul Tugas' : 'Assignment Title'}</span><input value={assignment.title} onChange={(event) => setAssignment({ ...assignment, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={assignment.instructions} onChange={(event) => setAssignment({ ...assignment, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal Diberikan' : 'Assigned Date'}</span><input type="date" value={assignment.assignedDate} onChange={(event) => setAssignment({ ...assignment, assignedDate: event.target.value })} required /></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={assignment.dueDate} onChange={(event) => setAssignment({ ...assignment, dueDate: event.target.value })} required /></label></div><label><span>{isID ? 'Hadiah EXP (0–200)' : 'EXP Reward (0–200)'}</span><input type="number" min="0" max="200" value={assignment.expReward} onChange={(event) => setAssignment({ ...assignment, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Assignment' : 'Create Assignment / Challenge')}</button></form>{selectedClass?.assignments?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Tugas Kelas Ini' : 'Class Assignments'}</h3>{selectedClass.assignments.map((item) => <article key={item.assignmentId}><span>☑</span><div><strong>{item.title}</strong><small>{isID ? 'Tenggat' : 'Due'}: {item.dueDate} • +{item.expReward} EXP</small></div></article>)}</div>}{selectedClass?.submissions?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Pengumpulan Siswa' : 'Student Submissions'}</h3>{selectedClass.submissions.map((item) => <button type="button" key={item.submissionId} onClick={() => { setReviewItem({ ...item, kind: 'assignment' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
 
       {page === 'challenges' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>GAMIFICATION</span><h2>Challenges</h2></div></div><form className="tutor-journal-form" onSubmit={createChallenge}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Template sesuai program' : 'Program Template'}</span><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setChallenge({ ...challenge, ...template, gradingMode: template.gradingMode || (['text','speech'].includes(template.responseType) ? 'automatic' : 'review') }); }}><option value="">{isID ? 'Pilih template atau isi manual' : 'Choose a template or enter manually'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}</select></label><label><span>{isID ? 'Judul Challenge' : 'Challenge Title'}</span><input value={challenge.title} onChange={(event) => setChallenge({ ...challenge, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={challenge.instructions} onChange={(event) => setChallenge({ ...challenge, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Jenis Jawaban' : 'Response Type'}</span><select value={challenge.responseType} onChange={(event) => setChallenge({ ...challenge, responseType: event.target.value })}><option value="text">Text</option><option value="speech">{isID ? 'Speech — Mikrofon' : 'Speech — Microphone'}</option><option value="link">Link Audio/Video/File</option></select></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={challenge.dueDate} onChange={(event) => setChallenge({ ...challenge, dueDate: event.target.value })} required /></label></div>{challenge.responseType === 'speech' && <label><span>{isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'}</span><input value={challenge.answerKey} onChange={(event) => setChallenge({ ...challenge, answerKey: event.target.value })} placeholder={isID ? 'Contoh: I would like a glass of water.' : 'Example: I would like a glass of water.'} required /></label>}<label><span>{isID ? 'Hadiah EXP (0–250)' : 'EXP Reward (0–250)'}</span><input type="number" min="0" max="250" value={challenge.expReward} onChange={(event) => setChallenge({ ...challenge, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Challenge' : 'Create Challenge')}</button></form>{selectedClass?.challengeResults?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Hasil Challenge Siswa' : 'Student Challenge Results'}</h3>{selectedClass.challengeResults.map((item) => <button type="button" key={item.resultId} onClick={() => { setReviewItem({ ...item, kind: 'challenge' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
@@ -2375,7 +2429,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
 
       {page === 'assessment' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assessment</h2></div></div><form className="tutor-journal-form" onSubmit={saveAssessment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => { setSelectedClassId(event.target.value); setAssessment({ ...assessment, studentId: '' }); }} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Pilih Siswa' : 'Select Student'}</span><select value={assessment.studentId} onChange={(event) => setAssessment({ ...assessment, studentId: event.target.value })} required><option value="">—</option>{(selectedClass?.students || []).map((student) => <option key={student.studentId} value={student.studentId}>{student.fullName}</option>)}</select></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal' : 'Date'}</span><input type="date" value={assessment.date} onChange={(event) => setAssessment({ ...assessment, date: event.target.value })} required /></label><label><span>{isID ? 'Jenis Penilaian' : 'Assessment Type'}</span><select value={assessment.type} onChange={(event) => setAssessment({ ...assessment, type: event.target.value })}><option>Monthly Assessment</option><option>Quiz</option><option>Test</option><option>Project</option><option>Placement Test</option></select></label></div><div className="tutor-score-grid">{['speaking','writing','reading','listening','quizTest'].map((skill) => <label key={skill}><span>{skill === 'quizTest' ? 'Quiz / Test' : skill.charAt(0).toUpperCase() + skill.slice(1)}</span><input type="number" min="0" max="100" value={assessment[skill]} onChange={(event) => setAssessment({ ...assessment, [skill]: event.target.value })} placeholder="0–100" /></label>)}</div><label><span>{isID ? 'Komentar Penilaian' : 'Assessment Comment'}</span><textarea rows="3" value={assessment.comment} onChange={(event) => setAssessment({ ...assessment, comment: event.target.value })} /></label><button type="submit" disabled={saving || !selectedClassId || !assessment.studentId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Penilaian' : 'Save Assessment')}</button></form></section>}
 
-      <nav className="tutor-bottom-navigation tutor-five-navigation"><button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}><span>⌂</span>{isID ? 'Beranda' : 'Home'}</button><button className={['classes','class','student','attendance','report'].includes(page) ? 'active' : ''} onClick={() => setPage('classes')}><span>▤</span>{isID ? 'Kelas' : 'Classes'}</button><button className={page === 'journal' ? 'active' : ''} onClick={() => setPage('journal')}><span>✎</span>Journal</button><button className={['academic','assignments','assessment','notes','challenges','review'].includes(page) ? 'active' : ''} onClick={() => setPage('academic')}><span>★</span>{isID ? 'Akademik' : 'Academic'}</button><button onClick={onLogout}><span>↪</span>{isID ? 'Keluar' : 'Sign Out'}</button></nav>
+      <nav className="tutor-bottom-navigation tutor-five-navigation"><button className={page === 'home' ? 'active' : ''} onClick={() => setPage('home')}><span>⌂</span>{isID ? 'Jadwal' : 'Schedule'}</button><button className={['academic','lesson-plan','assignments','assessment','notes','challenges','review','classes','class','attendance'].includes(page) ? 'active' : ''} onClick={() => setPage('academic')}><span>★</span>{isID ? 'Akademik' : 'Academics'}</button><button className={page === 'journal' ? 'active' : ''} onClick={() => setPage('journal')}><span>✎</span>{isID ? 'Jurnal' : 'Journal'}</button><button className={['reports','student','report'].includes(page) ? 'active' : ''} onClick={() => setPage('reports')}><span>▤</span>{isID ? 'Laporan' : 'Reports'}</button><button onClick={onLogout}><span>↪</span>{isID ? 'Keluar' : 'Sign Out'}</button></nav>
     </main>
   );
 }
@@ -2535,6 +2589,7 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
         language={language}
         page={detailPage}
         token={token}
+        user={user}
         overview={overview}
         onRefreshOverview={onRefreshOverview}
         onBack={goBack}
@@ -2610,15 +2665,29 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
           const holiday = /^libur$/i.test(tuitionStatus);
           const onLeave = /^cuti$/i.test(tuitionStatus);
 
-          if (paid || holiday || onLeave) return null;
+          if (holiday || onLeave) return null;
+
+          const state = paid ? 'paid' : pending ? 'pending' : 'active';
+          const icon = paid ? '✓' : pending ? '◷' : '◔';
+          const label = paid
+            ? (isID ? 'PEMBAYARAN BULAN INI' : 'THIS MONTH’S PAYMENT')
+            : pending
+              ? (isID ? 'PEMBAYARAN DIPERIKSA' : 'PAYMENT IN REVIEW')
+              : (isID ? 'PENGINGAT PEMBAYARAN' : 'PAYMENT REMINDER');
+          const message = paid
+            ? (isID ? 'Terima kasih, pembayaran bulan berjalan sudah lunas.' : 'Thank you, this month’s tuition has been paid.')
+            : pending
+              ? (isID ? 'Konfirmasi sedang diperiksa oleh Admin.' : 'Your confirmation is being reviewed by Admin.')
+              : (isID ? 'Pembayaran bulan berjalan belum tercatat.' : 'This month’s tuition has not been recorded yet.');
 
           return (
-            <button type="button" className={`student-home-tuition-alert ${pending ? 'pending' : 'active'}`} onClick={() => openStudentPage('payment')}>
-              <span>{pending ? '◷' : '!'}</span>
+            <button type="button" className={`student-home-tuition-alert ${state}`} onClick={() => openStudentPage('payment')}>
+              <span>{icon}</span>
               <div>
-                <small>{pending ? (isID ? 'PEMBAYARAN DIPERIKSA' : 'PAYMENT IN REVIEW') : (isID ? 'TAGIHAN LES AKTIF' : 'ACTIVE TUITION BILL')}</small>
-                <strong>{pending ? (isID ? 'Menunggu verifikasi Admin' : 'Waiting for Admin verification') : `${formatRupiah(150000)} • ${isID ? 'Batas tanggal 7' : 'Due on the 7th'}`}</strong>
+                <small>{label}</small>
+                <strong>{message}</strong>
               </div>
+              <em>{isID ? 'Buka Tuition' : 'Open Tuition'}</em>
               <b>→</b>
             </button>
           );
@@ -3240,8 +3309,9 @@ function QrisPaymentDisplay({ isID }) {
   );
 }
 
-function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
+function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onBack, onSelect, onLogout, language, embedded = false }) {
   const isID = language === 'ID';
+  const studentProfile = normalizeStudentOverviewPayload(overview || {}, user || {}).profile;
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordChanging, setPasswordChanging] = useState(false);
   const [passwordMessage, setPasswordMessage] = useState('');
@@ -3820,12 +3890,17 @@ function StudentDetailPage({ page, token, overview, onRefreshOverview, onBack, o
       {page === 'profile' && (
         <section className="detail-panel student-profile-panel">
           <div className="student-profile-identity">
-            <StudentPhoto photoLink={overview?.profile?.photoLink} fullName={overview?.profile?.fullName || 'Student'} className="student-profile-large-photo" />
-            <div><span>{isID ? 'PROFIL SISWA' : 'STUDENT PROFILE'}</span><h2>{overview?.profile?.fullName || '—'}</h2><p>{overview?.profile?.studentId || '—'} • {overview?.program?.program || '—'}</p></div>
+            <StudentPhoto photoLink={studentProfile.photoLink} fullName={studentProfile.fullName || 'Student'} className="student-profile-large-photo" />
+            <div><span>{isID ? 'PROFIL SISWA' : 'STUDENT PROFILE'}</span><h2>{studentProfile.fullName || '—'}</h2><p>{studentProfile.studentId || '—'} • {overview?.program?.program || '—'}</p></div>
           </div>
-          <div className="detail-row"><span>Student ID</span><strong>{overview?.profile?.studentId || '—'}</strong></div>
-          <div className="detail-row"><span>{isID ? 'Sekolah' : 'School'}</span><strong>{overview?.profile?.school || '—'}</strong></div>
-          <div className="detail-row"><span>{isID ? 'Kelas' : 'Grade'}</span><strong>{overview?.profile?.grade || '—'}</strong></div>
+          <div className="detail-row"><span>Student ID</span><strong>{studentProfile.studentId || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Nama Lengkap' : 'Full Name'}</span><strong>{studentProfile.fullName || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Tanggal Lahir' : 'Date of Birth'}</span><strong>{studentProfile.dob || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Sekolah' : 'School'}</span><strong>{studentProfile.school || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Kelas' : 'Grade'}</span><strong>{studentProfile.grade || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'WA Siswa' : 'Student WhatsApp'}</span><strong>{studentProfile.waStudent || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'WA Orang Tua' : 'Parent WhatsApp'}</span><strong>{studentProfile.waParent || '—'}</strong></div>
+          <div className="detail-row"><span>{isID ? 'Alamat' : 'Address'}</span><strong>{studentProfile.address || '—'}</strong></div>
           <div className="detail-row"><span>{isID ? 'Level Saat Ini' : 'Current Level'}</span><strong>{overview?.program?.level || '—'}</strong></div>
 
           <div className="profile-subsection-title"><span><BadgeGlyph name="allround" /></span><h3>{isID ? 'Progress Gamifikasi' : 'Gamification Progress'}</h3></div>
@@ -4424,6 +4499,7 @@ function Dashboard({
   attendanceFollowUps,
   attentionLists,
   ceoMonitoring,
+  managementMessages,
   adminActivities,
   message,
   onRefresh,
@@ -4442,6 +4518,7 @@ function Dashboard({
   registrationsLoading,
   onApproveRegistration,
   onRejectRegistration,
+  onCancelRegistrationVerification,
   onRefreshRegistrations,
   theme,
   onThemeChange,
@@ -4455,6 +4532,44 @@ function Dashboard({
   token,
 }) {
 
+  const [selectedCeoClassId, setSelectedCeoClassId] = useState('');
+  const [ceoFinanceList, setCeoFinanceList] = useState('');
+  const [ceoAdminMessage, setCeoAdminMessage] = useState('');
+  const [ceoMessageStatus, setCeoMessageStatus] = useState('');
+  const [ceoMessageSending, setCeoMessageSending] = useState(false);
+
+  useEffect(() => {
+    if (!selectedCeoClassId && ceoMonitoring?.classInsights?.[0]?.classId) {
+      setSelectedCeoClassId(ceoMonitoring.classInsights[0].classId);
+    }
+  }, [ceoMonitoring, selectedCeoClassId]);
+
+  const selectedCeoClass = (ceoMonitoring?.classInsights || []).find((item) => item.classId === selectedCeoClassId) || null;
+  const ceoFinanceLists = {
+    paid: ceoMonitoring?.currentPaidStudents || [],
+    unpaid: ceoMonitoring?.currentUnpaidStudents || [],
+    books: ceoMonitoring?.bookPurchases || [],
+    cards: ceoMonitoring?.idCardPurchases || [],
+  };
+  const ceoFinanceListData = ceoFinanceLists[ceoFinanceList] || [];
+
+  async function sendCeoMessage(event) {
+    event.preventDefault();
+    if (!ceoAdminMessage.trim()) return;
+    setCeoMessageSending(true);
+    setCeoMessageStatus('');
+    try {
+      const result = await callApi({ action: 'sendCeoAdminMessage', token, message: ceoAdminMessage.trim() });
+      setCeoMessageStatus(result.message || 'Pesan berhasil dikirim kepada Admin.');
+      setCeoAdminMessage('');
+      await onRefresh();
+    } catch (error) {
+      setCeoMessageStatus(error.message || 'Pesan belum berhasil dikirim.');
+    } finally {
+      setCeoMessageSending(false);
+    }
+  }
+
   useEdgeSwipeBack(
     () => onNavigate('home'),
     activePage !== 'home' && activePage !== 'students'
@@ -4467,7 +4582,7 @@ function Dashboard({
             label: 'Siswa Aktif',
             value: metrics?.activeStudents || 0,
             icon: '👥',
-            page: 'students',
+            page: 'ceo-classes',
           },
           {
             label: 'Kelas Aktif',
@@ -4476,7 +4591,7 @@ function Dashboard({
             page: 'ceo-classes',
           },
           {
-            label: 'Pendapatan',
+            label: 'Business Overview',
             value: formatRupiah(metrics?.totalRevenue || 0),
             icon: '💳',
             page: 'ceo-revenue',
@@ -4496,7 +4611,7 @@ function Dashboard({
         ];
 
   return (
-    <main className={`app-dashboard ${user.role === 'Admin' ? 'admin-dashboard' : ''}`}>
+    <main className={`app-dashboard ${user.role === 'Admin' ? 'admin-dashboard' : user.role === 'CEO' ? 'ceo-dashboard' : ''}`}>
       <header className="app-header">
         <div className="brand-small">
           <PaperPlaneLogo />
@@ -4577,6 +4692,13 @@ function Dashboard({
                 <span className="data-count">{(adminActivities || []).length} aktivitas</span>
               </div>
               {(adminActivities || []).length ? <div className="admin-activity-list">{adminActivities.map((item,index) => <article key={`${item.type}-${item.date}-${index}`}><span>{item.type === 'payment' ? '💳' : '▤'}</span><div><strong>{item.action}</strong><small>{item.detail}</small></div><time>{item.date}</time></article>)}</div> : <div className="empty-state">Belum ada aktivitas Admin yang tercatat.</div>}
+            </section>
+          )}
+
+          {user.role === 'Admin' && (managementMessages || []).length > 0 && (
+            <section className="admin-activity-panel management-message-inbox">
+              <div className="section-heading"><div><span className="eyebrow">MESSAGE FROM CEO</span><h2>Pesan Manajemen</h2></div><span className="data-count">{managementMessages.length} pesan</span></div>
+              <div className="management-message-list">{managementMessages.slice(0, 6).map((item) => <article key={item.messageId}><div><strong>{item.senderName || 'CEO'}</strong><small>{item.createdAt}</small></div><p>{item.text}</p></article>)}</div>
             </section>
           )}
 
@@ -4665,29 +4787,21 @@ function Dashboard({
       </>
       ) : activePage === 'ceo-classes' && user.role === 'CEO' ? (
         <section className="ceo-detail-page">
-          <div className="page-heading"><div><span className="eyebrow">CEO • CLASSES</span><h1>Kelas Aktif</h1><p>{ceoMonitoring?.activeClasses?.length || 0} Class ID aktif</p></div></div>
-          <div className="ceo-active-class-list">
-            {(ceoMonitoring?.activeClasses || []).map((item) => <article key={item.classId}>
-              <div><strong>{item.className || item.classId}</strong><small>{item.classId} • {item.program || '—'} • {item.tutor || '—'}</small></div>
-              <span>{item.schedule || '—'}</span>
-            </article>)}
-          </div>
-          <section className="ceo-class-business-monitor">
-            <article className="ceo-monitor-panel">
-              <header><div><span className="eyebrow">TUITION TREND</span><h3>Pembayaran Les</h3></div><small>3 bulan terakhir</small></header>
-              <div className="ceo-tuition-trend">{(ceoMonitoring?.tuitionMonthly || []).map((item) => <div key={item.period} className="ceo-tuition-month"><div className="ceo-tuition-month-head"><strong>{item.label}</strong><span>{item.percentage}%</span></div><div className="ceo-tuition-progress"><i style={{ width: `${Math.min(100, Math.max(0, item.percentage || 0))}%` }} /></div><div className="ceo-tuition-meta"><span>{item.paidStudents}/{item.totalStudents} siswa</span><strong>{formatRupiah(item.revenue)}</strong></div></div>)}</div>
-            </article>
-            <article className="ceo-monitor-panel"><header><div><span className="eyebrow">BOOK SALES</span><h3>Penjualan Buku</h3></div><strong>{ceoMonitoring?.bookSummary?.purchased || 0}</strong></header><p>{ceoMonitoring?.bookSummary?.received || 0} sudah diterima • {ceoMonitoring?.bookSummary?.pendingDelivery || 0} masih diproses</p></article>
-            <article className="ceo-monitor-panel"><header><div><span className="eyebrow">ID CARD SALES</span><h3>Penjualan ID Card</h3></div><strong>{ceoMonitoring?.idCardSummary?.purchased || 0}</strong></header><p>Pembelian ID Card terverifikasi.</p></article>
-          </section>
+          <div className="page-heading"><div><span className="eyebrow">CEO • CLASS INTELLIGENCE</span><h1>Kelas & Perkembangan</h1><p>Ringkasan operasional dan tren akademik untuk mendukung pengambilan keputusan.</p></div></div>
+          <div className="ceo-class-summary-grid"><article><small>JUMLAH KELAS</small><strong>{ceoMonitoring?.classInsights?.length || 0}</strong><span>Kelas aktif</span></article><article><small>SISWA AKTIF</small><strong>{metrics?.activeStudents || 0}</strong><span>Sedang mengikuti program</span></article><article><small>ALUMNI</small><strong>{metrics?.alumniStudents || 0}</strong><span>Arsip alumni</span></article><article><small>CUTI SAAT INI</small><strong>{metrics?.leaveStudents || 0}</strong><span>Tidak ditagihkan bulan ini</span></article></div>
+          <div className="section-heading ceo-class-picker-heading"><div><span className="eyebrow">PILIH KELAS</span><h2>Monitoring Per Kelas</h2></div><span className="data-count">{ceoMonitoring?.classInsights?.length || 0} kelas</span></div>
+          <div className="ceo-class-card-grid">{(ceoMonitoring?.classInsights || []).map((item) => <button type="button" className={selectedCeoClassId === item.classId ? 'active' : ''} key={item.classId} onClick={() => setSelectedCeoClassId(item.classId)}><span>🏫</span><div><strong>{item.className || item.classId}</strong><small>{item.program || '—'} • {item.studentCount} siswa</small><p>{item.tutor || 'Tutor belum ditentukan'} • {item.schedule || 'Jadwal belum tersedia'}</p></div><b>→</b></button>)}</div>
+          {selectedCeoClass && <section className="ceo-selected-class-panel"><header><div><span className="eyebrow">{selectedCeoClass.classId} • {selectedCeoClass.program}</span><h2>{selectedCeoClass.className}</h2><p>{selectedCeoClass.tutor} • {selectedCeoClass.schedule}</p></div><strong>{selectedCeoClass.studentCount}<small>SISWA</small></strong></header><div className="ceo-class-kpi-grid"><article><span>Perkembangan Akademik</span><strong>{selectedCeoClass.academicProgress}%</strong><i><b style={{width:`${selectedCeoClass.academicProgress}%`}} /></i></article><article><span>Kehadiran</span><strong>{selectedCeoClass.attendance}%</strong><i><b style={{width:`${selectedCeoClass.attendance}%`}} /></i></article><article><span>Penyelesaian Tugas</span><strong>{selectedCeoClass.assignmentProgress}%</strong><i><b style={{width:`${selectedCeoClass.assignmentProgress}%`}} /></i></article><article><span>Penyelesaian Tantangan</span><strong>{selectedCeoClass.challengeProgress}%</strong><i><b style={{width:`${selectedCeoClass.challengeProgress}%`}} /></i></article></div><div className="ceo-class-trend-table"><div className="ceo-trend-head"><span>Bulan</span><span>Akademik</span><span>Kehadiran</span><span>Tugas</span><span>Tantangan</span></div>{(selectedCeoClass.trends || []).map((trend) => <div key={trend.period}><strong>{trend.label}</strong><span>{trend.academic}%</span><span>{trend.attendance}%</span><span>{trend.assignments}%</span><span>{trend.challenges}%</span></div>)}</div><div className="ceo-decision-note"><strong>Catatan pengambilan keputusan</strong><p>{selectedCeoClass.attendance < 75 ? 'Kehadiran kelas perlu ditindaklanjuti bersama tutor dan admin.' : selectedCeoClass.assignmentProgress < 70 ? 'Penyelesaian tugas perlu menjadi fokus tindak lanjut.' : selectedCeoClass.academicProgress < 70 ? 'Perlu evaluasi materi, strategi pembelajaran, atau dukungan tambahan.' : 'Tren kelas berada dalam kondisi baik. Pertahankan monitoring rutin.'}</p></div></section>}
         </section>
       ) : activePage === 'ceo-revenue' && user.role === 'CEO' ? (
-        <section className="ceo-detail-page">
-          <div className="page-heading"><div><span className="eyebrow">CEO • REVENUE</span><h1>Rincian Pendapatan</h1><p>Total 3 bulan terakhir: {formatRupiah(ceoMonitoring?.revenueLast3Months || 0)}</p></div></div>
-          <div className="ceo-revenue-method-grid">
-            {(ceoMonitoring?.revenueByMethod || []).map((item) => <article key={item.method}><span>{item.method}</span><strong>{formatRupiah(item.amount)}</strong><small>{item.transactions} transaksi</small></article>)}
-          </div>
-          <button type="button" className="ceo-detail-link-button" onClick={() => onNavigate('payment-confirmations')}>Buka Payment Center →</button>
+        <section className="ceo-detail-page ceo-business-page">
+          <div className="page-heading"><div><span className="eyebrow">CEO • BUSINESS OVERVIEW</span><h1>Ringkasan Bisnis</h1><p>Laporan eksekutif pemasukan, pembayaran siswa, penjualan produk, dan rekening penerima selama 3 bulan terakhir.</p></div></div>
+          <div className="ceo-business-kpi"><article><small>TOTAL PENDAPATAN</small><strong>{formatRupiah(ceoMonitoring?.revenueLast3Months || 0)}</strong><span>3 bulan terakhir</span></article><article><small>RATA-RATA BULANAN</small><strong>{formatRupiah(ceoMonitoring?.averageMonthlyRevenue || 0)}</strong><span>Rata-rata 3 bulan</span></article><button type="button" onClick={() => setCeoFinanceList('paid')}><small>SUDAH BAYAR BULAN INI</small><strong>{ceoMonitoring?.currentPaidStudents?.length || 0}</strong><span>Klik untuk melihat nama →</span></button><button type="button" onClick={() => setCeoFinanceList('unpaid')}><small>BELUM BAYAR BULAN INI</small><strong>{ceoMonitoring?.currentUnpaidStudents?.length || 0}</strong><span>Klik untuk melihat nama →</span></button></div>
+          {ceoFinanceList && <section className="ceo-finance-name-panel"><header><div><span className="eyebrow">DETAIL</span><h2>{ceoFinanceList === 'paid' ? 'Siswa Sudah Membayar' : ceoFinanceList === 'unpaid' ? 'Siswa Belum Membayar' : ceoFinanceList === 'books' ? 'Pembeli Paket Buku' : 'Pembeli ID Card'}</h2></div><button type="button" onClick={() => setCeoFinanceList('')}>×</button></header><div>{ceoFinanceListData.length ? ceoFinanceListData.map((item, index) => <article key={item.studentId || item.paymentId || index}><span>{String(index + 1).padStart(2,'0')}</span><div><strong>{item.fullName || item.studentName || 'Siswa'}</strong><small>{item.studentId || '—'} • {item.classId || item.program || item.itemLabel || '—'}</small></div>{item.amount ? <b>{formatRupiah(item.amount)}</b> : <b>{item.period || ceoMonitoring?.currentPeriod}</b>}</article>) : <div className="empty-state">Belum ada data pada kelompok ini.</div>}</div></section>}
+          <section className="ceo-business-section"><div className="section-heading"><div><span className="eyebrow">REVENUE TREND</span><h2>Pendapatan 3 Bulan</h2></div></div><div className="ceo-revenue-month-grid">{(ceoMonitoring?.revenueMonthly || []).map((item) => <article key={item.period}><span>{item.label}</span><strong>{formatRupiah(item.amount)}</strong><i><b style={{width:`${Math.min(100, (item.amount / Math.max(...(ceoMonitoring?.revenueMonthly || []).map((entry) => entry.amount), 1)) * 100)}%`}} /></i></article>)}</div></section>
+          <section className="ceo-business-columns"><article><header><span className="eyebrow">INCOME SOURCES</span><h3>Sumber Pendapatan</h3></header><div className="ceo-finance-breakdown">{(ceoMonitoring?.revenueByCategory || []).map((item) => <div key={item.category}><span>{item.category}<small>{item.transactions} transaksi</small></span><strong>{formatRupiah(item.amount)}</strong></div>)}</div></article><article><header><span className="eyebrow">RECEIVING ACCOUNTS</span><h3>Rekening Penerima</h3></header><div className="ceo-finance-breakdown">{(ceoMonitoring?.revenueByMethod || []).map((item) => <div key={item.method}><span>{item.method}<small>{item.transactions} transaksi</small></span><strong>{formatRupiah(item.amount)}</strong></div>)}</div></article></section>
+          <section className="ceo-product-summary"><button type="button" onClick={() => setCeoFinanceList('books')}><span>▤</span><div><small>BOOK SALES</small><strong>{ceoMonitoring?.bookSummary?.purchased || 0} paket terjual</strong><p>{ceoMonitoring?.bookSummary?.received || 0} diterima • {ceoMonitoring?.bookSummary?.pendingDelivery || 0} diproses</p></div><b>→</b></button><button type="button" onClick={() => setCeoFinanceList('cards')}><span>◇</span><div><small>ID CARD SALES</small><strong>{ceoMonitoring?.idCardSummary?.purchased || 0} ID Card terjual</strong><p>Transaksi terverifikasi</p></div><b>→</b></button></section>
+          <section className="ceo-admin-message-card"><div><span className="eyebrow">CEO → ADMIN</span><h2>Pesan untuk Admin</h2><p>Kirim arahan atau tindak lanjut operasional langsung melalui Academic Suite.</p></div><form onSubmit={sendCeoMessage}><textarea rows="4" maxLength="1000" value={ceoAdminMessage} onChange={(event) => setCeoAdminMessage(event.target.value)} placeholder="Contoh: Mohon tindak lanjuti siswa yang belum membayar sebelum akhir pekan." /><div><small>{ceoAdminMessage.length}/1000</small><button type="submit" disabled={ceoMessageSending || !ceoAdminMessage.trim()}>{ceoMessageSending ? 'Mengirim...' : 'Kirim ke Admin'}</button></div></form>{ceoMessageStatus && <p className="ceo-message-status">{ceoMessageStatus}</p>}{(ceoMonitoring?.managementMessages || []).length > 0 && <div className="ceo-sent-message-list"><strong>Pesan terkirim terbaru</strong>{ceoMonitoring.managementMessages.slice(0,4).map((item) => <article key={item.messageId}><p>{item.text}</p><small>{item.createdAt}</small></article>)}</div>}</section>
         </section>
       ) : activePage === 'ceo-attendance' && user.role === 'CEO' ? (
         <section className="ceo-detail-page">
@@ -4697,7 +4811,7 @@ function Dashboard({
             <div><span>{ceoMonitoring?.attendanceCurrentMonth?.present || 0} hadir</span><span>dari {ceoMonitoring?.attendanceCurrentMonth?.totalRecords || 0} catatan kehadiran</span></div>
           </div>
         </section>
-      ) : activePage === 'students' ? (
+      ) : activePage === 'students' && user.role === 'Admin' ? (
         <StudentsPage
           students={students}
           loading={studentsLoading}
@@ -4713,7 +4827,7 @@ function Dashboard({
           onBack={() => onNavigate('home')}
         />
       ) : activePage === 'registrations' ? (
-        <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} token={token} onRefresh={onRefreshRegistrations} />
+        <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} onCancelVerification={onCancelRegistrationVerification} token={token} onRefresh={onRefreshRegistrations} />
       ) : activePage === 'payment-confirmations' ? (
         <PaymentPageErrorBoundary><PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onBulkPayment={onBulkPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} /></PaymentPageErrorBoundary>
       ) : activePage === 'attendance-watch' ? (
@@ -4724,12 +4838,13 @@ function Dashboard({
         <section className="admin-menu-page">
           <div className="page-heading"><div><span className="eyebrow">OPERATIONS</span><h1>Menu</h1><p>Akses cepat operasional dan aktivitas Admin.</p></div></div>
           <div className="admin-menu-links">
-            <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>
-            <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>
-            <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('attendance-watch')}><span>◷</span><div><strong>Attendance Watch</strong><small>Tindak lanjut ketidakhadiran siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
-            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Monitoring Kelas</strong><small>Kelas aktif, tuition trend, buku, dan ID Card</small></div><b>→</b></button>}
+            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Kelas & Perkembangan</strong><small>Tren akademik, kehadiran, tugas, dan tantangan</small></div><b>→</b></button>}
+            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-revenue')}><span>▥</span><div><strong>Business Overview</strong><small>Keuangan 3 bulan, tuition, produk, dan rekening penerima</small></div><b>→</b></button>}
           </div>
         </section>
       ) : (
@@ -4749,18 +4864,10 @@ function Dashboard({
           Beranda
         </button>
 
-        <button
-          className={activePage === 'students' ? 'active' : ''}
-          onClick={() => onNavigate('students')}
-        >
-          <span>👥</span>
-          Siswa
-        </button>
+        {user.role === 'CEO' ? <button className={activePage === 'ceo-classes' ? 'active' : ''} onClick={() => onNavigate('ceo-classes')}><span>🏫</span>Kelas</button> : <button className={activePage === 'students' ? 'active' : ''} onClick={() => onNavigate('students')}><span>👥</span>Siswa</button>}
 
         {user.role === 'Admin' && <button className={activePage === 'registrations' ? 'active' : ''} onClick={() => onNavigate('registrations')}><span>▤</span>Pendaftaran</button>}
-        <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}>
-          <span>💳</span>Pembayaran
-        </button>
+        {user.role === 'CEO' ? <button className={activePage === 'ceo-revenue' ? 'active' : ''} onClick={() => onNavigate('ceo-revenue')}><span>▥</span>Business</button> : <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}><span>💳</span>Pembayaran</button>}
 
         <button
           className={activePage === 'menu' ? 'active' : ''}
@@ -5071,7 +5178,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     const invoiceWindow = window.open('', '_blank');
     if (!invoiceWindow) return window.alert('Izinkan pop-up untuk membuat invoice.');
     invoiceWindow.document.write(`<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice Mr One Course</title><style>
-      *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;justify-content:space-between;gap:20px;padding:28px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:8px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:6px}.invoice-document>header span{font-size:11px;letter-spacing:.16em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:14px}.brand{display:flex;align-items:center;gap:10px;text-align:right}.brand img{width:52px;height:52px;border-radius:13px;object-fit:cover;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:16px}.brand small{color:#d7f5f6}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header,.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand{text-align:left}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
+      *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:0;padding:20px 24px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:6px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:5px}.invoice-document>header span{font-size:10px;letter-spacing:.14em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:13px}.brand{display:flex;align-items:center;gap:9px;text-align:right}.brand img{display:block;width:44px;height:44px;max-width:44px;max-height:44px;border-radius:11px;object-fit:contain;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:15px}.brand small{color:#d7f5f6;font-size:10px}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header{padding:17px 18px}.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand img{width:38px;height:38px;max-width:38px;max-height:38px}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document>header{padding:8mm 14mm!important}.brand img{width:13mm!important;height:13mm!important;max-width:13mm!important;max-height:13mm!important}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
     </style></head><body>${invoices}<div class="print-actions"><button onclick="window.print()">⤓ Cetak / Simpan Invoice</button></div></body></html>`);
     invoiceWindow.document.close();
   }
@@ -5169,15 +5276,14 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   }
 
   const paymentJobCopy = {
-    bulk: { eyebrow: 'PEMBAYARAN MASSAL', title: 'Catat Pembayaran Siswa', description: 'Pilih siswa yang sudah membayar, tentukan tanggal dan metode, lalu tandai lunas sekaligus.' },
+    bulk: { eyebrow: 'INPUT PAYMENT', title: 'Input Pembayaran Siswa', description: 'Pilih satu atau beberapa siswa yang sudah membayar, tentukan tanggal dan metode, lalu simpan pembayaran.' },
     invoice: { eyebrow: 'SURAT TAGIHAN', title: 'Buat Invoice Siswa', description: 'Pilih siswa dengan tagihan aktif, lalu buat invoice profesional untuk setiap siswa.' },
     historical: { eyebrow: 'PEMBAYARAN LAMA', title: 'Catat Transaksi Lama', description: 'Masukkan pembayaran yang diterima sebelum portal Academic Suite digunakan.' }
   };
 
   return <section className="payment-admin-page payment-admin-page-v77 payment-admin-page-v31">
     {!activePaymentJob && <div className="payment-job-cards payment-job-cards-home">
-      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span>✓</span><strong>Catat Pembayaran Massal</strong><small>Pilih beberapa siswa dan tandai lunas sekaligus.</small></button>
-      <button type="button" onClick={() => setActivePaymentJob('invoice')}><span>▤</span><strong>Buat Surat Tagihan</strong><small>Buat invoice untuk siswa yang dipilih.</small></button>
+      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span>✓</span><strong>Input Payment</strong><small>Catat pembayaran satu atau beberapa siswa dengan cepat.</small></button>
       <button type="button" onClick={() => { setActivePaymentJob('historical'); setShowHistorical(true); }}><span>＋</span><strong>Pembayaran Lama</strong><small>Catat transaksi sebelum portal digunakan.</small></button>
     </div>}
 
@@ -5186,7 +5292,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
     </div>}
 
-    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Tandai Lunas'}</button></form>}
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button><button type="button" className="invoice-secondary-action" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat Surat Tagihan</button></div></form>}
 
     {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
 
@@ -5253,7 +5359,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   </section>;
 }
 
-function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, token, onRefresh }) {
+function StudentRegistrationsPage({ registrations, loading, message, onApprove, onReject, onCancelVerification, token, onRefresh }) {
   const [drafts, setDrafts] = useState({});
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState('');
@@ -5453,6 +5559,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
           <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
           <div className="registration-contact"><span>Student ID: <b>{item.studentId || '—'}</b></span><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
           <div className="registration-wa-actions registration-wa-actions-approved">
+            <button type="button" className="cancel-verification" onClick={() => { if (window.confirm(`Batalkan verifikasi pendaftaran ${item.fullName}?`)) onCancelVerification({ registrationId: item.registrationId }); }}>↶ Batalkan Verifikasi</button>
             <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'approved')} disabled={waLoading === `${item.registrationId}-approved`}>
               {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Hasil Verifikasi'}
             </button>
@@ -5826,6 +5933,10 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     finally { setDetailLoading(false); }
   }
 
+  const activeStudentsOnPage = students.filter((student) => /^(aktif|active)$/i.test(String(student.status || 'Aktif').trim())).length;
+  const inactiveStudentsOnPage = Math.max(students.length - activeStudentsOnPage, 0);
+  const activeAccountsOnPage = students.filter((student) => /^(aktif|active)$/i.test(String(student.accountStatus || '').trim())).length;
+
   if (selectedStudentId) {
     return <section className="students-page admin-student-detail-page">
       <button type="button" className="admin-student-detail-back" onClick={closeStudentDetail}>← Kembali ke Data Siswa</button>
@@ -5929,7 +6040,7 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
     </section>;
   }
 
-  return <section className="students-page">
+  return <section className="students-page admin-student-directory-v32">
     {isCEOStudentManager && <section className="admin-student-account-bulk-card">
       <div className="section-heading">
         <div><span className="eyebrow">CEO • STUDENT ACCOUNT CONTROL</span><h2>Aktivasi / Reset Semua Akun Siswa</h2><p>Kontrol massal akun siswa dipusatkan di CEO. Hanya siswa berstatus aktif yang diproses; data pembayaran, absensi, EXP, badge, dan akademik tidak diubah.</p></div>
@@ -5942,15 +6053,33 @@ function StudentsPage({ students, loading, search, onSearchChange, onSearch, pag
       <small className="admin-student-account-warning">Tindakan ini membatalkan session siswa lama sehingga mereka harus Sign In kembali menggunakan Student ID dan password awal baru.</small>
     </section>}
 
-    <div className="page-heading"><div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>{pagination.totalData || 0} siswa ditemukan</p></div></div>
-    <form className="student-search" onSubmit={submitSearch}><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cari nama, ID, sekolah, atau kelas" /><button type="submit">Cari</button></form>
+    <div className="student-directory-hero-v32">
+      <div><span className="eyebrow">STUDENT DIRECTORY</span><h1>Data Siswa</h1><p>Temukan siswa dan buka profil lengkap, akun, kehadiran, pembayaran, serta perkembangan belajarnya.</p></div>
+      <strong>{pagination.totalData || 0}<small>Total Siswa</small></strong>
+    </div>
+    <div className="student-directory-summary-v32">
+      <div><span>DITAMPILKAN</span><strong>{students.length}</strong><small>pada halaman ini</small></div>
+      <div><span>STATUS AKTIF</span><strong>{activeStudentsOnPage}</strong><small>siswa aktif</small></div>
+      <div><span>NONAKTIF / CUTI</span><strong>{inactiveStudentsOnPage}</strong><small>perlu diperiksa</small></div>
+      <div><span>AKUN AKTIF</span><strong>{activeAccountsOnPage}</strong><small>dapat masuk aplikasi</small></div>
+    </div>
+    <form className="student-search student-search-v32" onSubmit={submitSearch}><span>⌕</span><input type="search" value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Cari nama, Student ID, sekolah, program, atau kelas" /><button type="submit">Cari Siswa</button>{search && <button type="button" className="student-search-clear-v32" onClick={() => { onSearchChange(''); onSearch(''); }}>Hapus</button>}</form>
     {message && <div className="error-message">{message}</div>}
-    {loading ? <div className="dashboard-loading">Memuat data siswa...</div> : students.length === 0 ? <div className="empty-state">Data siswa tidak ditemukan.</div> : <div className="student-list">
-      {students.map((student) => <button type="button" className="student-card student-card-action" key={student.studentId} onClick={() => openStudentDetail(student.studentId)}>
-        <div className="student-avatar">{String(student.fullName || 'S').charAt(0).toUpperCase()}</div>
-        <div className="student-info"><div className="student-name-row"><strong>{student.fullName || 'Tanpa nama'}</strong><span className={`student-status ${String(student.status).toLowerCase() === 'aktif' ? 'active' : ''}`}>{student.status || 'Aktif'}</span></div><span>{student.studentId || '-'}</span><p>{student.program || 'Program belum diisi'} • {student.className || student.classId || 'Kelas belum diisi'}</p><small>{student.school || 'Sekolah belum diisi'}{student.grade ? ` • ${student.grade}` : ''}</small></div>
-        <b className="student-card-open">→</b>
-      </button>)}
+    {loading ? <div className="student-directory-loading-v32">{Array.from({ length: 6 }, (_, index) => <div key={index}><i></i><span></span><span></span><span></span></div>)}</div> : students.length === 0 ? <div className="empty-state student-directory-empty-v32"><strong>Data siswa tidak ditemukan</strong><span>Periksa kembali kata pencarian atau hapus pencarian untuk melihat seluruh siswa.</span></div> : <div className="student-list student-directory-grid-v32">
+      {students.map((student) => {
+        const activeStatus = /^(aktif|active)$/i.test(String(student.status || 'Aktif').trim());
+        const activeAccount = /^(aktif|active)$/i.test(String(student.accountStatus || '').trim());
+        return <button type="button" className="student-card student-card-action student-directory-card-v32" key={student.studentId} onClick={() => openStudentDetail(student.studentId)}>
+          <header><StudentPhoto photoLink={student.photoLink} fullName={student.fullName} className="student-directory-photo-v32" /><div><small>{student.studentId || 'TANPA ID'}</small><strong>{student.fullName || 'Tanpa nama'}</strong></div><span className={`student-status ${activeStatus ? 'active' : ''}`}>{student.status || 'Aktif'}</span></header>
+          <div className="student-directory-details-v32">
+            <div><span>Program</span><strong>{student.program || 'Belum diisi'}</strong></div>
+            <div><span>Kelas</span><strong>{student.className || student.classId || 'Belum diisi'}</strong></div>
+            <div><span>Sekolah</span><strong>{student.school || 'Belum diisi'}</strong></div>
+            <div><span>Tingkat</span><strong>{student.grade || '—'}</strong></div>
+          </div>
+          <footer><span className={activeAccount ? 'account-active' : 'account-inactive'}>{activeAccount ? '● Akun Aktif' : '○ Akun Belum Aktif'}</span><b>Buka Detail <i>→</i></b></footer>
+        </button>;
+      })}
     </div>}
     {!loading && pagination.totalPages > 1 && <div className="pagination"><button disabled={pagination.page <= 1} onClick={() => onPageChange(pagination.page - 1)}>← Sebelumnya</button><span>Halaman {pagination.page} dari {pagination.totalPages}</span><button disabled={pagination.page >= pagination.totalPages} onClick={() => onPageChange(pagination.page + 1)}>Berikutnya →</button></div>}
   </section>;
