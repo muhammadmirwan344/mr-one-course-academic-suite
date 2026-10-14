@@ -26406,7 +26406,10 @@ html[data-theme='light'] .student-directory-hero-v32,html[data-theme='light'] .s
    Scoped to Tutor only; other dashboards remain unchanged.
    ========================================================= */
 .tutor-dashboard .tutor-academic-master {
-  display: none !important;
+  display: grid !important;
+  gap: 18px !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 .tutor-dashboard .tutor-journal-simple {
