@@ -2030,6 +2030,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const [notice, setNotice] = useState('');
   const [attendanceSavedModal, setAttendanceSavedModal] = useState(null);
   const [journal, setJournal] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, title: '', objective: '', activities: '', notes: '' });
+  const [journalStudents, setJournalStudents] = useState({});
   const [learningPlan, setLearningPlan] = useState({
     month: new Date().toISOString().slice(0, 7), meetingNumber: 1, plannedDate: '', title: '', objective: '',
     targetCompetency: '', activities: '', status: 'Direncanakan',
@@ -2075,6 +2076,44 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   }, [classes, selectedClassId]);
 
   const selectedClass = classes.find((item) => item.classId === selectedClassId) || classes[0] || null;
+
+  useEffect(() => {
+    if (!selectedClass?.students?.length) {
+      setJournalStudents({});
+      return;
+    }
+    setJournalStudents(Object.fromEntries(selectedClass.students.map((student) => [
+      student.studentId,
+      { selected: false, achievement: 'Berkembang', comment: '' }
+    ])));
+  }, [selectedClassId, overview]);
+
+  function composeJournalComment(student, achievement) {
+    const topic = journal.title.trim() || (isID ? 'materi pada pertemuan ini' : 'today’s lesson');
+    const activity = journal.activities.trim();
+    const idTemplates = {
+      'Sangat Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} secara mandiri, aktif, dan konsisten.`,
+      'Baik': `${student.fullName} mampu memahami dan menerapkan materi ${topic} dengan baik serta hanya memerlukan sedikit arahan.`,
+      'Berkembang': `${student.fullName} mulai memahami materi ${topic} dan perlu melanjutkan latihan agar lebih percaya diri dan konsisten.`,
+      'Perlu Dukungan': `${student.fullName} memerlukan pendampingan dan latihan tambahan untuk memahami serta menerapkan materi ${topic}.`
+    };
+    const enTemplates = {
+      'Sangat Baik': `${student.fullName} understood and applied ${topic} independently, actively, and consistently.`,
+      'Baik': `${student.fullName} understood and applied ${topic} well with only limited guidance.`,
+      'Berkembang': `${student.fullName} is developing an understanding of ${topic} and needs continued practice to become more confident and consistent.`,
+      'Perlu Dukungan': `${student.fullName} needs further guidance and additional practice to understand and apply ${topic}.`
+    };
+    const base = (isID ? idTemplates : enTemplates)[achievement] || (isID ? idTemplates.Berkembang : enTemplates.Berkembang);
+    return activity ? `${base} ${isID ? 'Kegiatan pembelajaran meliputi' : 'Learning activities included'} ${activity.replace(/[.!?]+$/, '')}.` : base;
+  }
+
+  function generateAllJournalComments() {
+    if (!selectedClass) return;
+    setJournalStudents((current) => Object.fromEntries(selectedClass.students.map((student) => {
+      const entry = current[student.studentId] || { selected: false, achievement: 'Berkembang' };
+      return [student.studentId, { ...entry, comment: entry.selected ? composeJournalComment(student, entry.achievement) : entry.comment || '' }];
+    })));
+  }
   const tutorMonthKey = new Date().toISOString().slice(0, 7);
   const selectedMonthPlans = (selectedClass?.learningPlans || []).filter((item) => String(item.month || item.plannedDate || '').startsWith(tutorMonthKey));
   const selectedMonthJournals = (selectedClass?.journals || []).filter((item) => String(item.date || '').startsWith(tutorMonthKey));
@@ -2145,9 +2184,19 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     setSaving(true);
     setNotice('');
     try {
-      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries: [] } });
+      const studentEntries = (selectedClass?.students || []).map((student) => {
+        const entry = journalStudents[student.studentId] || {};
+        return {
+          studentId: student.studentId,
+          selected: entry.selected === true,
+          achievement: entry.achievement || 'Berkembang',
+          comment: entry.comment || composeJournalComment(student, entry.achievement || 'Berkembang')
+        };
+      }).filter((entry) => entry.selected);
+      const result = await callApi({ action: 'saveTutorJournal', token, journal: { ...journal, classId: selectedClassId, studentEntries } });
       setNotice(result.message || (isID ? 'Learning Journal berhasil disimpan.' : 'Learning Journal saved successfully.'));
       setJournal((current) => ({ ...current, title: '', objective: '', activities: '', notes: '' }));
+      setJournalStudents(Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, { selected: false, achievement: 'Berkembang', comment: '' }])));
       await onRefresh();
     } catch (error) {
       setNotice(error.message || (isID ? 'Jurnal gagal disimpan.' : 'Journal could not be saved.'));
@@ -2430,8 +2479,36 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
             <label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="3" value={journal.objective} onChange={(event) => setJournal({ ...journal, objective: event.target.value })} placeholder={isID ? 'Contoh: Siswa mampu membuat kalimat tentang kebiasaan sehari-hari.' : 'Example: Students can write sentences about daily routines.'} required /></label>
             <label><span>{isID ? 'Kegiatan Pembelajaran' : 'Learning Activities'}</span><textarea rows="4" value={journal.activities} onChange={(event) => setJournal({ ...journal, activities: event.target.value })} placeholder={isID ? 'Contoh: Apersepsi, penjelasan singkat, latihan berpasangan, dan refleksi.' : 'Example: Warm-up, short explanation, pair practice, and reflection.'} required /></label>
             <label><span>{isID ? 'Catatan / Tindak Lanjut (opsional)' : 'Notes / Follow-up (optional)'}</span><textarea rows="3" value={journal.notes} onChange={(event) => setJournal({ ...journal, notes: event.target.value })} placeholder={isID ? 'Isi hanya jika ada hal penting untuk pertemuan berikutnya.' : 'Complete only when there is an important follow-up.'} /></label>
-            <div className="journal-automatic-class-note"><span>✓</span><div><strong>{isID ? 'Tidak perlu mencentang siswa satu per satu' : 'No need to select students one by one'}</strong><small>{isID ? 'Jurnal disimpan sebagai catatan kelas. Penilaian siswa tetap dilakukan melalui menu Penilaian atau Perkembangan Siswa.' : 'The journal is saved as a class record. Assess students from Assessment or Student Progress.'}</small></div></div>
-            <button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.objective.trim() || !journal.activities.trim()}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal Mengajar' : 'Save Teaching Journal')}</button>
+            <div className="journal-roster-heading">
+              <div>
+                <span>{isID ? 'CAPAIAN INDIVIDUAL' : 'INDIVIDUAL PROGRESS'}</span>
+                <h3>{isID ? 'Centang Siswa Satu per Satu' : 'Select Students One by One'}</h3>
+                <small>{isID ? 'Centang siswa yang mengikuti pertemuan, lalu pilih capaian belajarnya.' : 'Select each student who joined the lesson, then record their learning achievement.'}</small>
+              </div>
+              <div className="journal-roster-actions">
+                <button type="button" onClick={generateAllJournalComments} disabled={!journal.title.trim()}>{isID ? '✦ Susun Catatan Otomatis' : '✦ Generate Comments'}</button>
+              </div>
+            </div>
+            <div className="journal-student-roster">
+              {(selectedClass?.students || []).map((student, index) => {
+                const entry = journalStudents[student.studentId] || { selected: false, achievement: 'Berkembang', comment: '' };
+                return <article className={entry.selected ? '' : 'not-selected'} key={student.studentId}>
+                  <label className="journal-student-check">
+                    <input type="checkbox" checked={entry.selected === true} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, selected: event.target.checked } })} />
+                    <span>{String(index + 1).padStart(2, '0')}</span>
+                    <div><strong>{student.fullName}</strong><small>{student.studentId}</small></div>
+                  </label>
+                  {entry.selected && <>
+                    <label className="journal-achievement"><span>{isID ? 'Kemampuan Hari Ini' : 'Today’s Achievement'}</span><select value={entry.achievement} onChange={(event) => { const achievement = event.target.value; setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, achievement, comment: composeJournalComment(student, achievement) } }); }}><option value="Sangat Baik">{isID ? 'Sangat Baik — Mandiri' : 'Excellent — Independent'}</option><option value="Baik">{isID ? 'Baik — Sedikit Arahan' : 'Good — Limited Guidance'}</option><option value="Berkembang">{isID ? 'Berkembang — Perlu Latihan' : 'Developing — Needs Practice'}</option><option value="Perlu Dukungan">{isID ? 'Perlu Dukungan — Pendampingan' : 'Needs Support — Guidance'}</option></select></label>
+                    <label className="journal-generated-comment"><span>{isID ? 'Catatan Otomatis (boleh diedit)' : 'Generated Comment (editable)'}</span><textarea rows="3" value={entry.comment} onChange={(event) => setJournalStudents({ ...journalStudents, [student.studentId]: { ...entry, comment: event.target.value } })} placeholder={isID ? 'Pilih kemampuan siswa atau gunakan tombol susun catatan otomatis.' : 'Select the student achievement or generate a comment.'} /></label>
+                  </>}
+                </article>;
+              })}
+            </div>
+            <div className="journal-save-summary">
+              <span>{Object.values(journalStudents).filter((entry) => entry.selected === true).length} {isID ? 'siswa dicentang' : 'students selected'}</span>
+              <button type="submit" disabled={saving || !selectedClassId || !journal.title.trim() || !journal.objective.trim() || !journal.activities.trim() || !Object.values(journalStudents).some((entry) => entry.selected === true)}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Jurnal & Capaian Siswa' : 'Save Journal & Student Progress')}</button>
+            </div>
           </form>
           {selectedClass?.journals?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Jurnal Terbaru' : 'Recent Journals'}</h3>{selectedClass.journals.map((entry) => <article key={entry.journalId || `${entry.date}-${entry.meetingNumber}`}><span>{String(entry.meetingNumber).padStart(2, '0')}</span><div><strong>{entry.title}</strong>{entry.objective && <small><b>{isID ? 'Tujuan:' : 'Objective:'}</b> {entry.objective}</small>}<small>{entry.date} • {entry.activities}</small></div></article>)}</div>}
         </section>
