@@ -2009,14 +2009,39 @@ function ThemeSwitch({ theme, onChange }) {
   );
 }
 
-function createEmptyAssignmentQuestion() {
-  return { id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, text: '', options: ['', '', '', ''], correctOption: 0, points: 10 };
+const ASSIGNMENT_TASK_TYPES = [
+  ['multiple-choice', 'Pilihan Ganda', '◉'], ['multiple-select', 'Pilihan Ganda Kompleks', '☑'], ['true-false', 'Benar / Salah', '◐'],
+  ['fill-blank', 'Fill in the Blank', '＿'], ['matching', 'Matching', '⇄'], ['ordering', 'Mengurutkan', '↕'],
+  ['sentence-builder', 'Sentence Builder', '▤'], ['categorization', 'Kategorisasi', '▦'], ['short-answer', 'Jawaban Singkat', '✎'],
+  ['error-correction', 'Error Correction', '✓'], ['reading', 'Reading Task', '▧'], ['listening', 'Listening Task', '◖']
+];
+
+function createEmptyAssignmentQuestion(taskType = 'multiple-choice') {
+  const type = ['reading', 'listening'].includes(taskType) ? 'multiple-choice' : taskType;
+  const base = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, text: '', points: 10 };
+  if (type === 'multiple-choice') return { ...base, options: ['', '', '', ''], correctOption: 0 };
+  if (type === 'multiple-select') return { ...base, options: ['', '', '', ''], correctOptions: [] };
+  if (type === 'true-false') return { ...base, options: ['True', 'False'], correctOption: 0 };
+  if (['fill-blank', 'short-answer', 'error-correction'].includes(type)) return { ...base, acceptedAnswers: '' };
+  if (type === 'matching') return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }] };
+  if (['ordering', 'sentence-builder'].includes(type)) return { ...base, items: ['', '', ''] };
+  if (type === 'categorization') return { ...base, categories: [{ name: '', items: '' }, { name: '', items: '' }] };
+  return { ...base, acceptedAnswers: '' };
 }
 
-function AssignmentQuestionBuilder({ questions, onChange, isID }) {
+function AssignmentQuestionBuilder({ questions, onChange, isID, taskType = 'multiple-choice' }) {
   const rows = Array.isArray(questions) ? questions : [];
+  const editorType = ['reading', 'listening'].includes(taskType) ? 'multiple-choice' : taskType;
   const updateQuestion = (index, update) => onChange(rows.map((item, itemIndex) => itemIndex === index ? { ...item, ...update } : item));
-  return <section className="assignment-question-builder"><div className="question-builder-heading"><div><span>{isID ? 'SOAL PILIHAN GANDA' : 'MULTIPLE-CHOICE QUESTIONS'}</span><strong>{rows.length} {isID ? 'soal' : 'questions'} • {rows.reduce((sum, item) => sum + Number(item.points || 0), 0)} {isID ? 'poin' : 'points'}</strong></div><button type="button" onClick={() => onChange([...rows, createEmptyAssignmentQuestion()])}>＋ {isID ? 'Tambah Soal' : 'Add Question'}</button></div>{rows.map((question, questionIndex) => <article key={question.id || questionIndex}><header><b>{isID ? 'Soal' : 'Question'} {questionIndex + 1}</b><label><span>{isID ? 'Bobot' : 'Weight'}</span><input type="number" min="1" max="100" value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} /></label><button type="button" aria-label={isID ? 'Hapus soal' : 'Delete question'} onClick={() => onChange(rows.filter((_, index) => index !== questionIndex))}>×</button></header><textarea rows="2" value={question.text} onChange={(event) => updateQuestion(questionIndex, { text: event.target.value })} placeholder={isID ? 'Tulis pertanyaan...' : 'Write the question...'} /> <div className="question-option-grid">{question.options.map((option, optionIndex) => <label className={Number(question.correctOption) === optionIndex ? 'correct-option' : ''} key={optionIndex}><input type="radio" name={`key-${question.id || questionIndex}`} checked={Number(question.correctOption) === optionIndex} onChange={() => updateQuestion(questionIndex, { correctOption: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><input value={option} onChange={(event) => updateQuestion(questionIndex, { options: question.options.map((value, index) => index === optionIndex ? event.target.value : value) })} placeholder={`${isID ? 'Pilihan' : 'Option'} ${String.fromCharCode(65 + optionIndex)}`} /></label>)}</div><small>{isID ? 'Pilih lingkaran pada jawaban yang benar.' : 'Select the radio button for the correct answer.'}</small></article>)}</section>;
+  const updateList = (questionIndex, field, itemIndex, value) => updateQuestion(questionIndex, { [field]: (rows[questionIndex][field] || []).map((item, index) => index === itemIndex ? value : item) });
+  const typeLabel = ASSIGNMENT_TASK_TYPES.find(([value]) => value === taskType)?.[1] || 'Assignment';
+  return <section className={`assignment-question-builder task-${taskType}`}><div className="question-builder-heading"><div><span>{typeLabel.toUpperCase()}</span><strong>{rows.length} {isID ? 'soal' : 'questions'} • {rows.reduce((sum, item) => sum + Number(item.points || 0), 0)} {isID ? 'poin' : 'points'}</strong></div><button type="button" onClick={() => onChange([...rows, createEmptyAssignmentQuestion(taskType)])}>＋ {isID ? 'Tambah Soal' : 'Add Question'}</button></div>{rows.map((question, questionIndex) => <article key={question.id || questionIndex}><header><b>{isID ? 'Soal' : 'Question'} {questionIndex + 1}</b><label><span>{isID ? 'Bobot' : 'Weight'}</span><input type="number" min="1" max="100" value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} /></label><button type="button" aria-label={isID ? 'Hapus soal' : 'Delete question'} onClick={() => onChange(rows.filter((_, index) => index !== questionIndex))}>×</button></header><textarea rows="2" value={question.text} onChange={(event) => updateQuestion(questionIndex, { text: event.target.value })} placeholder={editorType === 'fill-blank' ? (isID ? 'Gunakan ___ pada bagian yang harus dilengkapi.' : 'Use ___ for the missing part.') : (isID ? 'Tulis pertanyaan atau instruksi...' : 'Write the question or instruction...')} />
+    {['multiple-choice', 'multiple-select', 'true-false'].includes(editorType) && <div className="question-option-grid">{(question.options || []).map((option, optionIndex) => { const checked = editorType === 'multiple-select' ? (question.correctOptions || []).includes(optionIndex) : Number(question.correctOption) === optionIndex; return <label className={checked ? 'correct-option' : ''} key={optionIndex}><input type={editorType === 'multiple-select' ? 'checkbox' : 'radio'} name={`key-${question.id || questionIndex}`} checked={checked} onChange={() => editorType === 'multiple-select' ? updateQuestion(questionIndex, { correctOptions: checked ? (question.correctOptions || []).filter((value) => value !== optionIndex) : [...(question.correctOptions || []), optionIndex] }) : updateQuestion(questionIndex, { correctOption: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><input value={option} readOnly={editorType === 'true-false'} onChange={(event) => updateList(questionIndex, 'options', optionIndex, event.target.value)} placeholder={`${isID ? 'Pilihan' : 'Option'} ${String.fromCharCode(65 + optionIndex)}`} /></label>; })}</div>}
+    {['fill-blank', 'short-answer', 'error-correction'].includes(editorType) && <label className="structured-key-field"><span>{isID ? 'Jawaban yang diterima' : 'Accepted Answers'}</span><input value={question.acceptedAnswers || ''} onChange={(event) => updateQuestion(questionIndex, { acceptedAnswers: event.target.value })} placeholder={isID ? 'Pisahkan alternatif dengan tanda |' : 'Separate alternatives with |'} /><small>{isID ? 'Huruf besar, tanda baca, dan spasi berlebih akan diabaikan.' : 'Capitalization, punctuation, and extra spaces are ignored.'}</small></label>}
+    {editorType === 'matching' && <div className="structured-row-list">{(question.pairs || []).map((pair, pairIndex) => <div className="matching-builder-row" key={pairIndex}><input value={pair.left} onChange={(event) => updateQuestion(questionIndex, { pairs: question.pairs.map((item, index) => index === pairIndex ? { ...item, left: event.target.value } : item) })} placeholder={isID ? 'Item kiri' : 'Left item'} /><b>↔</b><input value={pair.right} onChange={(event) => updateQuestion(questionIndex, { pairs: question.pairs.map((item, index) => index === pairIndex ? { ...item, right: event.target.value } : item) })} placeholder={isID ? 'Pasangan benar' : 'Correct match'} /><button type="button" onClick={() => updateQuestion(questionIndex, { pairs: question.pairs.filter((_, index) => index !== pairIndex) })}>×</button></div>)}<button type="button" className="add-structured-row" onClick={() => updateQuestion(questionIndex, { pairs: [...(question.pairs || []), { left: '', right: '' }] })}>＋ {isID ? 'Tambah Pasangan' : 'Add Pair'}</button></div>}
+    {['ordering', 'sentence-builder'].includes(editorType) && <div className="structured-row-list">{(question.items || []).map((item, itemIndex) => <div className="order-builder-row" key={itemIndex}><b>{itemIndex + 1}</b><input value={item} onChange={(event) => updateList(questionIndex, 'items', itemIndex, event.target.value)} placeholder={editorType === 'sentence-builder' ? (isID ? 'Kata sesuai urutan benar' : 'Word in the correct order') : (isID ? 'Item sesuai urutan benar' : 'Item in the correct order')} /><button type="button" onClick={() => updateQuestion(questionIndex, { items: question.items.filter((_, index) => index !== itemIndex) })}>×</button></div>)}<button type="button" className="add-structured-row" onClick={() => updateQuestion(questionIndex, { items: [...(question.items || []), ''] })}>＋ {isID ? 'Tambah Item' : 'Add Item'}</button></div>}
+    {editorType === 'categorization' && <div className="category-builder-list">{(question.categories || []).map((category, categoryIndex) => <div className="category-builder-row" key={categoryIndex}><input value={category.name} onChange={(event) => updateQuestion(questionIndex, { categories: question.categories.map((item, index) => index === categoryIndex ? { ...item, name: event.target.value } : item) })} placeholder={isID ? 'Nama kategori' : 'Category name'} /><textarea rows="2" value={category.items} onChange={(event) => updateQuestion(questionIndex, { categories: question.categories.map((item, index) => index === categoryIndex ? { ...item, items: event.target.value } : item) })} placeholder={isID ? 'Item kategori, pisahkan dengan koma' : 'Category items, separated by commas'} /><button type="button" onClick={() => updateQuestion(questionIndex, { categories: question.categories.filter((_, index) => index !== categoryIndex) })}>×</button></div>)}<button type="button" className="add-structured-row" onClick={() => updateQuestion(questionIndex, { categories: [...(question.categories || []), { name: '', items: '' }] })}>＋ {isID ? 'Tambah Kategori' : 'Add Category'}</button></div>}
+    <small>{isID ? 'Kunci ini digunakan sistem untuk menghitung nilai langsung.' : 'The system uses this answer key for instant grading.'}</small></article>)}</section>;
 }
 
 function TutorDashboard({ user, token, overview, loading, message, onRefresh, onLogout, language, theme, onThemeChange }) {
@@ -2039,7 +2064,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     challenge: { enabled: false, title: '', instructions: '', responseType: 'text', dueDate: '', expReward: 100, gradingMode: 'review', answerKey: '' }
   });
   const [studentNote, setStudentNote] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), participation: '', strengths: '', improvements: '', comment: '', achievement: '', expAwarded: 0 });
-  const [assignment, setAssignment] = useState({ title: '', instructions: '', assignedDate: new Date().toISOString().slice(0, 10), dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [createEmptyAssignmentQuestion()] });
+  const [assignment, setAssignment] = useState({ title: '', instructions: '', stimulus: '', assignedDate: new Date().toISOString().slice(0, 10), dueDate: '', expReward: 100, gradingMode: 'automatic', answerKey: '', questions: [createEmptyAssignmentQuestion()] });
   const [assignmentType, setAssignmentType] = useState('multiple-choice');
   const [assessment, setAssessment] = useState({ studentId: '', date: new Date().toISOString().slice(0, 10), type: 'Monthly Assessment', speaking: '', writing: '', reading: '', listening: '', quizTest: '', comment: '' });
   const [challenge, setChallenge] = useState({ title: '', instructions: '', responseType: 'text', dueDate: '', expReward: 150, gradingMode: 'automatic', answerKey: '' });
@@ -2291,9 +2316,14 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     try {
       const result = await callApi({ action: 'createTutorAssignment', token, assignment: { ...assignment, taskType: assignmentType, classId: selectedClassId } });
       setNotice(result.message || (isID ? 'Assignment berhasil dibuat.' : 'Assignment created successfully.'));
-      setAssignment((current) => ({ ...current, title: '', instructions: '', dueDate: '', answerKey: '', questions: [createEmptyAssignmentQuestion()] })); await onRefresh();
+      setAssignment((current) => ({ ...current, title: '', instructions: '', stimulus: '', dueDate: '', answerKey: '', questions: [createEmptyAssignmentQuestion(assignmentType)] })); await onRefresh();
     } catch (error) { setNotice(error.message || (isID ? 'Assignment gagal dibuat.' : 'Assignment could not be created.')); }
     finally { setSaving(false); }
+  }
+
+  function chooseAssignmentType(type) {
+    setAssignmentType(type);
+    setAssignment((current) => ({ ...current, gradingMode: 'automatic', answerKey: '', stimulus: '', questions: [createEmptyAssignmentQuestion(type)] }));
   }
 
   async function saveAssessment(event) {
@@ -2408,7 +2438,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
         />
       )}
 
-      {page === 'assignments' && <section className="tutor-section grading-settings"><div className="tutor-section-heading"><div><span>AUTO GRADING</span><h2>{isID ? 'Pengaturan Nilai Langsung' : 'Instant Grading Settings'}</h2></div></div><div className="tutor-journal-form"><label><span>{isID ? 'Cara Penilaian Assignment' : 'Assignment Grading Method'}</span><select value={assignment.gradingMode} onChange={(event) => setAssignment({ ...assignment, gradingMode: event.target.value })}><option value="automatic">{isID ? 'Otomatis — nilai langsung keluar' : 'Automatic — instant result'}</option><option value="review">{isID ? 'Diperiksa Tutor — tugas terbuka/proyek' : 'Tutor Review — open task/project'}</option></select></label>{assignment.gradingMode === 'automatic' && <div className="grading-mode-note">{isID ? 'Kunci jawaban dan bobot ditentukan pada setiap soal pilihan ganda.' : 'Set the answer key and weight inside each multiple-choice question.'}</div>}<small className="grading-help">{isID ? 'Nilai dihitung dari jumlah jawaban benar. EXP diberikan sebanding dengan nilai.' : 'The score is based on correct answers. EXP is awarded proportionally.'}</small></div></section>}
+      {page === 'assignments' && <section className="tutor-section grading-settings assignment-auto-grading"><div className="tutor-section-heading"><div><span>AUTO GRADING</span><h2>{isID ? 'Nilai Langsung Otomatis' : 'Automatic Instant Score'}</h2><p>{isID ? 'Semua bentuk tugas dikerjakan di aplikasi dan langsung dinilai berdasarkan kunci serta bobot soal.' : 'Every task is completed in the app and graded instantly using its answer key and question weights.'}</p></div><strong>✓ AUTO</strong></div></section>}
 
       {page === 'challenges' && !selectedChallengeProgram && <section className="tutor-section tutor-page-section challenge-program-picker"><button className="tutor-back" type="button" onClick={() => setPage('academic')}>← {isID ? 'Kembali ke Akademik' : 'Back to Academics'}</button><div className="tutor-section-heading"><div><span>PROGRAM CHALLENGE</span><h2>{isID ? 'Pilih Program' : 'Choose a Program'}</h2><p>{isID ? 'Pilih kelas/program terlebih dahulu. Form tantangan lain akan disembunyikan.' : 'Choose the class/program before creating a challenge.'}</p></div></div><div className="challenge-program-grid">{classes.map((item) => <button type="button" key={item.classId} onClick={() => { setSelectedClassId(item.classId); setSelectedChallengeProgram(item.program || item.className); }}><span>★</span><div><small>{item.program || 'PROGRAM'}</small><strong>{item.className}</strong><p>{item.students?.length || 0} siswa aktif</p></div><b>→</b></button>)}</div></section>}
 
@@ -2470,7 +2500,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
             </button>
             {lessonPlanAssessmentOpen && <div className="lesson-assessment-actions">
               {selectedClassIsPrimary && <article className="primary-assessment-note"><span><ModernUiIcon name="assessment" /></span><div><small>PRIMARY • TANPA HP SISWA</small><strong>{isID ? 'Penilaian Langsung oleh Tutor' : 'Direct Tutor Assessment'}</strong><p>{isID ? 'Tutor mengamati siswa saat pembelajaran. Hasil penilaiannya dimasukkan melalui Jurnal.' : 'The tutor observes students during class. Results are entered through the Journal.'}</p></div></article>}
-              <button type="button" disabled={!selectedClassId} onClick={() => { setAssignment((current) => ({ ...current, gradingMode: selectedClassIsPrimary ? 'review' : current.gradingMode })); setPage('assignments'); }}><span><ModernUiIcon name="assignment" /></span><div><strong>{isID ? 'Buat Tugas' : 'Create Assignment'}</strong><small>{selectedClassIsPrimary ? (isID ? 'Dikerjakan di kelas dan dinilai tutor' : 'Completed in class and assessed by tutor') : (isID ? 'Dikerjakan siswa melalui aplikasi' : 'Completed by students in the app')}</small></div><b>→</b></button>
+              <button type="button" disabled={!selectedClassId} onClick={() => { setAssignment((current) => ({ ...current, gradingMode: 'automatic' })); setPage('assignments'); }}><span><ModernUiIcon name="assignment" /></span><div><strong>{isID ? 'Buat Tugas' : 'Create Assignment'}</strong><small>{selectedClassIsPrimary ? (isID ? 'Siapkan tugas; hasil kelas dapat dicatat tutor di Jurnal' : 'Prepare a task; classroom results can be recorded in the Journal') : (isID ? 'Dikerjakan dan dinilai langsung di aplikasi' : 'Completed and graded instantly in the app')}</small></div><b>→</b></button>
               <button type="button" disabled={!selectedClassId} onClick={() => { setChallenge((current) => ({ ...current, gradingMode: selectedClassIsPrimary ? 'review' : current.gradingMode })); setSelectedChallengeProgram(selectedClass?.program || selectedClass?.className || ''); setPage('challenges'); }}><span><ModernUiIcon name="challenge" /></span><div><strong>{isID ? 'Buat Tantangan' : 'Create Challenge'}</strong><small>{selectedClassIsPrimary ? (isID ? 'Aktivitas kelas dengan hasil dari tutor' : 'Class activity with tutor-entered results') : (isID ? 'Termasuk speaking menggunakan mikrofon' : 'Includes speaking with microphone')}</small></div><b>→</b></button>
             </div>}
           </section>
@@ -2575,9 +2605,9 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
         })}</div> : <div className="tutor-empty">Belum ada siswa aktif pada kelas ini.</div>}
       </section>}
 
-      {page === 'assignments' && <section className="tutor-section tutor-page-section"><button className="tutor-back" type="button" onClick={() => setPage('academic')}>← Kembali ke Akademik</button><div className="task-type-picker"><span>PILIH BENTUK TUGAS</span>{[['multiple-choice','Pilihan Ganda'],['fill-blank','Fill in the Blank'],['matching','Matching'],['short-answer','Uraian'],['essay','Essay']].map(([value,label]) => <button type="button" className={assignmentType === value ? 'active' : ''} key={value} onClick={() => setAssignmentType(value)}>{label}</button>)}</div></section>}
-      {page === 'assignments' && assignmentType !== 'multiple-choice' && <section className="tutor-section tutor-page-section question-answer-key"><label><span>{assignmentType === 'matching' ? 'Pasangan jawaban / kunci' : 'Kunci jawaban atau pedoman penilaian'}</span><textarea rows="5" value={assignment.answerKey} onChange={(event) => setAssignment({ ...assignment, answerKey: event.target.value, questions: [] })} placeholder="Tuliskan satu jawaban atau pasangan per baris." /></label><small>Uraian dan essay dapat dipilih untuk diperiksa Tutor. Fill in the blank dan matching dapat memakai kunci jawaban otomatis.</small></section>}
-      {page === 'assignments' && assignment.gradingMode === 'automatic' && assignmentType === 'multiple-choice' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions, answerKey: questions.map((item) => item.options[Number(item.correctOption)] || '').join('\\n') })} isID={isID} /></section>}
+      {page === 'assignments' && <section className="tutor-section tutor-page-section assignment-type-section"><button className="tutor-back" type="button" onClick={() => setPage('lesson-plan')}>← {isID ? 'Kembali ke Lesson Plan' : 'Back to Lesson Plan'}</button><div className="task-type-picker"><div><span>{isID ? 'PILIH BENTUK TUGAS' : 'CHOOSE TASK TYPE'}</span><p>{isID ? 'Semua tugas dikerjakan di aplikasi dan dinilai otomatis.' : 'Every task is completed in the app and graded automatically.'}</p></div>{ASSIGNMENT_TASK_TYPES.map(([value,label,icon]) => <button type="button" className={assignmentType === value ? 'active' : ''} key={value} onClick={() => chooseAssignmentType(value)}><i>{icon}</i><strong>{label}</strong><small>{value === 'multiple-choice' ? '1 jawaban benar' : value === 'multiple-select' ? 'Beberapa jawaban benar' : value === 'true-false' ? 'Pilih benar atau salah' : value === 'fill-blank' ? 'Lengkapi bagian kosong' : value === 'matching' ? 'Pasangkan dua kelompok' : value === 'ordering' ? 'Susun urutan yang benar' : value === 'sentence-builder' ? 'Susun kata menjadi kalimat' : value === 'categorization' ? 'Kelompokkan setiap item' : value === 'short-answer' ? 'Jawaban singkat otomatis' : value === 'error-correction' ? 'Perbaiki kalimat salah' : value === 'reading' ? 'Teks dan pertanyaan' : 'Audio dan pertanyaan'}</small></button>)}</div></section>}
+      {page === 'assignments' && ['reading','listening'].includes(assignmentType) && <section className="tutor-section tutor-page-section assignment-stimulus-editor"><div className="tutor-section-heading"><div><span>{assignmentType === 'reading' ? 'READING PASSAGE' : 'LISTENING SCRIPT'}</span><h2>{assignmentType === 'reading' ? (isID ? 'Teks Bacaan' : 'Reading Text') : (isID ? 'Naskah Audio' : 'Audio Script')}</h2><p>{assignmentType === 'listening' ? (isID ? 'Naskah tidak ditampilkan kepada siswa; aplikasi membacakannya melalui tombol audio.' : 'The script is hidden from students and played through the audio button.') : (isID ? 'Teks ini tampil sebelum soal.' : 'This text appears before the questions.')}</p></div></div><textarea rows="7" value={assignment.stimulus || ''} onChange={(event) => setAssignment({ ...assignment, stimulus: event.target.value })} placeholder={assignmentType === 'reading' ? (isID ? 'Masukkan teks bacaan...' : 'Enter the reading text...') : (isID ? 'Masukkan naskah yang akan dibacakan...' : 'Enter the script to be played...')} required /></section>}
+      {page === 'assignments' && <section className="tutor-section tutor-page-section"><AssignmentQuestionBuilder taskType={assignmentType} questions={assignment.questions || []} onChange={(questions) => setAssignment({ ...assignment, questions })} isID={isID} /></section>}
       {page === 'assignments' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>ACADEMIC</span><h2>Assignments</h2></div></div><form className="tutor-journal-form" onSubmit={createAssignment}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Judul Tugas' : 'Assignment Title'}</span><input value={assignment.title} onChange={(event) => setAssignment({ ...assignment, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={assignment.instructions} onChange={(event) => setAssignment({ ...assignment, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Tanggal Diberikan' : 'Assigned Date'}</span><input type="date" value={assignment.assignedDate} onChange={(event) => setAssignment({ ...assignment, assignedDate: event.target.value })} required /></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={assignment.dueDate} onChange={(event) => setAssignment({ ...assignment, dueDate: event.target.value })} required /></label></div><label><span>{isID ? 'Hadiah EXP (0–200)' : 'EXP Reward (0–200)'}</span><input type="number" min="0" max="200" value={assignment.expReward} onChange={(event) => setAssignment({ ...assignment, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Assignment' : 'Create Assignment / Challenge')}</button></form>{selectedClass?.assignments?.length > 0 && <div className="tutor-journal-history"><h3>{isID ? 'Tugas Kelas Ini' : 'Class Assignments'}</h3>{selectedClass.assignments.map((item) => <article key={item.assignmentId}><span>☑</span><div><strong>{item.title}</strong><small>{isID ? 'Tenggat' : 'Due'}: {item.dueDate} • +{item.expReward} EXP</small></div></article>)}</div>}{selectedClass?.submissions?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Pengumpulan Siswa' : 'Student Submissions'}</h3>{selectedClass.submissions.map((item) => <button type="button" key={item.submissionId} onClick={() => { setReviewItem({ ...item, kind: 'assignment' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
 
       {page === 'challenges' && <section className="tutor-section tutor-page-section"><div className="tutor-section-heading"><div><span>GAMIFICATION</span><h2>Challenges</h2></div></div><form className="tutor-journal-form" onSubmit={createChallenge}><label><span>{isID ? 'Pilih Kelas' : 'Select Class'}</span><select value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} required><option value="">—</option>{classes.map((item) => <option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>{isID ? 'Template sesuai program' : 'Program Template'}</span><select value="" onChange={(event) => { const template = (overview?.challengeTemplates?.[selectedClassId] || [])[Number(event.target.value)]; if (template) setChallenge({ ...challenge, ...template, gradingMode: template.gradingMode || (['text','speech'].includes(template.responseType) ? 'automatic' : 'review') }); }}><option value="">{isID ? 'Pilih template atau isi manual' : 'Choose a template or enter manually'}</option>{(overview?.challengeTemplates?.[selectedClassId] || []).map((item, index) => <option key={item.title} value={index}>{item.title}</option>)}</select></label><label><span>{isID ? 'Judul Challenge' : 'Challenge Title'}</span><input value={challenge.title} onChange={(event) => setChallenge({ ...challenge, title: event.target.value })} required /></label><label><span>{isID ? 'Instruksi' : 'Instructions'}</span><textarea rows="4" value={challenge.instructions} onChange={(event) => setChallenge({ ...challenge, instructions: event.target.value })} required /></label><div className="tutor-form-grid"><label><span>{isID ? 'Jenis Jawaban' : 'Response Type'}</span><select value={challenge.responseType} onChange={(event) => setChallenge({ ...challenge, responseType: event.target.value })}><option value="text">Text</option><option value="speech">{isID ? 'Speech — Mikrofon' : 'Speech — Microphone'}</option><option value="link">Link Audio/Video/File</option></select></label><label><span>{isID ? 'Tenggat' : 'Due Date'}</span><input type="date" value={challenge.dueDate} onChange={(event) => setChallenge({ ...challenge, dueDate: event.target.value })} required /></label></div>{challenge.responseType === 'speech' && <label><span>{isID ? 'Target kata / frasa speaking' : 'Speaking target word / phrase'}</span><input value={challenge.answerKey} onChange={(event) => setChallenge({ ...challenge, answerKey: event.target.value })} placeholder={isID ? 'Contoh: I would like a glass of water.' : 'Example: I would like a glass of water.'} required /></label>}<label><span>{isID ? 'Hadiah EXP (0–250)' : 'EXP Reward (0–250)'}</span><input type="number" min="0" max="250" value={challenge.expReward} onChange={(event) => setChallenge({ ...challenge, expReward: Number(event.target.value) })} /></label><button type="submit" disabled={saving || !selectedClassId}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Buat Challenge' : 'Create Challenge')}</button></form>{selectedClass?.challengeResults?.length > 0 && <div className="tutor-review-list"><h3>{isID ? 'Hasil Challenge Siswa' : 'Student Challenge Results'}</h3>{selectedClass.challengeResults.map((item) => <button type="button" key={item.resultId} onClick={() => { setReviewItem({ ...item, kind: 'challenge' }); setReview({ score: item.score || '', feedback: item.feedback || '', expAwarded: item.expAwarded || 0 }); setPage('review'); }}><div><strong>{item.studentName}</strong><small>{item.status} • {item.response}</small></div><b>{item.status === 'Reviewed' ? `${item.score}/100` : (isID ? 'PERIKSA →' : 'REVIEW →')}</b></button>)}</div>}</section>}
@@ -3150,9 +3180,39 @@ function SkillRadar({ scores, isID }) {
   );
 }
 
+function isAssignmentAnswerComplete(question, answer) {
+  const type = question.type || 'multiple-choice';
+  if (type === 'multiple-select') return Array.isArray(answer) && answer.length > 0;
+  if (['ordering', 'sentence-builder'].includes(type)) return Array.isArray(answer) && answer.length === (question.displayItems || []).length;
+  if (type === 'matching') return answer && typeof answer === 'object' && (question.leftItems || []).every((item) => String(answer[item.id] || '').trim());
+  if (type === 'categorization') return answer && typeof answer === 'object' && (question.displayItems || []).every((item) => String(answer[item] || '').trim());
+  if (['fill-blank', 'short-answer', 'error-correction'].includes(type)) return String(answer || '').trim().length > 0;
+  return answer !== '' && answer !== null && typeof answer !== 'undefined';
+}
+
 function StudentAssignmentQuestions({ assignment, answers, onChange, isID }) {
   const rows = Array.isArray(assignment.questions) ? assignment.questions : [];
-  return <div className="student-question-list">{rows.map((question, questionIndex) => <fieldset key={question.id || questionIndex}><legend><span>{questionIndex + 1}</span><strong>{question.text}</strong><b>{question.points || 0} {isID ? 'poin' : 'pts'}</b></legend>{question.options.map((option, optionIndex) => <label className={Number(answers?.[question.id]) === optionIndex ? 'selected' : ''} key={optionIndex}><input type="radio" name={`${assignment.assignmentId}-${question.id}`} checked={Number(answers?.[question.id]) === optionIndex} onChange={() => onChange({ ...(answers || {}), [question.id]: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>)}</fieldset>)}</div>;
+  const taskType = assignment.taskType || 'multiple-choice';
+  const setAnswer = (id, value) => onChange({ ...(answers || {}), [id]: value });
+  function playListening() {
+    if (!('speechSynthesis' in window) || !assignment.stimulus) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(assignment.stimulus);
+    utterance.lang = 'en-US'; utterance.rate = 0.88;
+    window.speechSynthesis.speak(utterance);
+  }
+  return <div className="student-question-list structured-student-assignment">
+    {taskType === 'reading' && <article className="assignment-reading-passage"><small>READING TEXT</small><p>{assignment.stimulus}</p></article>}
+    {taskType === 'listening' && <article className="assignment-listening-player"><span>◖</span><div><small>LISTENING AUDIO</small><strong>{isID ? 'Dengarkan sebelum menjawab' : 'Listen before answering'}</strong></div><button type="button" onClick={playListening}>▶ {isID ? 'Putar Audio' : 'Play Audio'}</button></article>}
+    {rows.map((question, questionIndex) => { const type = question.type || 'multiple-choice'; const answer = answers?.[question.id]; return <fieldset key={question.id || questionIndex}><legend><span>{questionIndex + 1}</span><strong>{question.text}</strong><b>{question.points || 0} {isID ? 'poin' : 'pts'}</b></legend>
+      {['multiple-choice','true-false'].includes(type) && (question.options || []).map((option, optionIndex) => <label className={Number(answer) === optionIndex ? 'selected' : ''} key={optionIndex}><input type="radio" name={`${assignment.assignmentId}-${question.id}`} checked={Number(answer) === optionIndex} onChange={() => setAnswer(question.id, optionIndex)} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>)}
+      {type === 'multiple-select' && (question.options || []).map((option, optionIndex) => { const selected = Array.isArray(answer) && answer.includes(optionIndex); return <label className={selected ? 'selected' : ''} key={optionIndex}><input type="checkbox" checked={selected} onChange={() => setAnswer(question.id, selected ? answer.filter((value) => value !== optionIndex) : [...(answer || []), optionIndex])} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>; })}
+      {['fill-blank','short-answer','error-correction'].includes(type) && <input className="student-structured-text-answer" value={answer || ''} onChange={(event) => setAnswer(question.id, event.target.value)} placeholder={isID ? 'Ketik jawaban Anda...' : 'Type your answer...'} />}
+      {type === 'matching' && <div className="student-matching-grid">{(question.leftItems || []).map((item) => <label key={item.id}><strong>{item.label}</strong><select value={answer?.[item.id] || ''} onChange={(event) => setAnswer(question.id, { ...(answer || {}), [item.id]: event.target.value })}><option value="">{isID ? 'Pilih pasangan' : 'Choose a match'}</option>{(question.rightOptions || []).map((option, index) => <option key={`${option}-${index}`} value={option}>{option}</option>)}</select></label>)}</div>}
+      {['ordering','sentence-builder'].includes(type) && <div className="student-ordering-task"><div className="ordering-answer-line">{(Array.isArray(answer) ? answer : []).map((item, index) => <button type="button" key={`${item}-${index}`} onClick={() => setAnswer(question.id, answer.filter((_, itemIndex) => itemIndex !== index))}><b>{index + 1}</b>{item}</button>)}</div><div className="ordering-choice-bank">{(question.displayItems || []).map((item, index) => { const used = (Array.isArray(answer) ? answer : []).filter((value) => value === item).length >= (question.displayItems || []).slice(0, index + 1).filter((value) => value === item).length; return <button type="button" disabled={used} key={`${item}-${index}`} onClick={() => setAnswer(question.id, [...(Array.isArray(answer) ? answer : []), item])}>{item}</button>; })}</div><button className="reset-order-answer" type="button" onClick={() => setAnswer(question.id, [])}>{isID ? 'Atur Ulang' : 'Reset'}</button></div>}
+      {type === 'categorization' && <div className="student-category-task">{(question.displayItems || []).map((item, index) => <label key={`${item}-${index}`}><strong>{item}</strong><select value={answer?.[item] || ''} onChange={(event) => setAnswer(question.id, { ...(answer || {}), [item]: event.target.value })}><option value="">{isID ? 'Pilih kategori' : 'Choose category'}</option>{(question.categoryNames || []).map((category) => <option key={category} value={category}>{category}</option>)}</select></label>)}</div>}
+    </fieldset>; })}
+  </div>;
 }
 
 
@@ -3669,7 +3729,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
     const assignmentId = typeof assignment === 'string' ? assignment : assignment.assignmentId;
     const hasQuestions = Array.isArray(assignment?.questions) && assignment.questions.length > 0;
     const storedResponse = assignmentResponses[assignmentId];
-    if (hasQuestions && assignment.questions.some((question) => !Object.prototype.hasOwnProperty.call(storedResponse || {}, question.id))) { setStudentSubmitMessage(isID ? 'Jawab seluruh soal sebelum mengumpulkan assignment.' : 'Answer every question before submitting the assignment.'); return; }
+    if (hasQuestions && assignment.questions.some((question) => !isAssignmentAnswerComplete(question, storedResponse?.[question.id]))) { setStudentSubmitMessage(isID ? 'Jawab seluruh soal sebelum mengumpulkan tugas.' : 'Answer every question before submitting the assignment.'); return; }
     const response = hasQuestions ? JSON.stringify(storedResponse || {}) : String(storedResponse || '').trim(); if (!response) return;
     setStudentSubmitting(assignmentId); setStudentSubmitMessage('');
     try { const result = await callApi({ action: 'submitStudentAssignment', token, submission: { assignmentId, response } }); setStudentSubmitMessage(result.message); showGamificationReward(result, isID ? 'Tugas selesai' : 'Assignment completed'); await onRefreshOverview(); }
@@ -4187,7 +4247,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
       )}
 
       {(page === 'assignments' || page === 'missions') && (
-        <section className="student-assignments-page"><div className="assignment-page-heading"><span>☑</span><div><h2>{isID ? 'Tugas Saya' : 'My Assignments'}</h2><p>{isID ? 'Tugas aktif dari tutor sesuai kelas Anda' : 'Active assignments from your class tutor'}</p></div></div>{studentSubmitMessage && <div className="student-submit-message">{studentSubmitMessage}</div>}{studentAssignments.length ? <div className="student-assignment-list">{studentAssignments.map((item) => <article key={item.assignmentId}><div className="assignment-title-row"><div><small>{overview?.program?.className || 'CLASS'}</small><h3>{item.title}</h3></div><b>+{item.expReward || 0} EXP</b></div><p>{item.instructions}</p><div className="assignment-meta"><span>{isID ? 'Diberikan' : 'Assigned'}: {item.assignedDate || '—'}</span><strong>{isID ? 'Tenggat' : 'Due'}: {item.dueDate || '—'}</strong></div>{item.submission ? <div className={`submission-result ${String(item.submission.status).toLowerCase()}`}><strong>{item.submission.status === 'Reviewed' ? (isID ? 'Sudah Dinilai' : 'Reviewed') : (isID ? 'Sudah Dikumpulkan' : 'Submitted')}</strong>{item.submission.status === 'Reviewed' && <p>{item.submission.score}/100 • +{item.submission.expAwarded} EXP<br />{item.submission.feedback}</p>}</div> : <div className="student-response-box">{Array.isArray(item.questions) && item.questions.length ? <StudentAssignmentQuestions assignment={item} answers={assignmentResponses[item.assignmentId] || {}} onChange={(answers) => setAssignmentResponses({ ...assignmentResponses, [item.assignmentId]: answers })} isID={isID} /> : <textarea rows="3" value={assignmentResponses[item.assignmentId] || ''} onChange={(event) => setAssignmentResponses({ ...assignmentResponses, [item.assignmentId]: event.target.value })} placeholder={isID ? 'Tulis jawaban atau tempel tautan file...' : 'Write your answer or paste a file link...'} />}<button type="button" disabled={studentSubmitting === item.assignmentId} onClick={() => sendAssignment(item)}>{studentSubmitting === item.assignmentId ? (isID ? 'Mengirim...' : 'Sending...') : (isID ? 'Kumpulkan Tugas' : 'Submit Assignment')}</button></div>}</article>)}</div> : <section className="detail-panel empty-feature"><span>☑</span><h2>{isID ? 'Belum ada tugas aktif' : 'No active assignments'}</h2><p>{isID ? 'Tugas baru dari tutor akan muncul di sini.' : 'New assignments from your tutor will appear here.'}</p></section>}</section>
+        <section className="student-assignments-page"><div className="assignment-page-heading"><span>☑</span><div><h2>{isID ? 'Tugas Saya' : 'My Assignments'}</h2><p>{isID ? 'Tugas aktif dari tutor sesuai kelas Anda' : 'Active assignments from your class tutor'}</p></div></div>{studentSubmitMessage && <div className="student-submit-message">{studentSubmitMessage}</div>}{studentAssignments.length ? <div className="student-assignment-list">{studentAssignments.map((item) => <article key={item.assignmentId}><div className="assignment-title-row"><div><small>{overview?.program?.className || 'CLASS'}</small><h3>{item.title}</h3></div><b>+{item.expReward || 0} EXP</b></div><p>{item.instructions}</p><div className="assignment-meta"><span>{isID ? 'Diberikan' : 'Assigned'}: {item.assignedDate || '—'}</span><strong>{isID ? 'Tenggat' : 'Due'}: {item.dueDate || '—'}</strong></div>{item.submission ? <div className={`submission-result ${String(item.submission.status).toLowerCase()}`}><strong>{item.submission.status === 'Reviewed' ? (isID ? 'Sudah Dinilai' : 'Reviewed') : (isID ? 'Sudah Dikumpulkan' : 'Submitted')}</strong>{item.submission.status === 'Reviewed' && <p>{item.submission.score}/100 • +{item.submission.expAwarded} EXP<br />{item.submission.feedback}</p>}</div> : <div className="student-response-box">{Array.isArray(item.questions) && item.questions.length ? <StudentAssignmentQuestions assignment={item} answers={assignmentResponses[item.assignmentId] || {}} onChange={(answers) => setAssignmentResponses({ ...assignmentResponses, [item.assignmentId]: answers })} isID={isID} /> : <textarea rows="3" value={assignmentResponses[item.assignmentId] || ''} onChange={(event) => setAssignmentResponses({ ...assignmentResponses, [item.assignmentId]: event.target.value })} placeholder={isID ? 'Tulis jawaban Anda...' : 'Write your answer...'} />}<button type="button" disabled={studentSubmitting === item.assignmentId} onClick={() => sendAssignment(item)}>{studentSubmitting === item.assignmentId ? (isID ? 'Mengirim...' : 'Sending...') : (isID ? 'Kumpulkan & Lihat Nilai' : 'Submit & View Score')}</button></div>}</article>)}</div> : <section className="detail-panel empty-feature"><span>☑</span><h2>{isID ? 'Belum ada tugas aktif' : 'No active assignments'}</h2><p>{isID ? 'Tugas baru dari tutor akan muncul di sini.' : 'New assignments from your tutor will appear here.'}</p></section>}</section>
       )}
 
       {page === 'journal' && (
@@ -4987,6 +5047,8 @@ function Dashboard({
         <StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} onCancelVerification={onCancelRegistrationVerification} token={token} onRefresh={onRefreshRegistrations} />
       ) : activePage === 'payment-confirmations' ? (
         <PaymentPageErrorBoundary><PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onBulkPayment={onBulkPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} /></PaymentPageErrorBoundary>
+      ) : activePage === 'contact-students' && user.role === 'Admin' ? (
+        <AdminContactStudentsPage token={token} />
       ) : activePage === 'attendance-watch' ? (
         <AdminAttendanceWatchPage attentionLists={attentionLists} onNavigate={onNavigate} />
       ) : activePage === 'alumni' ? (
@@ -4998,6 +5060,7 @@ function Dashboard({
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('contact-students')}><span>✉</span><div><strong>Hubungi Siswa</strong><small>Konfirmasi pembayaran dan permintaan foto ID Card melalui WhatsApp</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('attendance-watch')}><span>◷</span><div><strong>Attendance Watch</strong><small>Tindak lanjut ketidakhadiran siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
             {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Kelas & Perkembangan</strong><small>Tren akademik, kehadiran, tugas, dan tantangan</small></div><b>→</b></button>}
@@ -5027,7 +5090,7 @@ function Dashboard({
         {user.role === 'CEO' ? <button className={activePage === 'ceo-revenue' ? 'active' : ''} onClick={() => onNavigate('ceo-revenue')}><span>▥</span>Business</button> : <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}><span>💳</span>Pembayaran</button>}
 
         <button
-          className={activePage === 'menu' ? 'active' : ''}
+          className={['menu', 'contact-students', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''}
           onClick={() => onNavigate('menu')}
         >
           <span>☰</span>
@@ -5036,6 +5099,146 @@ function Dashboard({
       </nav>
     </main>
   );
+}
+
+function AdminContactStudentsPage({ token }) {
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
+  const [periods, setPeriods] = useState([]);
+  const [currentPeriod, setCurrentPeriod] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [period, setPeriod] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [recipient, setRecipient] = useState('parent');
+  const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const purposes = [
+    { id: 'overdue', icon: '◷', title: 'Les Bulan Menunggak', note: 'Konfirmasi pembayaran les periode sebelumnya.' },
+    { id: 'current', icon: '✓', title: 'Les Bulan Berjalan', note: 'Konfirmasi pembayaran les bulan berjalan.' },
+    { id: 'workbook', icon: '▤', title: 'Workbook', note: 'Konfirmasi pembayaran paket workbook.' },
+    { id: 'idcard', icon: '◇', title: 'ID Card', note: 'Konfirmasi pembayaran pembuatan ID Card.' },
+    { id: 'photo', icon: '▣', title: 'Kirim Ulang Foto ID Card', note: 'Minta foto baru agar hasil ID Card lebih jelas.' },
+  ];
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    callApi({ action: 'getAdminContactStudents', token })
+      .then((result) => {
+        if (!active) return;
+        const availablePeriods = Array.isArray(result.periods) ? result.periods : [];
+        setStudents(Array.isArray(result.students) ? result.students : []);
+        setPeriods(availablePeriods);
+        setCurrentPeriod(result.currentPeriod || '');
+        setPeriod(availablePeriods.includes(result.currentPeriod) ? result.currentPeriod : (availablePeriods[0] || ''));
+      })
+      .catch((error) => { if (active) setNotice(error.message || 'Data kontak siswa gagal dimuat.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  function formatPeriod(value) {
+    if (!/^\d{4}-\d{2}$/.test(String(value || ''))) return value || '—';
+    return new Date(`${value}-01T12:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  }
+
+  function normalizeWhatsApp(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+    else if (digits.startsWith('8')) digits = `62${digits}`;
+    return digits;
+  }
+
+  function buildMessage(student, selectedPurpose) {
+    const name = student.fullName || 'Siswa';
+    const opening = `Halo, Kak/Orang Tua/Wali ${name}. Semoga dalam keadaan baik. 🙏`;
+    const closing = `Terima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`;
+    if (selectedPurpose === 'overdue') {
+      return `${opening}\n\nKami ingin mengonfirmasi pembayaran les periode ${formatPeriod(period)}. Berdasarkan catatan kami, pembayarannya belum tercatat.\n\nJika sudah melakukan pembayaran, mohon kirimkan bukti transfer atau informasikan tanggal dan metode pembayarannya melalui chat ini. Jika belum, mohon informasikan rencana pembayarannya agar kami dapat membantu pencatatannya.\n\n${closing}`;
+    }
+    if (selectedPurpose === 'current') {
+      return `${opening}\n\nKami ingin memastikan apakah pembayaran les periode ${formatPeriod(period)} sudah dilakukan. Saat ini pembayarannya belum tercatat pada sistem kami.\n\nJika sudah membayar, silakan balas chat ini dengan bukti pembayaran atau informasi tanggal dan metode pembayaran agar dapat segera kami periksa.\n\n${closing}`;
+    }
+    if (selectedPurpose === 'workbook') {
+      return `${opening}\n\nKami ingin mengonfirmasi pembayaran paket Workbook Mr One Course. Berdasarkan catatan kami, pembayarannya belum tercatat.\n\nJika sudah membayar, silakan balas chat ini dengan bukti pembayaran agar dapat segera kami periksa dan proses.\n\n${closing}`;
+    }
+    if (selectedPurpose === 'idcard') {
+      return `${opening}\n\nKami ingin mengonfirmasi pembayaran pembuatan ID Card Mr One Course. Berdasarkan catatan kami, pembayarannya belum tercatat.\n\nJika sudah membayar, silakan balas chat ini dengan bukti pembayaran agar dapat segera kami periksa dan proses.\n\n${closing}`;
+    }
+    return `${opening}\n\nKami sedang menyiapkan ID Card Mr One Course dan memerlukan pengiriman ulang foto agar hasil cetaknya lebih jelas.\n\nMohon kirimkan 1 foto terbaru melalui chat ini dengan posisi menghadap kamera, pencahayaan cukup, tidak buram, dan latar belakang sederhana.\n\nSilakan balas chat ini dengan foto terbaik yang akan digunakan pada ID Card.\n\n${closing}`;
+  }
+
+  function choosePurpose(id) {
+    setPurpose(id);
+    setSelectedStudent(null);
+    setMessage('');
+    setNotice('');
+    if (id === 'overdue') {
+      const previous = periods.filter((item) => item < currentPeriod).slice(-1)[0];
+      if (previous) setPeriod(previous);
+    } else if (id === 'current' && periods.includes(currentPeriod)) setPeriod(currentPeriod);
+  }
+
+  const visibleStudents = students.filter((student) => {
+    if (purpose === 'overdue' || purpose === 'current') {
+      if ((student.tuitionPaidPeriods || []).includes(period)) return false;
+    }
+    if (purpose === 'workbook' && student.workbookSettled) return false;
+    if (purpose === 'idcard' && student.idCardSettled) return false;
+    const haystack = `${student.fullName} ${student.studentId} ${student.className} ${student.program}`.toLowerCase();
+    return haystack.includes(search.trim().toLowerCase());
+  });
+
+  function prepareStudent(student) {
+    setSelectedStudent(student);
+    setRecipient(student.waParent ? 'parent' : 'student');
+    setMessage(buildMessage(student, purpose));
+    setNotice('');
+  }
+
+  const selectedNumber = selectedStudent
+    ? (recipient === 'parent' ? selectedStudent.waParent : selectedStudent.waStudent)
+    : '';
+
+  async function copyMessage() {
+    try {
+      await navigator.clipboard.writeText(message);
+      setNotice('Pesan berhasil disalin.');
+    } catch (error) {
+      setNotice('Pesan belum dapat disalin otomatis. Silakan blok dan salin teksnya.');
+    }
+  }
+
+  function openWhatsApp() {
+    const number = normalizeWhatsApp(selectedNumber);
+    if (!number) {
+      setNotice('Nomor WhatsApp penerima belum tersedia di Data Siswa.');
+      return;
+    }
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  return <section className="admin-contact-page admin-menu-detail-page">
+    <div className="admin-contact-heading"><div><span className="eyebrow">ADMIN • WHATSAPP ASSISTANT</span><h1>Hubungi Siswa</h1><p>Pilih kebutuhan konfirmasi. Pesan dapat ditinjau dan disunting sebelum WhatsApp dibuka.</p></div>{purpose && <button type="button" onClick={() => { setPurpose(''); setSelectedStudent(null); setMessage(''); setNotice(''); }}>← Pilihan pesan</button>}</div>
+    {notice && <div className={notice.includes('berhasil') ? 'admin-contact-notice success' : 'admin-contact-notice'}>{notice}</div>}
+    {!purpose ? <div className="admin-contact-purpose-grid">{purposes.map((item) => <button type="button" key={item.id} onClick={() => choosePurpose(item.id)}><span>{item.icon}</span><div><strong>{item.title}</strong><small>{item.note}</small></div><b>→</b></button>)}</div> : loading ? <div className="dashboard-loading">Memuat data kontak siswa...</div> : <>
+      <section className="admin-contact-toolbar">
+        <div><span className="eyebrow">JENIS KONFIRMASI</span><h2>{purposes.find((item) => item.id === purpose)?.title}</h2></div>
+        {(purpose === 'overdue' || purpose === 'current') && <label><span>Periode pembayaran</span><select value={period} onChange={(event) => { setPeriod(event.target.value); setSelectedStudent(null); setMessage(''); }}>{periods.map((item) => <option key={item} value={item}>{formatPeriod(item)}</option>)}</select></label>}
+        <label className="admin-contact-search"><span>Cari siswa</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nama, ID, kelas, atau program" /></label>
+      </section>
+      <div className="admin-contact-count"><strong>{visibleStudents.length} siswa</strong><span>{purpose === 'photo' ? 'tersedia untuk dipilih' : 'belum tercatat selesai'}</span></div>
+      <div className="admin-contact-student-list">{visibleStudents.length ? visibleStudents.map((student) => <article key={student.studentId} className={selectedStudent?.studentId === student.studentId ? 'active' : ''}><span>{String(student.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.className || student.program || 'Kelas belum tercatat'}</small><p>{student.waParent ? 'WA Orang Tua tersedia' : student.waStudent ? 'WA Siswa tersedia' : 'Nomor WhatsApp belum tersedia'}</p></div><button type="button" onClick={() => prepareStudent(student)}>Buat Pesan</button></article>) : <div className="empty-state">Tidak ada siswa yang perlu dikonfirmasi untuk pilihan ini.</div>}</div>
+      {selectedStudent && <section className="admin-contact-composer">
+        <header><div><span className="eyebrow">PRATINJAU CHAT</span><h2>{selectedStudent.fullName}</h2><p>{selectedStudent.studentId} • {selectedStudent.className || selectedStudent.program || '—'}</p></div><button type="button" onClick={() => { setSelectedStudent(null); setMessage(''); }}>×</button></header>
+        <div className="admin-contact-recipient"><strong>Kirim kepada</strong>{selectedStudent.waParent && <button type="button" className={recipient === 'parent' ? 'active' : ''} onClick={() => setRecipient('parent')}>Orang Tua <small>{selectedStudent.waParent}</small></button>}{selectedStudent.waStudent && <button type="button" className={recipient === 'student' ? 'active' : ''} onClick={() => setRecipient('student')}>Siswa <small>{selectedStudent.waStudent}</small></button>}{!selectedStudent.waParent && !selectedStudent.waStudent && <span>Nomor belum tersedia</span>}</div>
+        <label><span>Pesan WhatsApp</span><textarea rows="13" value={message} onChange={(event) => setMessage(event.target.value)} /></label>
+        <div className="admin-contact-actions"><button type="button" onClick={copyMessage}>Salin Pesan</button><button type="button" className="primary" disabled={!message.trim() || !normalizeWhatsApp(selectedNumber)} onClick={openWhatsApp}>Buka WhatsApp →</button></div>
+      </section>}
+    </>}
+  </section>;
 }
 
 function AdminAttendanceWatchPage({ attentionLists, onNavigate }) {
