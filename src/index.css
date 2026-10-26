@@ -24619,6 +24619,90 @@ html[data-theme='light'] .tuition-status-summary b{color:#153047}
   .tuition-status-badge{white-space:normal}
 }
 
+/* MOC V62.1 — revised Admin WhatsApp flow. */
+.moc-whatsapp-icon{display:block;width:1em;height:1em}
+.admin-dashboard .mobile-navigation .moc-whatsapp-icon{width:20px;height:20px;margin:0 auto}
+.admin-dashboard .admin-contact-v2-search{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;overflow:hidden;border:1px solid var(--moc-border);border-radius:14px;background:var(--moc-surface-solid)}
+.admin-dashboard .admin-contact-v2-search>span{display:grid;place-items:center;height:100%;color:var(--moc-primary-strong);font-size:21px}
+.admin-dashboard .admin-contact-v2-search>input{width:100%;min-width:0;padding:14px 14px 14px 0;border:0;outline:0;color:var(--moc-text);background:transparent;font:inherit;font-size:13px}
+.admin-dashboard .admin-contact-selected-student{display:grid;grid-template-columns:54px minmax(0,1fr) minmax(220px,.65fr);align-items:center;gap:14px;padding:17px;border:1px solid var(--moc-primary);border-radius:18px;background:linear-gradient(145deg,var(--moc-primary-soft),var(--moc-surface-solid))}
+.admin-dashboard .admin-contact-selected-student>.student-avatar{display:grid;place-items:center;width:54px;height:54px;border-radius:16px;color:var(--moc-on-primary);background:var(--moc-primary);font-size:18px;font-weight:950}
+.admin-dashboard .admin-contact-selected-student h2{margin:4px 0;color:var(--moc-text);font-size:19px;line-height:1.25}
+.admin-dashboard .admin-contact-selected-student p{margin:0;color:var(--moc-muted);font-size:11px}
+.admin-dashboard .admin-contact-auto-number{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.admin-dashboard .admin-contact-auto-number>small{grid-column:1/-1;color:var(--moc-muted);font-size:9px;font-weight:950;letter-spacing:.1em}
+.admin-dashboard .admin-contact-auto-number>button{display:grid;gap:2px;min-width:0;padding:9px;border:1px solid var(--moc-border);border-radius:11px;color:var(--moc-text);background:var(--moc-surface-soft);font-size:10px;text-align:left;cursor:pointer}
+.admin-dashboard .admin-contact-auto-number>button.active{border-color:var(--moc-primary);background:var(--moc-primary-soft)}
+.admin-dashboard .admin-contact-auto-number b{overflow:hidden;color:var(--moc-primary-strong);font-size:10px;text-overflow:ellipsis}
+.admin-dashboard .admin-contact-v2-type-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-dashboard .admin-contact-v2-type-grid>button{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:13px;padding:18px;border:1px solid var(--moc-border);border-radius:18px;color:var(--moc-text);background:var(--moc-surface-solid);text-align:left;cursor:pointer}
+.admin-dashboard .admin-contact-v2-type-grid>button:hover{border-color:var(--moc-primary)}
+.admin-dashboard .admin-contact-v2-type-grid>button>span{display:grid;place-items:center;width:54px;height:54px;border-radius:16px;color:var(--moc-primary-strong);background:var(--moc-primary-soft);font-size:19px;font-weight:950}
+.admin-dashboard .admin-contact-v2-type-grid>button>div{display:grid;gap:4px;min-width:0}
+.admin-dashboard .admin-contact-v2-type-grid strong{font-size:15px}.admin-dashboard .admin-contact-v2-type-grid small{color:var(--moc-muted);font-size:11px;line-height:1.45}
+.admin-dashboard .admin-contact-v2-type-grid>button>b{color:var(--moc-primary-strong)}
+.admin-dashboard .admin-contact-v2-back{justify-self:start;padding:9px 12px;border:1px solid var(--moc-border);border-radius:10px;color:var(--moc-text);background:var(--moc-surface-solid);font-weight:850;cursor:pointer}
+.admin-dashboard .admin-contact-payment-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:17px;border:1px solid var(--moc-border);border-radius:18px;background:var(--moc-surface-solid)}
+.admin-dashboard .admin-contact-payment-options>div:first-child{grid-column:1/-1;display:grid;gap:4px;margin-bottom:3px}
+.admin-dashboard .admin-contact-payment-options h2{margin:0;color:var(--moc-text);font-size:19px}.admin-dashboard .admin-contact-payment-options p{margin:0;color:var(--moc-muted);font-size:11px}
+.admin-dashboard .admin-contact-payment-options>label{display:grid;grid-template-columns:22px minmax(0,1fr);align-items:start;gap:9px;padding:13px;border:1px solid var(--moc-border);border-radius:13px;background:var(--moc-surface-soft);cursor:pointer}
+.admin-dashboard .admin-contact-payment-options>label:has(input:checked){border-color:var(--moc-primary);background:var(--moc-primary-soft)}
+.admin-dashboard .admin-contact-payment-options input{width:18px;height:18px;margin:1px 0 0;accent-color:var(--moc-primary)}
+.admin-dashboard .admin-contact-payment-options label>span{display:grid;gap:3px;min-width:0}.admin-dashboard .admin-contact-payment-options label strong{color:var(--moc-text);font-size:12px}.admin-dashboard .admin-contact-payment-options label small{color:var(--moc-muted);font-size:9px;line-height:1.4}
+.admin-dashboard .admin-contact-payment-options .payment-check-main{grid-column:1/-1}
+.admin-dashboard .overdue-month-checks{grid-column:1/-1!important;display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0!important}
+.admin-dashboard .overdue-month-checks>label{display:flex;align-items:center;gap:7px;padding:10px;border:1px solid var(--moc-border);border-radius:11px;color:var(--moc-text);background:var(--moc-surface-soft);font-size:10px;font-weight:850;cursor:pointer}
+.admin-dashboard .overdue-month-checks>label:has(input:checked){border-color:var(--moc-primary);background:var(--moc-primary-soft)}
+.admin-dashboard .admin-contact-composer>header>.moc-whatsapp-icon{width:36px;height:36px;color:#25d366}
+.admin-dashboard .admin-contact-actions>button.whatsapp{display:flex;align-items:center;justify-content:center;gap:7px;background:#128c4a;border-color:#128c4a;color:#fff}
+.admin-dashboard .admin-contact-actions>button.whatsapp .moc-whatsapp-icon{width:17px;height:17px}
+
+@media(max-width:760px){
+  .admin-dashboard .admin-contact-selected-student{grid-template-columns:50px minmax(0,1fr)}
+  .admin-dashboard .admin-contact-auto-number{grid-column:1/-1}
+  .admin-dashboard .admin-contact-payment-options{grid-template-columns:1fr}
+  .admin-dashboard .admin-contact-payment-options>div:first-child,.admin-dashboard .admin-contact-payment-options .payment-check-main,.admin-dashboard .overdue-month-checks{grid-column:1}
+}
+@media(max-width:620px){
+  .admin-dashboard .admin-contact-v2-type-grid{grid-template-columns:1fr}
+  .admin-dashboard .overdue-month-checks{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* MOC V62.2 — multi-student WhatsApp recipients. */
+.admin-dashboard .admin-contact-v3-picker-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+.admin-dashboard .admin-contact-v3-picker-tools>button{padding:0 15px;border:1px solid var(--moc-primary);border-radius:13px;color:var(--moc-primary-strong);background:var(--moc-primary-soft);font-size:11px;font-weight:900;cursor:pointer}
+.admin-dashboard .admin-contact-checkbox-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.admin-dashboard .admin-contact-checkbox-list>label{display:grid;grid-template-columns:20px 42px minmax(0,1fr);align-items:center;gap:10px;min-width:0;padding:12px;border:1px solid var(--moc-border);border-radius:14px;background:var(--moc-surface-solid);cursor:pointer}
+.admin-dashboard .admin-contact-checkbox-list>label.active{border-color:var(--moc-primary);background:var(--moc-primary-soft);box-shadow:0 0 0 1px var(--moc-primary)}
+.admin-dashboard .admin-contact-checkbox-list input{width:18px;height:18px;accent-color:var(--moc-primary)}
+.admin-dashboard .admin-contact-checkbox-list>label>span{display:grid;place-items:center;width:42px;height:42px;border-radius:12px;color:var(--moc-on-primary);background:var(--moc-primary);font-size:13px;font-weight:950}
+.admin-dashboard .admin-contact-checkbox-list>label>div{display:grid;gap:2px;min-width:0}
+.admin-dashboard .admin-contact-checkbox-list strong{color:var(--moc-text);font-size:12px;overflow-wrap:anywhere}
+.admin-dashboard .admin-contact-checkbox-list small,.admin-dashboard .admin-contact-checkbox-list p{margin:0;color:var(--moc-muted);font-size:9px;line-height:1.4;overflow-wrap:anywhere}
+.admin-dashboard .admin-contact-v3-continue{position:sticky;bottom:92px;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid var(--moc-primary);border-radius:15px;background:color-mix(in srgb,var(--moc-surface-solid) 94%,transparent);box-shadow:var(--moc-shadow);backdrop-filter:blur(14px)}
+.admin-dashboard .admin-contact-v3-continue>div{display:grid;gap:2px}.admin-dashboard .admin-contact-v3-continue strong{color:var(--moc-text);font-size:13px}.admin-dashboard .admin-contact-v3-continue span{color:var(--moc-muted);font-size:10px}
+.admin-dashboard .admin-contact-v3-continue>button{padding:11px 16px;border:0;border-radius:11px;color:var(--moc-on-primary);background:var(--moc-primary);font-weight:950;cursor:pointer}.admin-dashboard .admin-contact-v3-continue>button:disabled{opacity:.45;cursor:not-allowed}
+.admin-dashboard .admin-contact-v3-recipients{display:grid;gap:12px;padding:16px;border:1px solid var(--moc-border);border-radius:18px;background:var(--moc-surface-solid)}
+.admin-dashboard .admin-contact-v3-recipients>header{display:flex;align-items:end;justify-content:space-between;gap:12px}.admin-dashboard .admin-contact-v3-recipients h2{margin:3px 0 0;color:var(--moc-text);font-size:19px}.admin-dashboard .admin-contact-v3-recipients>header>small{color:var(--moc-muted);font-size:10px}
+.admin-dashboard .admin-contact-v3-recipients>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.admin-dashboard .admin-contact-v3-recipients article{display:grid;grid-template-columns:34px minmax(0,1fr) 24px;align-items:center;gap:9px;padding:9px;border:1px solid var(--moc-border);border-radius:11px;background:var(--moc-surface-soft)}
+.admin-dashboard .admin-contact-v3-recipients article>span{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:var(--moc-on-primary);background:var(--moc-primary);font-size:10px;font-weight:950}.admin-dashboard .admin-contact-v3-recipients article>div{display:grid;gap:2px;min-width:0}.admin-dashboard .admin-contact-v3-recipients strong{color:var(--moc-text);font-size:10px;overflow-wrap:anywhere}.admin-dashboard .admin-contact-v3-recipients small{color:var(--moc-muted);font-size:8px;overflow-wrap:anywhere}.admin-dashboard .admin-contact-v3-recipients article>b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;color:var(--moc-primary-strong);background:var(--moc-primary-soft);font-size:10px}.admin-dashboard .admin-contact-v3-recipients article>b.missing{color:var(--moc-danger-text);background:var(--moc-danger-soft)}
+.admin-dashboard .admin-contact-send-list{display:grid;gap:9px;padding:16px;border:1px solid var(--moc-border);border-radius:18px;background:var(--moc-surface-solid)}
+.admin-dashboard .admin-contact-send-list>header{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:2px}.admin-dashboard .admin-contact-send-list h2{margin:3px 0 0;color:var(--moc-text);font-size:19px}.admin-dashboard .admin-contact-send-list>header>span{color:var(--moc-primary-strong);font-size:11px;font-weight:900}
+.admin-dashboard .admin-contact-send-list>article{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:11px;border:1px solid var(--moc-border);border-radius:12px;background:var(--moc-surface-soft)}
+.admin-dashboard .admin-contact-send-list>article>div{display:grid;gap:2px;min-width:0}.admin-dashboard .admin-contact-send-list strong{color:var(--moc-text);font-size:12px}.admin-dashboard .admin-contact-send-list small{color:var(--moc-muted);font-size:9px;overflow-wrap:anywhere}
+.admin-dashboard .admin-contact-send-list button{padding:9px 11px;border:1px solid var(--moc-border);border-radius:9px;color:var(--moc-text);background:var(--moc-surface-solid);font-size:10px;font-weight:900;cursor:pointer}.admin-dashboard .admin-contact-send-list button.whatsapp{display:flex;align-items:center;gap:6px;border-color:#128c4a;color:#fff;background:#128c4a}.admin-dashboard .admin-contact-send-list button.whatsapp:disabled{opacity:.4;cursor:not-allowed}.admin-dashboard .admin-contact-send-list .moc-whatsapp-icon{width:15px;height:15px}
+
+@media(max-width:700px){
+  .admin-dashboard .admin-contact-checkbox-list,.admin-dashboard .admin-contact-v3-recipients>div{grid-template-columns:1fr}
+  .admin-dashboard .admin-contact-v3-picker-tools{grid-template-columns:1fr}.admin-dashboard .admin-contact-v3-picker-tools>button{min-height:42px}
+  .admin-dashboard .admin-contact-v3-recipients>header{align-items:flex-start;flex-direction:column}
+}
+@media(max-width:480px){
+  .admin-dashboard .admin-contact-send-list>article{grid-template-columns:1fr 1fr}.admin-dashboard .admin-contact-send-list>article>div{grid-column:1/-1}
+  .admin-dashboard .admin-contact-send-list button{width:100%}.admin-dashboard .admin-contact-send-list button.whatsapp{justify-content:center}
+}
+
 /* V31 — Payment Centre opens as three focused jobs. */
 .payment-admin-page-v31{align-content:start}
 .payment-job-cards-home{margin:0;align-content:start}

@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbzUaKwNN-5wSWYC4EmxFOlE1z0ZELEaKvbYY8ykADZijJj0MhljRGVNaZnzBwogHWP8tA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwLwbTNAb4pw2JzGxmM6sV4Lc5hKcM3i10LTE86HUH7NjrpWvQdgJPCSeozdKoBgbxbnQ/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -5048,7 +5048,7 @@ function Dashboard({
       ) : activePage === 'payment-confirmations' ? (
         <PaymentPageErrorBoundary><PaymentConfirmationsPage confirmations={paymentConfirmations} payments={paymentRecords} loading={paymentConfirmationsLoading} message={message} onReview={onReviewPayment} onAddHistorical={onAddHistoricalPayment} onBulkPayment={onBulkPayment} onUpdateFulfillment={onUpdateFulfillment} token={token} attentionLists={attentionLists} /></PaymentPageErrorBoundary>
       ) : activePage === 'contact-students' && user.role === 'Admin' ? (
-        <AdminContactStudentsPage token={token} />
+        <AdminContactStudentsPageV3 token={token} />
       ) : activePage === 'attendance-watch' ? (
         <AdminAttendanceWatchPage attentionLists={attentionLists} onNavigate={onNavigate} />
       ) : activePage === 'alumni' ? (
@@ -5060,7 +5060,7 @@ function Dashboard({
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('students')}><span>👥</span><div><strong>Data Siswa</strong><small>Profil, attendance watch, dan administrasi siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('registrations')}><span>▤</span><div><strong>Pendaftaran</strong><small>Verifikasi dan aktivasi pendaftar baru</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('payment-confirmations')}><span>💳</span><div><strong>Pembayaran</strong><small>Verifikasi, tuition watch, dan rincian transaksi</small></div><b>→</b></button>}
-            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('contact-students')}><span>✉</span><div><strong>Hubungi Siswa</strong><small>Konfirmasi pembayaran dan permintaan foto ID Card melalui WhatsApp</small></div><b>→</b></button>}
+            {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('contact-students')}><span><WhatsAppIcon /></span><div><strong>Hubungi Siswa</strong><small>Konfirmasi pembayaran dan permintaan foto ID Card melalui WhatsApp</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('attendance-watch')}><span>◷</span><div><strong>Attendance Watch</strong><small>Tindak lanjut ketidakhadiran siswa</small></div><b>→</b></button>}
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
             {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Kelas & Perkembangan</strong><small>Tren akademik, kehadiran, tugas, dan tantangan</small></div><b>→</b></button>}
@@ -5089,7 +5089,7 @@ function Dashboard({
         {user.role === 'Admin' && <button className={activePage === 'registrations' ? 'active' : ''} onClick={() => onNavigate('registrations')}><span>▤</span>Pendaftaran</button>}
         {user.role === 'CEO' ? <button className={activePage === 'ceo-revenue' ? 'active' : ''} onClick={() => onNavigate('ceo-revenue')}><span>▥</span>Business</button> : <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}><span>💳</span>Pembayaran</button>}
 
-        {user.role === 'Admin' && <button className={activePage === 'contact-students' ? 'active' : ''} onClick={() => onNavigate('contact-students')}><span>✉</span>Hubungi</button>}
+        {user.role === 'Admin' && <button className={activePage === 'contact-students' ? 'active' : ''} onClick={() => onNavigate('contact-students')}><span><WhatsAppIcon /></span>Hubungi</button>}
 
         <button
           className={['menu', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''}
@@ -5101,6 +5101,243 @@ function Dashboard({
       </nav>
     </main>
   );
+}
+
+function WhatsAppIcon() {
+  return <svg className="moc-whatsapp-icon" viewBox="0 0 32 32" aria-hidden="true"><path fill="currentColor" d="M16.04 3C8.86 3 3.02 8.78 3.02 15.9c0 2.27.6 4.49 1.74 6.43L3 28.77l6.63-1.72a13.1 13.1 0 0 0 6.4 1.64h.01c7.18 0 13.02-5.79 13.02-12.9C29.06 8.78 23.22 3 16.04 3Zm0 23.52h-.01a10.9 10.9 0 0 1-5.56-1.51l-.4-.24-3.93 1.02 1.05-3.8-.26-.39a10.67 10.67 0 0 1-1.69-5.7c0-5.93 4.85-10.74 10.81-10.74 5.95 0 10.8 4.81 10.8 10.74 0 5.92-4.85 10.62-10.81 10.62Zm5.93-8.02c-.33-.16-1.92-.94-2.22-1.05-.3-.11-.52-.16-.74.16-.22.33-.85 1.05-1.04 1.27-.19.22-.38.24-.71.08-.33-.16-1.37-.5-2.61-1.6a9.79 9.79 0 0 1-1.81-2.23c-.19-.33-.02-.5.14-.66.15-.14.33-.38.49-.57.16-.19.22-.33.33-.54.11-.22.05-.41-.03-.57-.08-.16-.74-1.78-1.01-2.43-.27-.64-.54-.55-.74-.56h-.63c-.22 0-.57.08-.87.41-.3.33-1.15 1.11-1.15 2.7 0 1.59 1.17 3.13 1.33 3.35.16.22 2.3 3.48 5.56 4.88.78.33 1.38.53 1.86.68.78.25 1.49.21 2.05.13.63-.09 1.92-.78 2.19-1.54.27-.76.27-1.4.19-1.54-.08-.13-.3-.21-.63-.37Z" /></svg>;
+}
+
+function AdminContactStudentsPageV3({ token }) {
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
+  const [currentPeriod, setCurrentPeriod] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [selectionDone, setSelectionDone] = useState(false);
+  const [contactType, setContactType] = useState('');
+  const [paymentChecks, setPaymentChecks] = useState({ overdue: false, current: false, idcard: false, workbook: false });
+  const [overdueMonths, setOverdueMonths] = useState([]);
+  const [template, setTemplate] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    callApi({ action: 'getAdminContactStudents', token })
+      .then((result) => {
+        if (!active) return;
+        setStudents(Array.isArray(result.students) ? result.students : []);
+        setCurrentPeriod(result.currentPeriod || '');
+      })
+      .catch((error) => { if (active) setNotice(error.message || 'Data kontak siswa gagal dimuat.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  function formatPeriod(value) {
+    if (!/^\d{4}-\d{2}$/.test(String(value || ''))) return value || 'bulan berjalan';
+    return new Date(`${value}-01T12:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  }
+  function normalizeWhatsApp(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+    else if (digits.startsWith('8')) digits = `62${digits}`;
+    return digits;
+  }
+  function studentNumber(item) { return item.waStudent || item.waParent || ''; }
+  function recipientLabel(item) { return item.waStudent ? 'Siswa' : item.waParent ? 'Orang Tua' : 'Nomor belum tersedia'; }
+  const filteredStudents = students.filter((item) => `${item.fullName} ${item.studentId} ${item.className} ${item.program}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const selectedStudents = students.filter((item) => selectedIds.includes(item.studentId));
+  const year = Number(String(currentPeriod || new Date().getFullYear()).slice(0, 4)) || new Date().getFullYear();
+  const overdueChoices = [{ value: `${year}-08`, label: `Agustus ${year}` }, { value: `${year}-10`, label: `Oktober ${year}` }, { value: `${year}-11`, label: `November ${year}` }, { value: `${year}-12`, label: `Desember ${year}` }];
+
+  function toggleStudent(id) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  }
+  function toggleAllVisible() {
+    const visibleIds = filteredStudents.map((item) => item.studentId);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+    setSelectedIds((current) => allSelected ? current.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...current, ...visibleIds])));
+  }
+  function resetMessageOptions() {
+    setContactType('');
+    setPaymentChecks({ overdue: false, current: false, idcard: false, workbook: false });
+    setOverdueMonths([]);
+    setTemplate('');
+    setNotice('');
+  }
+  function buildPaymentTemplate(nextChecks = paymentChecks, nextMonths = overdueMonths) {
+    const items = [];
+    if (nextChecks.overdue && nextMonths.length) items.push(`Pembayaran les bulan menunggak: ${nextMonths.map(formatPeriod).join(', ')}`);
+    if (nextChecks.current) items.push(`Pembayaran les bulan berjalan: ${formatPeriod(currentPeriod)}`);
+    if (nextChecks.idcard) items.push('Pembayaran pembuatan ID Card');
+    if (nextChecks.workbook) items.push('Pembayaran paket Workbook');
+    if (!items.length) return '';
+    return `Halo, Kak/Orang Tua/Wali {nama}. Semoga dalam keadaan baik. 🙏\n\nKami dari Admin Mr One Course ingin mengonfirmasi beberapa pembayaran berikut:\n\n${items.map((item, index) => `${index + 1}. ${item}`).join('\n')}\n\nJika pembayaran sudah dilakukan, mohon balas chat ini dengan bukti pembayaran atau informasi tanggal dan metode pembayarannya agar dapat segera kami periksa. Jika belum, silakan informasikan rencana pembayarannya agar kami dapat membantu pencatatannya.\n\nTerima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`;
+  }
+  function togglePayment(key) {
+    const next = { ...paymentChecks, [key]: !paymentChecks[key] };
+    const nextMonths = key === 'overdue' && !next.overdue ? [] : overdueMonths;
+    setPaymentChecks(next);
+    if (key === 'overdue' && !next.overdue) setOverdueMonths([]);
+    setTemplate(buildPaymentTemplate(next, nextMonths));
+  }
+  function toggleMonth(value) {
+    const next = overdueMonths.includes(value) ? overdueMonths.filter((item) => item !== value) : [...overdueMonths, value];
+    setOverdueMonths(next);
+    setTemplate(buildPaymentTemplate(paymentChecks, next));
+  }
+  function chooseType(type) {
+    setContactType(type);
+    setNotice('');
+    if (type === 'photo') setTemplate(`Halo, Kak/Orang Tua/Wali {nama}. Semoga dalam keadaan baik. 🙏\n\nKami sedang menyiapkan ID Card Mr One Course dan memerlukan pengiriman ulang foto agar hasil cetaknya lebih jelas.\n\nMohon kirimkan 1 foto terbaru melalui chat ini dengan posisi menghadap kamera, pencahayaan cukup, tidak buram, dan latar belakang sederhana.\n\nSilakan balas chat ini dengan foto terbaik yang akan digunakan pada ID Card.\n\nTerima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`);
+    else setTemplate(buildPaymentTemplate());
+  }
+  function personalizedMessage(item) { return template.replaceAll('{nama}', item.fullName || 'Siswa'); }
+  async function copyMessage(item) {
+    try { await navigator.clipboard.writeText(personalizedMessage(item)); setNotice(`Pesan untuk ${item.fullName} berhasil disalin.`); }
+    catch (error) { setNotice('Pesan belum dapat disalin otomatis.'); }
+  }
+  function openWhatsApp(item) {
+    const number = normalizeWhatsApp(studentNumber(item));
+    if (!number) return setNotice(`Nomor WhatsApp ${item.fullName} belum tersedia.`);
+    if (!template.trim()) return setNotice('Lengkapi pilihan pesan terlebih dahulu.');
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(personalizedMessage(item))}`, '_blank', 'noopener,noreferrer');
+  }
+
+  return <section className="admin-contact-page admin-contact-v3 admin-menu-detail-page">
+    <div className="admin-contact-heading"><div><span className="eyebrow">ADMIN • WHATSAPP ASSISTANT</span><h1>Hubungi Siswa</h1><p>Centang satu atau beberapa siswa yang akan dikirimi pesan WhatsApp.</p></div>{selectionDone && <button type="button" onClick={() => { setSelectionDone(false); resetMessageOptions(); }}>← Ubah pilihan siswa</button>}</div>
+    {notice && <div className={notice.includes('berhasil') ? 'admin-contact-notice success' : 'admin-contact-notice'}>{notice}</div>}
+    {loading ? <div className="dashboard-loading">Memuat data siswa...</div> : !selectionDone ? <>
+      <div className="admin-contact-v3-picker-tools"><label className="admin-contact-v2-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, ID, kelas, atau program" /></label><button type="button" onClick={toggleAllVisible}>{filteredStudents.length > 0 && filteredStudents.every((item) => selectedIds.includes(item.studentId)) ? 'Batalkan semua' : 'Centang semua hasil'}</button></div>
+      <div className="admin-contact-count"><strong>{selectedIds.length} siswa dipilih</strong><span>dari {filteredStudents.length} hasil</span></div>
+      <div className="admin-contact-checkbox-list">{filteredStudents.map((item) => <label key={item.studentId} className={selectedIds.includes(item.studentId) ? 'active' : ''}><input type="checkbox" checked={selectedIds.includes(item.studentId)} onChange={() => toggleStudent(item.studentId)} /><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.program || 'Kelas belum tercatat'}</small><p>{recipientLabel(item)}: {studentNumber(item) || '—'}</p></div></label>)}</div>
+      <div className="admin-contact-v3-continue"><div><strong>{selectedIds.length} siswa</strong><span>akan masuk ke daftar penerima</span></div><button type="button" disabled={!selectedIds.length} onClick={() => { setSelectionDone(true); setNotice(''); }}>Lanjutkan →</button></div>
+    </> : <>
+      <section className="admin-contact-v3-recipients"><header><div><span className="eyebrow">PENERIMA TERPILIH</span><h2>{selectedStudents.length} siswa</h2></div><small>WA Siswa diprioritaskan, kemudian WA Orang Tua jika nomor siswa kosong.</small></header><div>{selectedStudents.map((item) => <article key={item.studentId}><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div>{normalizeWhatsApp(studentNumber(item)) ? <b>✓</b> : <b className="missing">!</b>}</article>)}</div></section>
+      {!contactType ? <div className="admin-contact-v2-type-grid"><button type="button" onClick={() => chooseType('payment')}><span>Rp</span><div><strong>Pembayaran</strong><small>Les menunggak, bulan berjalan, ID Card, dan Workbook.</small></div><b>→</b></button><button type="button" onClick={() => chooseType('photo')}><span>▣</span><div><strong>Permintaan Foto ID Card</strong><small>Minta siswa mengirim ulang foto yang lebih jelas.</small></div><b>→</b></button></div> : <>
+        <button className="admin-contact-v2-back" type="button" onClick={resetMessageOptions}>← Pilihan konfirmasi</button>
+        {contactType === 'payment' && <section className="admin-contact-payment-options"><div><span className="eyebrow">PILIH PEMBAYARAN</span><h2>Centang yang ingin dikonfirmasi</h2><p>Semua pilihan akan otomatis masuk ke pesan setiap siswa.</p></div><label className="payment-check-main"><input type="checkbox" checked={paymentChecks.overdue} onChange={() => togglePayment('overdue')} /><span><strong>Les Bulan Menunggak</strong><small>Pilih satu atau beberapa bulan.</small></span></label>{paymentChecks.overdue && <div className="overdue-month-checks">{overdueChoices.map((item) => <label key={item.value}><input type="checkbox" checked={overdueMonths.includes(item.value)} onChange={() => toggleMonth(item.value)} /><span>{item.label}</span></label>)}</div>}<label><input type="checkbox" checked={paymentChecks.current} onChange={() => togglePayment('current')} /><span><strong>Les Bulan Berjalan</strong><small>{formatPeriod(currentPeriod)}</small></span></label><label><input type="checkbox" checked={paymentChecks.idcard} onChange={() => togglePayment('idcard')} /><span><strong>ID Card</strong><small>Konfirmasi pembayaran pembuatan kartu.</small></span></label><label><input type="checkbox" checked={paymentChecks.workbook} onChange={() => togglePayment('workbook')} /><span><strong>Workbook</strong><small>Konfirmasi pembayaran paket buku.</small></span></label></section>}
+        <section className="admin-contact-composer"><header><div><span className="eyebrow">TEMPLATE PESAN</span><h2>{contactType === 'payment' ? 'Konfirmasi Pembayaran' : 'Permintaan Foto ID Card'}</h2><p>{'{nama}'} otomatis diganti dengan nama setiap siswa.</p></div><WhatsAppIcon /></header><label><span>Pesan dapat disunting</span><textarea rows="13" value={template} onChange={(event) => setTemplate(event.target.value)} placeholder={contactType === 'payment' ? 'Centang minimal satu pilihan pembayaran.' : ''} /></label></section>
+        {template.trim() && <section className="admin-contact-send-list"><header><div><span className="eyebrow">KIRIM PESAN</span><h2>Buka chat satu per satu</h2></div><span>{selectedStudents.length} penerima</span></header>{selectedStudents.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div><button type="button" onClick={() => copyMessage(item)}>Salin</button><button type="button" className="whatsapp" disabled={!normalizeWhatsApp(studentNumber(item))} onClick={() => openWhatsApp(item)}><WhatsAppIcon /> Kirim WA</button></article>)}</section>}
+      </>}
+    </>}
+  </section>;
+}
+
+function AdminContactStudentsPageV2({ token }) {
+  const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
+  const [currentPeriod, setCurrentPeriod] = useState('');
+  const [search, setSearch] = useState('');
+  const [student, setStudent] = useState(null);
+  const [recipient, setRecipient] = useState('parent');
+  const [contactType, setContactType] = useState('');
+  const [paymentChecks, setPaymentChecks] = useState({ overdue: false, current: false, idcard: false, workbook: false });
+  const [overdueMonths, setOverdueMonths] = useState([]);
+  const [message, setMessage] = useState('');
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    callApi({ action: 'getAdminContactStudents', token })
+      .then((result) => {
+        if (!active) return;
+        setStudents(Array.isArray(result.students) ? result.students : []);
+        setCurrentPeriod(result.currentPeriod || '');
+      })
+      .catch((error) => { if (active) setNotice(error.message || 'Data kontak siswa gagal dimuat.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  function formatPeriod(value) {
+    if (!/^\d{4}-\d{2}$/.test(String(value || ''))) return value || 'bulan berjalan';
+    return new Date(`${value}-01T12:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  }
+  function normalizeWhatsApp(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+    else if (digits.startsWith('8')) digits = `62${digits}`;
+    return digits;
+  }
+  function resetOptions() {
+    setContactType('');
+    setPaymentChecks({ overdue: false, current: false, idcard: false, workbook: false });
+    setOverdueMonths([]);
+    setMessage('');
+    setNotice('');
+  }
+  function chooseStudent(item) {
+    setStudent(item);
+    setRecipient(item.waParent ? 'parent' : 'student');
+    resetOptions();
+  }
+
+  const year = Number(String(currentPeriod || new Date().getFullYear()).slice(0, 4)) || new Date().getFullYear();
+  const overdueChoices = [
+    { value: `${year}-08`, label: `Agustus ${year}` },
+    { value: `${year}-10`, label: `Oktober ${year}` },
+    { value: `${year}-11`, label: `November ${year}` },
+    { value: `${year}-12`, label: `Desember ${year}` },
+  ];
+  const selectedNumber = student ? (recipient === 'parent' ? student.waParent : student.waStudent) : '';
+  const filteredStudents = students.filter((item) => `${item.fullName} ${item.studentId} ${item.className} ${item.program}`.toLowerCase().includes(search.trim().toLowerCase()));
+
+  function buildPaymentMessage(nextChecks = paymentChecks, nextMonths = overdueMonths) {
+    if (!student) return '';
+    const items = [];
+    if (nextChecks.overdue && nextMonths.length) items.push(`Pembayaran les bulan menunggak: ${nextMonths.map(formatPeriod).join(', ')}`);
+    if (nextChecks.current) items.push(`Pembayaran les bulan berjalan: ${formatPeriod(currentPeriod)}`);
+    if (nextChecks.idcard) items.push('Pembayaran pembuatan ID Card');
+    if (nextChecks.workbook) items.push('Pembayaran paket Workbook');
+    if (!items.length) return '';
+    return `Halo, Kak/Orang Tua/Wali ${student.fullName}. Semoga dalam keadaan baik. 🙏\n\nKami dari Admin Mr One Course ingin mengonfirmasi beberapa pembayaran berikut:\n\n${items.map((item, index) => `${index + 1}. ${item}`).join('\n')}\n\nJika pembayaran sudah dilakukan, mohon balas chat ini dengan bukti pembayaran atau informasi tanggal dan metode pembayarannya agar dapat segera kami periksa. Jika belum, silakan informasikan rencana pembayarannya agar kami dapat membantu pencatatannya.\n\nTerima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`;
+  }
+  function togglePayment(key) {
+    const next = { ...paymentChecks, [key]: !paymentChecks[key] };
+    const nextMonths = key === 'overdue' && !next.overdue ? [] : overdueMonths;
+    setPaymentChecks(next);
+    if (key === 'overdue' && !next.overdue) setOverdueMonths([]);
+    setMessage(buildPaymentMessage(next, nextMonths));
+  }
+  function toggleMonth(value) {
+    const next = overdueMonths.includes(value) ? overdueMonths.filter((item) => item !== value) : [...overdueMonths, value];
+    setOverdueMonths(next);
+    setMessage(buildPaymentMessage(paymentChecks, next));
+  }
+  function chooseType(type) {
+    setContactType(type);
+    setNotice('');
+    if (type === 'photo') setMessage(`Halo, Kak/Orang Tua/Wali ${student.fullName}. Semoga dalam keadaan baik. 🙏\n\nKami sedang menyiapkan ID Card Mr One Course dan memerlukan pengiriman ulang foto agar hasil cetaknya lebih jelas.\n\nMohon kirimkan 1 foto terbaru melalui chat ini dengan posisi menghadap kamera, pencahayaan cukup, tidak buram, dan latar belakang sederhana.\n\nSilakan balas chat ini dengan foto terbaik yang akan digunakan pada ID Card.\n\nTerima kasih atas perhatian dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`);
+    else setMessage(buildPaymentMessage());
+  }
+  async function copyMessage() {
+    try { await navigator.clipboard.writeText(message); setNotice('Pesan berhasil disalin.'); }
+    catch (error) { setNotice('Pesan belum dapat disalin otomatis. Silakan salin langsung dari kotak pesan.'); }
+  }
+  function openWhatsApp() {
+    const number = normalizeWhatsApp(selectedNumber);
+    if (!number) return setNotice('Nomor WhatsApp siswa atau orang tua belum tersedia di Data Siswa.');
+    if (!message.trim()) return setNotice('Pilih minimal satu pembayaran terlebih dahulu.');
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  return <section className="admin-contact-page admin-contact-v2 admin-menu-detail-page">
+    <div className="admin-contact-heading"><div><span className="eyebrow">ADMIN • WHATSAPP ASSISTANT</span><h1>Hubungi Siswa</h1><p>Pilih siswa terlebih dahulu. Nomor WhatsApp akan diambil otomatis dari Data Siswa.</p></div>{student && <button type="button" onClick={() => { setStudent(null); resetOptions(); }}>← Ganti siswa</button>}</div>
+    {notice && <div className={notice.includes('berhasil') ? 'admin-contact-notice success' : 'admin-contact-notice'}>{notice}</div>}
+    {loading ? <div className="dashboard-loading">Memuat data siswa...</div> : !student ? <>
+      <label className="admin-contact-v2-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama, ID, kelas, atau program" /></label>
+      <div className="admin-contact-count"><strong>{filteredStudents.length} siswa aktif</strong><span>pilih satu siswa untuk melanjutkan</span></div>
+      <div className="admin-contact-student-list">{filteredStudents.map((item) => <article key={item.studentId}><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.program || 'Kelas belum tercatat'}</small><p>{item.waParent ? `WA Orang Tua: ${item.waParent}` : item.waStudent ? `WA Siswa: ${item.waStudent}` : 'Nomor WhatsApp belum tersedia'}</p></div><button type="button" onClick={() => chooseStudent(item)}>Pilih Siswa</button></article>)}</div>
+    </> : <>
+      <section className="admin-contact-selected-student"><div className="student-avatar">{String(student.fullName || 'S').charAt(0).toUpperCase()}</div><div><span className="eyebrow">SISWA TERPILIH</span><h2>{student.fullName}</h2><p>{student.studentId} • {student.className || student.program || '—'}</p></div><div className="admin-contact-auto-number"><small>NOMOR WHATSAPP</small>{student.waParent && <button type="button" className={recipient === 'parent' ? 'active' : ''} onClick={() => setRecipient('parent')}>Orang Tua <b>{student.waParent}</b></button>}{student.waStudent && <button type="button" className={recipient === 'student' ? 'active' : ''} onClick={() => setRecipient('student')}>Siswa <b>{student.waStudent}</b></button>}{!student.waParent && !student.waStudent && <strong>Belum tersedia</strong>}</div></section>
+      {!contactType ? <div className="admin-contact-v2-type-grid"><button type="button" onClick={() => chooseType('payment')}><span>Rp</span><div><strong>Pembayaran</strong><small>Les menunggak, bulan berjalan, ID Card, dan Workbook.</small></div><b>→</b></button><button type="button" onClick={() => chooseType('photo')}><span>▣</span><div><strong>Permintaan Foto ID Card</strong><small>Minta siswa mengirim ulang foto yang lebih jelas.</small></div><b>→</b></button></div> : <>
+        <button className="admin-contact-v2-back" type="button" onClick={resetOptions}>← Pilihan konfirmasi</button>
+        {contactType === 'payment' && <section className="admin-contact-payment-options"><div><span className="eyebrow">PILIH PEMBAYARAN</span><h2>Centang yang ingin dikonfirmasi</h2><p>Semua pilihan yang dicentang akan otomatis masuk ke dalam pesan WhatsApp.</p></div><label className="payment-check-main"><input type="checkbox" checked={paymentChecks.overdue} onChange={() => togglePayment('overdue')} /><span><strong>Les Bulan Menunggak</strong><small>Pilih satu atau beberapa bulan.</small></span></label>{paymentChecks.overdue && <div className="overdue-month-checks">{overdueChoices.map((item) => <label key={item.value}><input type="checkbox" checked={overdueMonths.includes(item.value)} onChange={() => toggleMonth(item.value)} /><span>{item.label}</span></label>)}</div>}<label><input type="checkbox" checked={paymentChecks.current} onChange={() => togglePayment('current')} /><span><strong>Les Bulan Berjalan</strong><small>{formatPeriod(currentPeriod)}</small></span></label><label><input type="checkbox" checked={paymentChecks.idcard} onChange={() => togglePayment('idcard')} /><span><strong>ID Card</strong><small>Konfirmasi pembayaran pembuatan kartu.</small></span></label><label><input type="checkbox" checked={paymentChecks.workbook} onChange={() => togglePayment('workbook')} /><span><strong>Workbook</strong><small>Konfirmasi pembayaran paket buku.</small></span></label></section>}
+        <section className="admin-contact-composer"><header><div><span className="eyebrow">PRATINJAU CHAT WHATSAPP</span><h2>{contactType === 'payment' ? 'Konfirmasi Pembayaran' : 'Permintaan Foto ID Card'}</h2></div><WhatsAppIcon /></header><label><span>Pesan dapat disunting sebelum dikirim</span><textarea rows="14" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={contactType === 'payment' ? 'Centang minimal satu pilihan pembayaran.' : ''} /></label><div className="admin-contact-actions"><button type="button" disabled={!message.trim()} onClick={copyMessage}>Salin Pesan</button><button type="button" className="primary whatsapp" disabled={!message.trim() || !normalizeWhatsApp(selectedNumber)} onClick={openWhatsApp}><WhatsAppIcon /> Buka WhatsApp</button></div></section>
+      </>}
+    </>}
+  </section>;
 }
 
 function AdminContactStudentsPage({ token }) {
