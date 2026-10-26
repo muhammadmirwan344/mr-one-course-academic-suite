@@ -24661,7 +24661,7 @@ html[data-theme='light'] .student-directory-hero-v32,html[data-theme='light'] .s
   padding-bottom:max(105px,calc(env(safe-area-inset-bottom) + 88px));
 }
 .admin-dashboard .mobile-navigation{
-  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-columns:repeat(6,minmax(0,1fr));
   padding:7px 5px max(10px,env(safe-area-inset-bottom));
 }
 .admin-dashboard .mobile-navigation button{

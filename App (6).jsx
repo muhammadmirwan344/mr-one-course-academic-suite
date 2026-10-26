@@ -5089,8 +5089,10 @@ function Dashboard({
         {user.role === 'Admin' && <button className={activePage === 'registrations' ? 'active' : ''} onClick={() => onNavigate('registrations')}><span>▤</span>Pendaftaran</button>}
         {user.role === 'CEO' ? <button className={activePage === 'ceo-revenue' ? 'active' : ''} onClick={() => onNavigate('ceo-revenue')}><span>▥</span>Business</button> : <button className={activePage === 'payment-confirmations' ? 'active' : ''} onClick={() => onNavigate('payment-confirmations')}><span>💳</span>Pembayaran</button>}
 
+        {user.role === 'Admin' && <button className={activePage === 'contact-students' ? 'active' : ''} onClick={() => onNavigate('contact-students')}><span>✉</span>Hubungi</button>}
+
         <button
-          className={['menu', 'contact-students', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''}
+          className={['menu', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''}
           onClick={() => onNavigate('menu')}
         >
           <span>☰</span>
