@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwLwbTNAb4pw2JzGxmM6sV4Lc5hKcM3i10LTE86HUH7NjrpWvQdgJPCSeozdKoBgbxbnQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbz_a4m5jpsuLZwMaxxWABCf2cwKDqEtklAOcILIDSLfGMZQFsKL8E7BIkTIYpLohsKzsw/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -74,6 +74,9 @@ function ModernUiIcon({ name }) {
     score: <><path d="M4 19V9M10 19V5M16 19v-7M3 19.5h18"/><path d="m4 6 5-3 5 3 6-4"/></>,
     report: <><path d="M6 3.5h9l3 3v14H6Z"/><path d="M14.5 3.5V7H18M9 11h6M9 15h6"/></>,
     quest: <><path d="M12 3.5 14.5 9l6 .6-4.5 4 1.3 5.9L12 16.4l-5.3 3.1L8 13.6l-4.5-4L9.5 9Z"/></>,
+    payment: <><rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M3.5 9h17M7 15h4"/></>,
+    unpaid: <><path d="M6 4.5h12v15H6zM9 8h6M9 12h3"/><circle cx="16.5" cy="16" r="3.5"/><path d="M16.5 14.2v2.1M16.5 17.7v.1"/></>,
+    invoice: <><path d="M6 3.5h9l3 3v14H6Z"/><path d="M14.5 3.5V7H18M9 11h6M9 15h4"/><path d="M15.5 14.5v4M13.5 16.5h4"/></>,
   };
   return <svg {...common}>{paths[name] || paths.assignment}</svg>;
 }
@@ -5119,6 +5122,7 @@ function AdminContactStudentsPageV3({ token }) {
   const [overdueMonths, setOverdueMonths] = useState([]);
   const [template, setTemplate] = useState('');
   const [notice, setNotice] = useState('');
+  const [sentIds, setSentIds] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -5147,6 +5151,7 @@ function AdminContactStudentsPageV3({ token }) {
   function recipientLabel(item) { return item.waStudent ? 'Siswa' : item.waParent ? 'Orang Tua' : 'Nomor belum tersedia'; }
   const filteredStudents = students.filter((item) => `${item.fullName} ${item.studentId} ${item.className} ${item.program}`.toLowerCase().includes(search.trim().toLowerCase()));
   const selectedStudents = students.filter((item) => selectedIds.includes(item.studentId));
+  const pendingStudents = selectedStudents.filter((item) => !sentIds.includes(item.studentId));
   const year = Number(String(currentPeriod || new Date().getFullYear()).slice(0, 4)) || new Date().getFullYear();
   const overdueChoices = [{ value: `${year}-08`, label: `Agustus ${year}` }, { value: `${year}-10`, label: `Oktober ${year}` }, { value: `${year}-11`, label: `November ${year}` }, { value: `${year}-12`, label: `Desember ${year}` }];
 
@@ -5164,6 +5169,7 @@ function AdminContactStudentsPageV3({ token }) {
     setOverdueMonths([]);
     setTemplate('');
     setNotice('');
+    setSentIds([]);
   }
   function buildPaymentTemplate(nextChecks = paymentChecks, nextMonths = overdueMonths) {
     const items = [];
@@ -5202,6 +5208,8 @@ function AdminContactStudentsPageV3({ token }) {
     if (!number) return setNotice(`Nomor WhatsApp ${item.fullName} belum tersedia.`);
     if (!template.trim()) return setNotice('Lengkapi pilihan pesan terlebih dahulu.');
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(personalizedMessage(item))}`, '_blank', 'noopener,noreferrer');
+    setSentIds((current) => current.includes(item.studentId) ? current : [...current, item.studentId]);
+    setNotice(`Chat WhatsApp ${item.fullName} berhasil dibuka. Silakan lanjutkan ke siswa berikutnya.`);
   }
 
   return <section className="admin-contact-page admin-contact-v3 admin-menu-detail-page">
@@ -5213,12 +5221,12 @@ function AdminContactStudentsPageV3({ token }) {
       <div className="admin-contact-checkbox-list">{filteredStudents.map((item) => <label key={item.studentId} className={selectedIds.includes(item.studentId) ? 'active' : ''}><input type="checkbox" checked={selectedIds.includes(item.studentId)} onChange={() => toggleStudent(item.studentId)} /><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{item.studentId} • {item.className || item.program || 'Kelas belum tercatat'}</small><p>{recipientLabel(item)}: {studentNumber(item) || '—'}</p></div></label>)}</div>
       <div className="admin-contact-v3-continue"><div><strong>{selectedIds.length} siswa</strong><span>akan masuk ke daftar penerima</span></div><button type="button" disabled={!selectedIds.length} onClick={() => { setSelectionDone(true); setNotice(''); }}>Lanjutkan →</button></div>
     </> : <>
-      <section className="admin-contact-v3-recipients"><header><div><span className="eyebrow">PENERIMA TERPILIH</span><h2>{selectedStudents.length} siswa</h2></div><small>WA Siswa diprioritaskan, kemudian WA Orang Tua jika nomor siswa kosong.</small></header><div>{selectedStudents.map((item) => <article key={item.studentId}><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div>{normalizeWhatsApp(studentNumber(item)) ? <b>✓</b> : <b className="missing">!</b>}</article>)}</div></section>
+      <section className="admin-contact-v3-recipients"><header><div><span className="eyebrow">PENERIMA TERPILIH</span><h2>{pendingStudents.length} siswa tersisa</h2></div><small>WA Siswa diprioritaskan, kemudian WA Orang Tua jika nomor siswa kosong.</small></header><div>{pendingStudents.map((item) => <article key={item.studentId}><span>{String(item.fullName || 'S').charAt(0).toUpperCase()}</span><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div>{normalizeWhatsApp(studentNumber(item)) ? <b>✓</b> : <b className="missing">!</b>}</article>)}</div>{!pendingStudents.length && sentIds.length > 0 && <div className="admin-contact-send-complete"><strong>Semua chat sudah dibuka</strong><small>{sentIds.length} siswa telah selesai diproses pada daftar ini.</small></div>}</section>
       {!contactType ? <div className="admin-contact-v2-type-grid"><button type="button" onClick={() => chooseType('payment')}><span>Rp</span><div><strong>Pembayaran</strong><small>Les menunggak, bulan berjalan, ID Card, dan Workbook.</small></div><b>→</b></button><button type="button" onClick={() => chooseType('photo')}><span>▣</span><div><strong>Permintaan Foto ID Card</strong><small>Minta siswa mengirim ulang foto yang lebih jelas.</small></div><b>→</b></button></div> : <>
         <button className="admin-contact-v2-back" type="button" onClick={resetMessageOptions}>← Pilihan konfirmasi</button>
         {contactType === 'payment' && <section className="admin-contact-payment-options"><div><span className="eyebrow">PILIH PEMBAYARAN</span><h2>Centang yang ingin dikonfirmasi</h2><p>Semua pilihan akan otomatis masuk ke pesan setiap siswa.</p></div><label className="payment-check-main"><input type="checkbox" checked={paymentChecks.overdue} onChange={() => togglePayment('overdue')} /><span><strong>Les Bulan Menunggak</strong><small>Pilih satu atau beberapa bulan.</small></span></label>{paymentChecks.overdue && <div className="overdue-month-checks">{overdueChoices.map((item) => <label key={item.value}><input type="checkbox" checked={overdueMonths.includes(item.value)} onChange={() => toggleMonth(item.value)} /><span>{item.label}</span></label>)}</div>}<label><input type="checkbox" checked={paymentChecks.current} onChange={() => togglePayment('current')} /><span><strong>Les Bulan Berjalan</strong><small>{formatPeriod(currentPeriod)}</small></span></label><label><input type="checkbox" checked={paymentChecks.idcard} onChange={() => togglePayment('idcard')} /><span><strong>ID Card</strong><small>Konfirmasi pembayaran pembuatan kartu.</small></span></label><label><input type="checkbox" checked={paymentChecks.workbook} onChange={() => togglePayment('workbook')} /><span><strong>Workbook</strong><small>Konfirmasi pembayaran paket buku.</small></span></label></section>}
         <section className="admin-contact-composer"><header><div><span className="eyebrow">TEMPLATE PESAN</span><h2>{contactType === 'payment' ? 'Konfirmasi Pembayaran' : 'Permintaan Foto ID Card'}</h2><p>{'{nama}'} otomatis diganti dengan nama setiap siswa.</p></div><WhatsAppIcon /></header><label><span>Pesan dapat disunting</span><textarea rows="13" value={template} onChange={(event) => setTemplate(event.target.value)} placeholder={contactType === 'payment' ? 'Centang minimal satu pilihan pembayaran.' : ''} /></label></section>
-        {template.trim() && <section className="admin-contact-send-list"><header><div><span className="eyebrow">KIRIM PESAN</span><h2>Buka chat satu per satu</h2></div><span>{selectedStudents.length} penerima</span></header>{selectedStudents.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div><button type="button" onClick={() => copyMessage(item)}>Salin</button><button type="button" className="whatsapp" disabled={!normalizeWhatsApp(studentNumber(item))} onClick={() => openWhatsApp(item)}><WhatsAppIcon /> Kirim WA</button></article>)}</section>}
+        {template.trim() && <section className="admin-contact-send-list"><header><div><span className="eyebrow">KIRIM PESAN</span><h2>Buka chat satu per satu</h2></div><span>{pendingStudents.length} tersisa</span></header>{pendingStudents.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{recipientLabel(item)} • {studentNumber(item) || 'Nomor belum tersedia'}</small></div><button type="button" onClick={() => copyMessage(item)}>Salin</button><button type="button" className="whatsapp" disabled={!normalizeWhatsApp(studentNumber(item))} onClick={() => openWhatsApp(item)}><WhatsAppIcon /> Kirim WA</button></article>)}{!pendingStudents.length && sentIds.length > 0 && <div className="admin-contact-send-complete"><strong>Pengiriman daftar ini selesai</strong><small>Semua chat WhatsApp sudah dibuka. Anda dapat kembali memilih siswa lain jika diperlukan.</small></div>}</section>}
       </>}
     </>}
   </section>;
@@ -5520,6 +5528,8 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
   const [bulkPayment, setBulkPayment] = useState({ paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', amount: 150000 });
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
   const [showBulkPayment, setShowBulkPayment] = useState(false);
+  const [invoicePreparedKeys, setInvoicePreparedKeys] = useState([]);
+  const [invoiceSentKeys, setInvoiceSentKeys] = useState([]);
   const historicalFormRef = useRef(null);
   const emptyHistoricalPayment = () => ({ studentId: '', studentName: '', paymentCategory: 'Book Package', amount: 150000, paymentDate: new Date().toISOString().slice(0,10), paymentMethod: 'Tunai', period: '', fulfillmentStatus: 'Sedang Disiapkan', note: '', proof: null });
   const [historical, setHistorical] = useState(emptyHistoricalPayment);
@@ -5780,6 +5790,20 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       *{box-sizing:border-box}body{margin:0;padding:28px;background:#e9f4f5;color:#10232c;font-family:Inter,Arial,sans-serif}.invoice-document{width:min(100%,760px);margin:0 auto 28px;border:1px solid #bad7da;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 18px 60px rgba(0,72,82,.18);break-inside:avoid;page-break-inside:avoid;page-break-after:always}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.invoice-document>header{display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:0;padding:20px 24px;color:#fff;background:linear-gradient(135deg,#0094a8,#007b8d);border-bottom:6px solid #f7c928;box-shadow:inset 0 -2px #e7473c}.invoice-document>header>div:first-child{display:grid;gap:5px}.invoice-document>header span{font-size:10px;letter-spacing:.14em;color:#ffe66d;font-weight:900}.invoice-document>header strong{font-size:13px}.brand{display:flex;align-items:center;gap:9px;text-align:right}.brand img{display:block;width:44px;height:44px;max-width:44px;max-height:44px;border-radius:11px;object-fit:contain;background:#fff}.brand span{display:grid;letter-spacing:0;color:#fff}.brand b{font-size:15px}.brand small{color:#d7f5f6;font-size:10px}.amount{padding:40px 28px 34px;text-align:center;border-bottom:1px solid #dbe8ea;background:#fff}.amount span,.student>span{display:block;color:#008da1;font-size:11px;letter-spacing:.15em;font-weight:950}.amount strong{display:block;margin:10px 0;font-size:48px;color:#10232c}.amount small{color:#71858e}.student{margin:28px;padding:23px;border:1px solid #d4e2e4;border-left:6px solid #0094a8;background:#f7fafb}.student strong{display:block;margin:9px 0 5px;font-size:24px}.student p{margin:0;color:#61747e}.transaction{display:block;margin:0 28px 24px;border-top:2px solid #0094a8}.transaction div{display:flex;justify-content:space-between;gap:18px;padding:16px 0;border-bottom:1px solid #dce7e9}.transaction span{color:#61747e;font-size:12px}.transaction strong{font-size:14px;text-align:right}.transaction .unpaid{color:#e7473c}.note{margin:22px 28px 30px;padding:17px;border-left:5px solid #f7c928;border-radius:12px;background:#fff9d8;color:#52656e;line-height:1.6}.invoice-document>footer{display:flex;justify-content:space-between;gap:20px;padding:22px 28px;color:#fff;background:linear-gradient(135deg,#007f91,#006d7c);border-top:7px solid #f7c928;box-shadow:inset 0 2px #e7473c}.invoice-document>footer span{max-width:430px;color:#d5f1f3;font-size:12px;text-align:right}.print-actions{position:sticky;bottom:16px;display:flex;justify-content:center}.print-actions button{padding:13px 20px;border:0;border-radius:13px;background:#0094a8;color:#fff;font-weight:900;cursor:pointer}@media(max-width:600px){body{padding:12px}.invoice-document>header{padding:17px 18px}.invoice-document>footer{align-items:flex-start;flex-direction:column}.brand img{width:38px;height:38px;max-width:38px;max-height:38px}.amount strong{font-size:38px}.student{margin:20px}.transaction{margin:0 20px 20px}.note{margin:18px 20px 24px}.invoice-document>footer span{text-align:left}}@media print{@page{size:A4 portrait;margin:0}html,body{width:210mm;height:auto;margin:0;padding:0;background:#fff}.invoice-document{width:210mm;height:297mm;min-height:0;max-height:297mm;margin:0;border:0;border-radius:0;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}.invoice-document>header{padding:8mm 14mm!important}.brand img{width:13mm!important;height:13mm!important;max-width:13mm!important;max-height:13mm!important}.invoice-document:last-of-type{break-after:auto;page-break-after:auto}.print-actions{display:none}}
     </style></head><body>${invoices}<div class="print-actions"><button onclick="window.print()">⤓ Cetak / Simpan Invoice</button></div></body></html>`);
     invoiceWindow.document.close();
+    setInvoicePreparedKeys(selected.map((item) => `${item.studentId}|${item.period || tuitionPeriod || ''}`));
+    setInvoiceSentKeys([]);
+  }
+
+  function openInvoiceWhatsApp(item) {
+    const number = normalizePaymentWa(item.waStudent || item.waParent);
+    if (!number) return window.alert(`Nomor WhatsApp ${item.fullName} belum tersedia.`);
+    const period = String(item.period || tuitionPeriod || '').trim();
+    const invoiceNumber = `MOC-${normalizeTuitionStudentId(item.studentId)}-${period.replace('-', '') || 'TUITION'}`;
+    const messageText = `Halo, Kak/Orang Tua/Wali ${item.fullName}. Semoga dalam keadaan baik. 🙏\n\nBerikut kami sampaikan invoice pembayaran les Mr One Course:\n\nNomor Invoice: ${invoiceNumber}\nPeriode: ${formatBillingPeriod(period)}\nJumlah Tagihan: ${formatRupiah(bulkPayment.amount || 150000)}\nStatus: Belum Lunas\nBatas Pembayaran: Tanggal 7\n\nDokumen invoice dapat dilampirkan pada chat ini. Jika pembayaran sudah dilakukan, silakan abaikan pesan ini dan kirimkan bukti pembayaran agar dapat segera kami periksa.\n\nTerima kasih atas kepercayaan dan kerja samanya.\n\nSalam hangat,\nAdmin Mr One Course`;
+    const opened = window.open(`https://wa.me/${number}?text=${encodeURIComponent(messageText)}`, '_blank', 'noopener,noreferrer');
+    if (!opened) return window.alert('Izinkan pop-up agar WhatsApp dapat dibuka.');
+    const key = `${item.studentId}|${period}`;
+    setInvoiceSentKeys((current) => current.includes(key) ? current : [...current, key]);
   }
   async function viewProof(item) { setProofLoading(item.confirmationId); try { const result = await callApi({ action: 'getPaymentProof', token, confirmationId: item.confirmationId }); setProof({ ...result, confirmationId: item.confirmationId }); } catch (error) { window.alert(error.message); } finally { setProofLoading(''); } }
 
@@ -5871,19 +5895,23 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
     setShowBulkPayment(false);
     setShowHistorical(false);
     setSelectedTuitionIds([]);
+    setInvoicePreparedKeys([]);
+    setInvoiceSentKeys([]);
     setProof(null);
   }
 
   const paymentJobCopy = {
     bulk: { eyebrow: 'INPUT PAYMENT', title: 'Input Pembayaran Siswa', description: 'Pilih satu atau beberapa siswa yang sudah membayar, tentukan tanggal dan metode, lalu simpan pembayaran.' },
+    unpaid: { eyebrow: 'PAYMENT MONITOR', title: 'Siswa yang Belum Bayar', description: 'Lihat siswa dengan tagihan les aktif yang belum tercatat lunas pada sistem.' },
     invoice: { eyebrow: 'SURAT TAGIHAN', title: 'Buat Invoice Siswa', description: 'Pilih siswa dengan tagihan aktif, lalu buat invoice profesional untuk setiap siswa.' },
     historical: { eyebrow: 'PEMBAYARAN LAMA', title: 'Catat Transaksi Lama', description: 'Masukkan pembayaran yang diterima sebelum portal Academic Suite digunakan.' }
   };
 
   return <section className="payment-admin-page payment-admin-page-v77 payment-admin-page-v31">
     {!activePaymentJob && <div className="payment-job-cards payment-job-cards-home">
-      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span>✓</span><strong>Input Payment</strong><small>Catat pembayaran satu atau beberapa siswa dengan cepat.</small></button>
-      <button type="button" onClick={() => { setActivePaymentJob('historical'); setShowHistorical(true); }}><span>＋</span><strong>Pembayaran Lama</strong><small>Catat transaksi sebelum portal digunakan.</small></button>
+      <button type="button" onClick={() => { setActivePaymentJob('bulk'); setShowBulkPayment(true); }}><span><ModernUiIcon name="payment" /></span><strong>Input Pembayaran</strong><small>Catat pembayaran satu atau beberapa siswa dengan cepat.</small></button>
+      <button type="button" onClick={() => setActivePaymentJob('unpaid')}><span><ModernUiIcon name="unpaid" /></span><strong>Belum Bayar</strong><small>Lihat siswa yang pembayaran lesnya belum tercatat lunas.</small></button>
+      <button type="button" onClick={() => setActivePaymentJob('invoice')}><span><ModernUiIcon name="invoice" /></span><strong>Buat Surat Tagihan</strong><small>Pilih siswa dan buat satu lembar invoice untuk setiap tagihan.</small></button>
     </div>}
 
     {activePaymentJob && <div className="payment-workflow-heading">
@@ -5891,9 +5919,11 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
     </div>}
 
-    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button><button type="button" className="invoice-secondary-action" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat Surat Tagihan</button></div></form>}
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div></form>}
 
-    {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
+    {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice. Pilihan tetap tersimpan setelah invoice dibuka.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
+
+    {activePaymentJob === 'invoice' && invoicePreparedKeys.length > 0 && <section className="admin-contact-send-list invoice-whatsapp-queue"><header><div><span className="eyebrow">KIRIM INVOICE VIA WHATSAPP</span><h2>Buka chat satu per satu</h2></div><span>{invoicePreparedKeys.filter((key) => !invoiceSentKeys.includes(key)).length} tersisa</span></header>{tuitionTargetsWithStatus.filter((item) => invoicePreparedKeys.includes(`${item.studentId}|${item.period || tuitionPeriod || ''}`) && !invoiceSentKeys.includes(`${item.studentId}|${item.period || tuitionPeriod || ''}`)).map((item) => <article key={`invoice-wa-${item.studentId}-${item.period || tuitionPeriod}`}><div><strong>{item.fullName}</strong><small>{formatBillingPeriod(item.period || tuitionPeriod)} • {item.waStudent ? 'WA Siswa' : item.waParent ? 'WA Orang Tua' : 'Nomor belum tersedia'}</small></div><button type="button" className="whatsapp" disabled={!normalizePaymentWa(item.waStudent || item.waParent)} onClick={() => openInvoiceWhatsApp(item)}><WhatsAppIcon /> Kirim Invoice via WA</button></article>)}{invoicePreparedKeys.every((key) => invoiceSentKeys.includes(key)) && <div className="admin-contact-send-complete"><strong>Semua invoice selesai diproses</strong><small>Seluruh chat WhatsApp pada daftar ini sudah dibuka.</small></div>}</section>}
 
     {activePaymentJob === 'historical' && showHistorical && <form ref={historicalFormRef} className="historical-payment-form historical-payment-form-v77 historical-payment-form-top-v77" onSubmit={submitHistorical}>
       <header>
@@ -5915,12 +5945,12 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <button className="save-historical-payment" type="submit" disabled={historicalSubmitting}>{historicalSubmitting ? 'Menyimpan...' : 'Simpan sebagai Lunas'}</button>
     </form>}
     {activePaymentJob && message && <div className="error-message">{message}</div>}
-    {(activePaymentJob === 'bulk' || activePaymentJob === 'invoice') && <section className="admin-tuition-watch admin-tuition-watch-v85 payment-selection-list-v31">
+    {(activePaymentJob === 'bulk' || activePaymentJob === 'invoice' || activePaymentJob === 'unpaid') && <section className={`admin-tuition-watch admin-tuition-watch-v85 payment-selection-list-v31 ${activePaymentJob === 'unpaid' ? 'payment-unpaid-list' : ''}`}>
       <div className="admin-tuition-watch-heading">
         <div>
-          <span className="eyebrow">{activePaymentJob === 'bulk' ? 'PILIH SISWA' : 'PILIH PENERIMA INVOICE'}</span>
-          <h3>{activePaymentJob === 'bulk' ? 'Siswa yang Sudah Membayar' : 'Siswa dengan Tagihan Aktif'}</h3>
-          <p>{activePaymentJob === 'bulk' ? 'Centang siswa yang pembayarannya akan dicatat sebagai lunas.' : 'Centang siswa yang akan dibuatkan surat tagihan.'}</p>
+          <span className="eyebrow">{activePaymentJob === 'bulk' ? 'PILIH SISWA' : activePaymentJob === 'invoice' ? 'PILIH PENERIMA INVOICE' : 'DAFTAR BELUM BAYAR'}</span>
+          <h3>{activePaymentJob === 'bulk' ? 'Siswa yang Sudah Membayar' : activePaymentJob === 'invoice' ? 'Siswa dengan Tagihan Aktif' : 'Siswa yang Belum Bayar'}</h3>
+          <p>{activePaymentJob === 'bulk' ? 'Centang siswa yang pembayarannya akan dicatat sebagai lunas.' : activePaymentJob === 'invoice' ? 'Centang siswa yang akan dibuatkan surat tagihan.' : 'Daftar siswa dengan tagihan aktif yang belum tercatat lunas.'}</p>
         </div>
       </div>
       <div className="admin-tuition-watch-summary">
@@ -5938,7 +5968,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
                 className={`tuition-watch-row-v85 tuition-status-${status.key} ${selectedTuitionIds.includes(item.studentId) ? 'selected' : ''}`}
                 key={`tuition-watch-${item.studentId}-${item.period || tuitionPeriod}`}
               >
-                <label className="tuition-select-student"><input type="checkbox" checked={selectedTuitionIds.includes(item.studentId)} onChange={() => toggleTuitionStudent(item.studentId)} /><span>Pilih</span></label>
+                {activePaymentJob === 'unpaid' ? <span className="tuition-unpaid-indicator"><ModernUiIcon name="unpaid" /></span> : <label className="tuition-select-student"><input type="checkbox" checked={selectedTuitionIds.includes(item.studentId)} onChange={() => toggleTuitionStudent(item.studentId)} /><span>Pilih</span></label>}
                 <div className="tuition-watch-student-v85">
                   <div className="tuition-watch-name-line-v85">
                     <span>{item.fullName}</span>

@@ -24887,6 +24887,65 @@ html[data-theme='light'] .admin-dashboard :is(.admin-home-activity .admin-activi
   .admin-dashboard .admin-contact-checkbox-list>label>span{width:38px;height:38px}
 }
 
+/* MOC V62.5 — keep the WhatsApp sending queue on screen. */
+.admin-dashboard .admin-contact-send-complete{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:4px!important;
+  min-width:0;
+  padding:16px!important;
+  border:1px solid var(--moc-primary)!important;
+  border-radius:13px!important;
+  color:var(--moc-text);
+  background:var(--moc-primary-soft)!important;
+  text-align:center;
+}
+.admin-dashboard .admin-contact-send-complete strong{color:var(--moc-primary-strong);font-size:13px;line-height:1.4}
+.admin-dashboard .admin-contact-send-complete small{color:var(--moc-muted);font-size:10px;line-height:1.5}
+
+/* MOC V62.6 — three focused jobs in Admin Payment Centre. */
+.admin-dashboard .payment-job-cards-home{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  max-width:none;
+}
+.admin-dashboard .payment-job-cards-home>button>span .modern-ui-icon{
+  width:23px;
+  height:23px;
+}
+.admin-dashboard .payment-unpaid-list .tuition-watch-row-v85{
+  grid-template-columns:42px minmax(0,1fr) minmax(125px,auto);
+}
+.admin-dashboard .tuition-unpaid-indicator{
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border-radius:12px;
+  color:var(--moc-danger-text);
+  background:var(--moc-danger-soft);
+}
+.admin-dashboard .tuition-unpaid-indicator .modern-ui-icon{width:22px;height:22px}
+.admin-dashboard .bulk-payment-actions{min-width:150px}
+
+@media(max-width:900px){
+  .admin-dashboard .payment-job-cards-home{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .admin-dashboard .payment-job-cards-home{grid-template-columns:minmax(0,1fr)}
+  .admin-dashboard .payment-unpaid-list .tuition-watch-row-v85{grid-template-columns:42px minmax(0,1fr)!important}
+  .admin-dashboard .payment-unpaid-list .tuition-watch-row-v85>strong{grid-column:2!important;text-align:left}
+}
+
+/* MOC V62.7 — invoice WhatsApp queue remains on the Payment page. */
+.admin-dashboard .invoice-whatsapp-queue{border-color:var(--moc-primary)}
+.admin-dashboard .invoice-whatsapp-queue>article{grid-template-columns:minmax(0,1fr) auto}
+.admin-dashboard .invoice-whatsapp-queue>article>button.whatsapp{justify-content:center;white-space:nowrap}
+@media(max-width:520px){
+  .admin-dashboard .invoice-whatsapp-queue>article{grid-template-columns:minmax(0,1fr)}
+  .admin-dashboard .invoice-whatsapp-queue>article>div{grid-column:auto}
+  .admin-dashboard .invoice-whatsapp-queue>article>button.whatsapp{width:100%}
+}
+
 /* V31 — Payment Centre opens as three focused jobs. */
 .payment-admin-page-v31{align-content:start}
 .payment-job-cards-home{margin:0;align-content:start}
