@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwMdYvg0iiiZZBZz_yjchYAtGfFrVV1-sqncSYUF418hMX-TuOxEEM5iyt6HXKE2JLg5Q/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzlr2xOHCfkCv8falvFAd7OrmYtm-HcC0EpK1g4b2r64GRMTt5kGtMmy9lOJevmoGmkDA/exec';
 
 function PaperPlaneLogo() {
   return (
