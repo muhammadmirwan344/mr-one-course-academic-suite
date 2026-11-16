@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbzlr2xOHCfkCv8falvFAd7OrmYtm-HcC0EpK1g4b2r64GRMTt5kGtMmy9lOJevmoGmkDA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzUaKwNN-5wSWYC4EmxFOlE1z0ZELEaKvbYY8ykADZijJj0MhljRGVNaZnzBwogHWP8tA/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -1206,17 +1206,10 @@ function App() {
 
     if (String(user.role).toLowerCase() === 'tutor') {
       return (
-        <TutorDashboard
+        <TutorOperationsV77
           user={user}
           token={token}
-          overview={tutorOverview}
-          loading={tutorOverviewLoading}
-          message={message}
-          onRefresh={() => loadTutorOverview(token)}
           onLogout={handleLogout}
-          language={language}
-          theme={theme}
-          onThemeChange={chooseTheme}
         />
       );
     }
@@ -1908,24 +1901,12 @@ function StudentAccessModal({ mode, language, activationForm, setActivationForm,
               </div>
 
               <div className="registration-checkout-section">
-                <div className="registration-checkout-heading"><span>02</span><div><strong>{isID ? 'Transfer Pembayaran' : 'Payment Transfer'}</strong><small>{isID ? 'Pilih salah satu rekening berikut' : 'Choose one of the accounts below'}</small></div></div>
+                <div className="registration-checkout-heading"><span>02</span><div><strong>{isID ? 'Transfer Pembayaran' : 'Payment Transfer'}</strong><small>{isID ? 'Gunakan rekening resmi Mr One Course berikut' : 'Use the official Mr One Course account below'}</small></div></div>
 
                 <div className="registration-bank-list">
                   <button type="button" className={form.transferBank === 'BCA' ? 'selected' : ''} onClick={() => update('transferBank', 'BCA')}>
-                    <div><span>BCA</span><strong>1912628901</strong><small>Muhammad Mirwan Salmani</small></div>
-                    <em onClick={(event) => { event.stopPropagation(); copyAccount('1912628901'); }}>{isID ? 'Salin' : 'Copy'}</em>
-                  </button>
-                  <button type="button" className={form.transferBank === 'SeaBank' ? 'selected' : ''} onClick={() => update('transferBank', 'SeaBank')}>
-                    <div><span>SeaBank</span><strong>901182598278</strong><small>Muhammad Mirwan Salmani, S.Pd.</small></div>
-                    <em onClick={(event) => { event.stopPropagation(); copyAccount('901182598278'); }}>{isID ? 'Salin' : 'Copy'}</em>
-                  </button>
-                  <button type="button" className={form.transferBank === 'BPD Kaltimtara' ? 'selected' : ''} onClick={() => update('transferBank', 'BPD Kaltimtara')}>
-                    <div><span>BPD Kaltimtara</span><strong>1022075914</strong><small>Muhammad Mirwan Salmani</small></div>
-                    <em onClick={(event) => { event.stopPropagation(); copyAccount('1022075914'); }}>{isID ? 'Salin' : 'Copy'}</em>
-                  </button>
-                  <button type="button" className={form.transferBank === 'GoPay / DANA' ? 'selected' : ''} onClick={() => update('transferBank', 'GoPay / DANA')}>
-                    <div><span>GoPay / DANA</span><strong>085249684865</strong><small>Muhammad Mirwan Salmani</small></div>
-                    <em onClick={(event) => { event.stopPropagation(); copyAccount('085249684865'); }}>{isID ? 'Salin' : 'Copy'}</em>
+                    <div><span>BCA • REKENING RESMI</span><strong>7815846478</strong><small>Novita Rohmawati</small></div>
+                    <em onClick={(event) => { event.stopPropagation(); copyAccount('7815846478'); }}>{isID ? 'Salin' : 'Copy'}</em>
                   </button>
                 </div>
                 {copyMessage && <div className="registration-copy-message">{copyMessage}</div>}
@@ -2047,6 +2028,209 @@ function AssignmentQuestionBuilder({ questions, onChange, isID, taskType = 'mult
     <small>{isID ? 'Kunci ini digunakan sistem untuk menghitung nilai langsung.' : 'The system uses this answer key for instant grading.'}</small></article>)}</section>;
 }
 
+function TutorModalV77({ title, children, onClose, wide = false, printClass = '' }) {
+  return <div className="tutor-v77-modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className={`tutor-v77-modal ${wide ? 'wide' : ''} ${printClass}`} role="dialog" aria-modal="true" aria-label={title}>
+      <header><h2>{title}</h2><button type="button" onClick={onClose} aria-label="Tutup">×</button></header>
+      {children}
+    </section>
+  </div>;
+}
+
+function TutorOperationsV77({ user, token, onLogout }) {
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const [page, setPage] = useState('home');
+  const [period, setPeriod] = useState(now.toISOString().slice(0, 7));
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [search, setSearch] = useState('');
+  const [attendanceModal, setAttendanceModal] = useState(null);
+  const [scheduleModal, setScheduleModal] = useState(null);
+  const [noteModal, setNoteModal] = useState(null);
+  const [reportModal, setReportModal] = useState(null);
+  const [slipOpen, setSlipOpen] = useState(false);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendText, setSendText] = useState('');
+  const [replacementOpen, setReplacementOpen] = useState(false);
+
+  const monthOptions = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`);
+  const monthLabel = (value) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(`${value}-01T12:00:00`));
+  const dateLabel = (value) => value ? new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(`${value}T12:00:00`)) : '-';
+  const safeWa = (value) => { const digits = String(value || '').replace(/\D/g, ''); return digits.startsWith('0') ? `62${digits.slice(1)}` : digits; };
+
+  async function load(showLoader = true) {
+    if (showLoader) setLoading(true);
+    try {
+      const result = await callApi({ action: 'getTutorOperations', token, period });
+      setData(result);
+      setNotice('');
+    } catch (error) {
+      setNotice(error.message || 'Data Tutor belum dapat dimuat.');
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => { load(); }, [period]);
+
+  const classes = data?.classes || [];
+  const sessions = data?.sessions || [];
+  const reports = data?.reports || [];
+  const filteredReports = reports.filter((item) => `${item.fullName} ${item.studentId} ${item.className} ${item.program}`.toLowerCase().includes(search.toLowerCase()));
+  const tutorName = data?.tutor?.name || user?.fullName || user?.name || user?.username || 'Tutor';
+
+  function openAttendance(item, session = null, selectedDate = today) {
+    const tutorClass = classes.find((entry) => entry.classId === (session?.classId || item?.classId));
+    if (!tutorClass) return;
+    const present = session
+      ? tutorClass.students.filter((student) => session.studentStatuses?.[student.studentId] === 'Present').map((student) => student.studentId)
+      : tutorClass.students.map((student) => student.studentId);
+    setAttendanceModal({
+      classId: tutorClass.classId, className: tutorClass.className, date: session?.date || selectedDate,
+      meetingNumber: session?.meetingNumber || Math.min(8, sessions.filter((entry) => entry.classId === tutorClass.classId).length + 1),
+      presentStudentIds: present, material: session?.material || '', classNotes: session?.classNotes || ''
+    });
+  }
+
+  async function saveAttendance(event) {
+    event.preventDefault(); setSaving(true); setNotice('');
+    try {
+      const result = await callApi({ action: 'saveTutorOperationsSession', token, sessionData: attendanceModal });
+      setNotice(result.message || 'Absensi berhasil disimpan.'); setAttendanceModal(null); await load(false);
+    } catch (error) { setNotice(error.message || 'Absensi belum berhasil disimpan.'); }
+    finally { setSaving(false); }
+  }
+
+  async function deleteSession(item) {
+    if (!window.confirm(`Hapus sesi ${item.className} tanggal ${dateLabel(item.date)}?`)) return;
+    setSaving(true);
+    try { const result = await callApi({ action: 'deleteTutorOperationsSession', token, classId: item.classId, date: item.date }); setNotice(result.message); await load(false); }
+    catch (error) { setNotice(error.message || 'Sesi belum berhasil dihapus.'); }
+    finally { setSaving(false); }
+  }
+
+  function openSchedule(item) {
+    const first = item.schedules?.[0] || {};
+    const startMinutes = String(first.start || '14:00').split(':').map(Number);
+    const endMinutes = String(first.end || '15:00').split(':').map(Number);
+    const duration = Math.max(15, ((endMinutes[0] || 0) * 60 + (endMinutes[1] || 0)) - ((startMinutes[0] || 0) * 60 + (startMinutes[1] || 0)) || 60);
+    setScheduleModal({ classId: item.classId, className: item.className, program: item.program, location: item.location || '', days: item.schedules.map((entry) => entry.day), start: first.start || '14:00', duration, studentIds: item.students.map((student) => student.studentId) });
+  }
+
+  async function saveSchedule(event) {
+    event.preventDefault(); setSaving(true);
+    try { const result = await callApi({ action: 'saveTutorScheduleEdit', token, classData: scheduleModal }); setNotice(result.message); setScheduleModal(null); await load(false); }
+    catch (error) { setNotice(error.message || 'Jadwal belum berhasil disimpan.'); }
+    finally { setSaving(false); }
+  }
+
+  async function saveNote(event) {
+    event.preventDefault(); setSaving(true);
+    try { const result = await callApi({ action: 'saveTutorParentNote', token, note: noteModal }); setNotice(result.message); setNoteModal(null); await load(false); }
+    catch (error) { setNotice(error.message || 'Catatan belum berhasil disimpan.'); }
+    finally { setSaving(false); }
+  }
+
+  function openSendHonor() {
+    const honor = data?.honor || {};
+    setSendText(`Halo ${tutorName},\n\nRekap honor ${monthLabel(period)} di Mr One Course:\n${honor.sessions || 0} sesi\nTotal *${formatRupiah(honor.total || 0)}*\n\nTerima kasih atas kerja kerasnya 😊`);
+    setSendOpen(true);
+  }
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); setNotice('Pesan berhasil disalin.'); }
+    catch { setNotice('Teks belum dapat disalin otomatis. Silakan salin dari kolom pesan.'); }
+  }
+
+  const nav = [
+    ['home', '⌂', 'Beranda'], ['attendance', '✓', 'Absensi'], ['schedule', '▣', 'Jadwal & Kelas'],
+    ['honor', '▤', 'Honor Tutor'], ['reports', '↗', 'Laporan Ortu']
+  ];
+
+  function HomePage() {
+    const attention = data?.attention || [];
+    return <div className="tutor-v77-page tutor-v77-home">
+      <section className="tutor-v77-hero">
+        <div><small>Selamat datang di Mr One Course</small><h1>Halo, {tutorName}!</h1><p>{new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now)}</p></div>
+        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama murid..." />
+      </section>
+      <div className="tutor-v77-home-grid">
+        <section className="tutor-v77-card tutor-v77-today-summary"><header><div><small>Kelas hari ini</small><strong>{data?.todayClasses?.length || 0}</strong><span>kelas dalam jadwal Anda</span></div></header>
+          <div className="tutor-v77-shortcuts"><button type="button" onClick={() => setPage('attendance')}><b>✓</b><span>Absen</span></button><button type="button" onClick={() => setPage('reports')}><b>➤</b><span>Laporan Ortu</span></button></div>
+        </section>
+        <section><div className="tutor-v77-section-title"><h2>Jadwal hari ini</h2><button onClick={() => setPage('schedule')}>Semua</button></div><div className="tutor-v77-card tutor-v77-agenda">
+          {(data?.todayClasses || []).length ? data.todayClasses.map((item) => <article key={item.classId}><time>{item.start || '--:--'}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid{item.location ? ` · ${item.location}` : ''}</small></div><button onClick={() => openAttendance(item)}>Absen</button></article>) : <p className="tutor-v77-empty">Tidak ada kelas dalam jadwal hari ini.</p>}
+        </div></section>
+      </div>
+      <section><div className="tutor-v77-section-title"><h2>Perlu perhatian</h2></div><div className="tutor-v77-attention-list">
+        {attention.length ? attention.slice(0, 8).map((item, index) => <article key={item.alertId || index}><span>!</span><div><strong>{item.studentName || item.fullName || 'Murid'}</strong><p>{item.message || item.reason || 'Tidak hadir dan perlu tindak lanjut.'}</p></div></article>) : <div className="tutor-v77-card tutor-v77-empty">Tidak ada riwayat ketidakhadiran yang perlu ditindaklanjuti.</div>}
+      </div></section>
+      {search && <section><div className="tutor-v77-section-title"><h2>Hasil pencarian</h2></div><div className="tutor-v77-card tutor-v77-report-list">{filteredReports.slice(0, 6).map((item) => <article key={`${item.classId}-${item.studentId}`}><div><strong>{item.fullName}</strong><small>{item.studentId} · {item.className}</small></div><button onClick={() => { setReportModal(item); setSearch(''); }}>Lihat rapor</button></article>)}</div></section>}
+    </div>;
+  }
+
+  function AttendancePage() {
+    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Absensi</h1><p>Satu klik per kelas. Kehadiran tutor otomatis menjadi dasar honor.</p></div></div>
+      <div className="tutor-v77-two-column">
+        <section className="tutor-v77-card"><div className="tutor-v77-card-heading"><h2>Kelas hari ini</h2><time>{dateLabel(today)}</time></div>
+          <div className="tutor-v77-class-list">{(data?.todayClasses || []).map((item) => <article key={item.classId}><time>{item.start || '--:--'}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid</small></div><button onClick={() => openAttendance(item)}>Absen</button></article>)}</div>
+          <button className="tutor-v77-disclosure" onClick={() => setReplacementOpen(!replacementOpen)}>▾ Kelas pengganti / di luar jadwal</button>
+          {replacementOpen && <div className="tutor-v77-replacement">{classes.map((item) => <button key={item.classId} onClick={() => openAttendance(item, null, today)}><span>{item.className}</span><small>Buat sesi pengganti</small></button>)}</div>}
+        </section>
+        <section className="tutor-v77-card"><div className="tutor-v77-card-heading"><h2>Ringkasan {data?.periodLabel}</h2></div><div className="tutor-v77-stat-grid"><article><small>Sesi terlaksana</small><strong>{data?.summary?.sessionCount || 0}</strong></article><article><small>Rata-rata hadir</small><strong>{data?.summary?.averagePresent || 0} murid</strong></article></div></section>
+      </div>
+      <section className="tutor-v77-card tutor-v77-table-card"><div className="tutor-v77-card-heading"><h2>Riwayat sesi</h2><select value={period} onChange={(event) => setPeriod(event.target.value)}>{monthOptions.map((value) => <option value={value} key={value}>{monthLabel(value)}</option>)}</select></div>
+        <div className="tutor-v77-table"><div className="head"><span>Tanggal</span><span>Kelas</span><span>Tutor</span><span>Hadir</span><span>Materi</span><span>Aksi</span></div>{sessions.map((item) => <div className="row" key={item.sessionId}><span data-label="Tanggal">{dateLabel(item.date)}</span><span data-label="Kelas"><strong>{item.className}</strong></span><span data-label="Tutor">{item.tutor}</span><span data-label="Hadir">{item.presentCount}/{item.totalStudents}</span><span data-label="Materi">{item.material || '-'}</span><span className="actions"><button onClick={() => openAttendance(null, item)}>Edit</button><button className="danger" onClick={() => deleteSession(item)}>Hapus</button></span></div>)}</div>
+      </section>
+    </div>;
+  }
+
+  function SchedulePage() {
+    const dayOrder = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Jadwal & Kelas</h1><p>{classes.length} kelas aktif yang ditugaskan kepada Anda.</p></div></div>
+      <div className="tutor-v77-schedule-grid">{dayOrder.map((day) => { const dayClasses = classes.filter((item) => item.schedules.some((schedule) => schedule.day === day)); return <section className="tutor-v77-card" key={day}><div className="tutor-v77-card-heading"><h2>{day}</h2><span>{dayClasses.length}</span></div>{dayClasses.length ? dayClasses.map((item) => { const schedule = item.schedules.find((entry) => entry.day === day) || {}; return <article key={item.classId}><time>{schedule.start}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid</small></div><button onClick={() => openSchedule(item)}>Edit</button></article>; }) : <p className="tutor-v77-empty">Tidak ada kelas.</p>}</section>; })}</div>
+    </div>;
+  }
+
+  function HonorPage() {
+    const honor = data?.honor || {};
+    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Honor Tutor</h1><p>Dihitung dari sesi yang tercatat di absensi × honor per sesi.</p></div></div>
+      <section className="tutor-v77-card tutor-v77-table-card"><div className="tutor-v77-card-heading"><select value={period} onChange={(event) => setPeriod(event.target.value)}>{monthOptions.map((value) => <option value={value} key={value}>{monthLabel(value)}</option>)}</select></div>
+        <div className="tutor-v77-honor-table"><div className="head"><span>Tutor</span><span>Sesi</span><span>Honor / sesi</span><span>Total</span><span>Aksi</span></div><div className="row"><span><strong>{tutorName}</strong><small>{honor.subjects || 'Tutor'}</small></span><span>{honor.sessions || 0}</span><span>{formatRupiah(honor.honorPerSession || 0)}</span><span><strong>{formatRupiah(honor.total || 0)}</strong></span><span className="actions"><button onClick={() => setSlipOpen(true)}>Slip</button><button className="primary" onClick={openSendHonor}>◉ Kirim</button></span></div></div>
+      </section>
+    </div>;
+  }
+
+  function ReportsPage() {
+    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Laporan Ortu</h1><p>Kehadiran + catatan perkembangan. Admin yang mengirimkan laporan kepada orang tua.</p></div></div>
+      <section className="tutor-v77-card tutor-v77-table-card"><div className="tutor-v77-report-toolbar"><select value={period} onChange={(event) => setPeriod(event.target.value)}>{monthOptions.map((value) => <option value={value} key={value}>{monthLabel(value)}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /></div>
+        <div className="tutor-v77-report-list">{filteredReports.map((item) => <article key={`${item.classId}-${item.studentId}`}><div><strong>{item.fullName}</strong><small>{item.program} · {item.studentId}</small></div><span>{item.attendancePresent}/{item.attendanceTotal} <b>{item.attendancePercentage}%</b></span><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setNoteModal({ classId: item.classId, studentId: item.studentId, fullName: item.fullName, date: today, score: '', comment: '' })}>＋ Catatan</button><button onClick={() => setReportModal(item)}>Rapor</button></div></article>)}</div>
+      </section>
+    </div>;
+  }
+
+  return <main className="tutor-v77-shell">
+    <header className="tutor-v77-header"><div className="tutor-v77-brand"><PaperPlaneLogo /><div><strong>Mr One Course</strong><small>Ruang Tutor</small></div></div><div><span>{tutorName}</span><button type="button" onClick={onLogout}>Keluar</button></div></header>
+    <aside className="tutor-v77-sidebar"><div className="tutor-v77-brand"><PaperPlaneLogo /><div><strong>Mr One Course</strong><small>Ruang Tutor</small></div></div><nav>{nav.map(([value, icon, label]) => <button className={page === value ? 'active' : ''} key={value} onClick={() => { setPage(value); setSearch(''); }}><b>{icon}</b><span>{label}</span></button>)}</nav><button className="tutor-v77-logout" onClick={onLogout}>↪ Keluar</button></aside>
+    <section className="tutor-v77-content">{notice && <div className="tutor-v77-notice"><span>{notice}</span><button onClick={() => setNotice('')}>×</button></div>}{loading ? <div className="tutor-v77-loading">Memuat ruang Tutor...</div> : !data ? <div className="tutor-v77-loading">Data belum tersedia.</div> : page === 'home' ? <HomePage /> : page === 'attendance' ? <AttendancePage /> : page === 'schedule' ? <SchedulePage /> : page === 'honor' ? <HonorPage /> : <ReportsPage />}</section>
+    <nav className="tutor-v77-bottom-nav">{nav.map(([value, icon, label]) => <button className={page === value ? 'active' : ''} key={value} onClick={() => { setPage(value); setSearch(''); }}><b>{icon}</b><span>{label}</span></button>)}</nav>
+
+    {attendanceModal && <TutorModalV77 title={`Absensi · ${attendanceModal.className}`} onClose={() => setAttendanceModal(null)}><form className="tutor-v77-form" onSubmit={saveAttendance}><div className="two"><label>Tanggal *<input type="date" required value={attendanceModal.date} onChange={(event) => setAttendanceModal({ ...attendanceModal, date: event.target.value })} /></label><label>Tutor yang mengajar<input value={tutorName} readOnly /></label></div><label>Murid hadir ({attendanceModal.presentStudentIds.length} murid)<div className="tutor-v77-checks">{(classes.find((item) => item.classId === attendanceModal.classId)?.students || []).map((student) => { const checked = attendanceModal.presentStudentIds.includes(student.studentId); return <button type="button" className={checked ? 'checked' : ''} key={student.studentId} onClick={() => setAttendanceModal({ ...attendanceModal, presentStudentIds: checked ? attendanceModal.presentStudentIds.filter((id) => id !== student.studentId) : [...attendanceModal.presentStudentIds, student.studentId] })}>{checked ? '✓' : '○'} {student.fullName}</button>; })}</div><small>Hilangkan centang untuk murid yang tidak hadir.</small></label><label>Materi yang diajarkan *<input required value={attendanceModal.material} onChange={(event) => setAttendanceModal({ ...attendanceModal, material: event.target.value })} /></label><label>Catatan kelas<textarea rows="3" value={attendanceModal.classNotes} onChange={(event) => setAttendanceModal({ ...attendanceModal, classNotes: event.target.value })} /></label><footer><button type="button" onClick={() => setAttendanceModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</button></footer></form></TutorModalV77>}
+
+    {scheduleModal && <TutorModalV77 title="Edit jadwal kelas" onClose={() => setScheduleModal(null)} wide><form className="tutor-v77-form" onSubmit={saveSchedule}><label>Nama kelas *<input required value={scheduleModal.className} onChange={(event) => setScheduleModal({ ...scheduleModal, className: event.target.value })} /></label><div className="two"><label>Program *<input required value={scheduleModal.program} onChange={(event) => setScheduleModal({ ...scheduleModal, program: event.target.value })} /></label><label>Ruang / lokasi<input value={scheduleModal.location} onChange={(event) => setScheduleModal({ ...scheduleModal, location: event.target.value })} /></label></div><label>Hari *<div className="tutor-v77-checks">{['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map((day) => { const checked = scheduleModal.days.includes(day); return <button type="button" className={checked ? 'checked' : ''} key={day} onClick={() => setScheduleModal({ ...scheduleModal, days: checked ? scheduleModal.days.filter((value) => value !== day) : [...scheduleModal.days, day] })}>{checked ? '✓' : '○'} {day}</button>; })}</div></label><div className="two"><label>Jam mulai *<input type="time" required value={scheduleModal.start} onChange={(event) => setScheduleModal({ ...scheduleModal, start: event.target.value })} /></label><label>Durasi (menit)<input type="number" min="15" step="15" value={scheduleModal.duration} onChange={(event) => setScheduleModal({ ...scheduleModal, duration: Number(event.target.value) })} /></label></div><label>Murid di kelas ini<div className="tutor-v77-checks">{(classes.find((item) => item.classId === scheduleModal.classId)?.students || []).map((student) => { const checked = scheduleModal.studentIds.includes(student.studentId); return <button type="button" className={checked ? 'checked' : ''} key={student.studentId} onClick={() => setScheduleModal({ ...scheduleModal, studentIds: checked ? scheduleModal.studentIds.filter((id) => id !== student.studentId) : [...scheduleModal.studentIds, student.studentId] })}>{checked ? '✓' : '○'} {student.fullName}</button>; })}</div></label><footer><button type="button" onClick={() => setScheduleModal(null)}>Batal</button><button className="primary" disabled={saving}>Simpan</button></footer></form></TutorModalV77>}
+
+    {noteModal && <TutorModalV77 title={`Catatan perkembangan · ${noteModal.fullName}`} onClose={() => setNoteModal(null)}><form className="tutor-v77-form" onSubmit={saveNote}><div className="two"><label>Tanggal *<input type="date" required value={noteModal.date} onChange={(event) => setNoteModal({ ...noteModal, date: event.target.value })} /></label><label>Nilai / skor (opsional)<input value={noteModal.score} placeholder="mis. 85 atau B+" onChange={(event) => setNoteModal({ ...noteModal, score: event.target.value })} /></label></div><label>Catatan untuk orang tua *<textarea rows="5" required placeholder="Tuliskan perkembangan dan hal yang perlu dilatih." value={noteModal.comment} onChange={(event) => setNoteModal({ ...noteModal, comment: event.target.value })} /></label><footer><button type="button" onClick={() => setNoteModal(null)}>Batal</button><button className="primary" disabled={saving}>Simpan</button></footer></form></TutorModalV77>}
+
+    {reportModal && <TutorModalV77 title={`Laporan bulanan · ${reportModal.fullName}`} onClose={() => setReportModal(null)} wide printClass="tutor-parent-report-print"><div className="tutor-v77-print-paper"><header><strong>Mr One Course</strong><span>LAPORAN PERKEMBANGAN BELAJAR</span><small>{monthLabel(period)}</small></header><dl><dt>Nama</dt><dd>{reportModal.fullName}</dd><dt>Kelas sekolah</dt><dd>{reportModal.grade || '-'}</dd><dt>Program</dt><dd>{reportModal.program || '-'}</dd><dt>Kehadiran</dt><dd>{reportModal.attendancePresent} dari {reportModal.attendanceTotal} pertemuan</dd></dl><h3>Catatan perkembangan</h3>{reportModal.notes?.length ? reportModal.notes.map((note) => <p key={`${note.date}-${note.comment}`}><b>{dateLabel(note.date)}{note.score ? ` · ${note.score}` : ''}</b><br />{note.comment}</p>) : <p>Belum ada catatan perkembangan.</p>}<h3>Materi yang dipelajari</h3><table><thead><tr><th>Tanggal</th><th>Kelas</th><th>Materi</th><th>Hadir</th></tr></thead><tbody>{sessions.filter((item) => item.classId === reportModal.classId).map((item) => <tr key={item.sessionId}><td>{dateLabel(item.date)}</td><td>{item.className}</td><td>{item.material || '-'}</td><td>{item.studentStatuses?.[reportModal.studentId] === 'Present' ? '✓' : '—'}</td></tr>)}</tbody></table></div><footer className="tutor-v77-print-actions"><button onClick={() => setReportModal(null)}>Tutup</button><button className="primary" onClick={() => window.print()}>Cetak / PDF</button></footer></TutorModalV77>}
+
+    {slipOpen && <TutorModalV77 title={`Slip honor · ${tutorName}`} onClose={() => setSlipOpen(false)} wide printClass="tutor-honor-slip-print"><div className="tutor-v77-print-paper"><header><strong>Mr One Course</strong><span>SLIP HONOR TUTOR</span><small>Periode {monthLabel(period)}</small></header><dl><dt>Nama tutor</dt><dd>{tutorName}</dd><dt>Mata pelajaran</dt><dd>{data?.honor?.subjects || '-'}</dd></dl><table><thead><tr><th>No</th><th>Tanggal</th><th>Kelas</th><th>Materi</th><th>Hadir</th></tr></thead><tbody>{sessions.map((item, index) => <tr key={item.sessionId}><td>{index + 1}</td><td>{dateLabel(item.date)}</td><td>{item.className}</td><td>{item.material || '-'}</td><td>{item.presentCount}</td></tr>)}</tbody></table><dl className="totals"><dt>Jumlah sesi</dt><dd>{data?.honor?.sessions || 0} sesi × {formatRupiah(data?.honor?.honorPerSession || 0)}</dd><dt>Total honor</dt><dd><strong>{formatRupiah(data?.honor?.total || 0)}</strong></dd></dl></div><footer className="tutor-v77-print-actions"><button onClick={() => setSlipOpen(false)}>Tutup</button><button className="primary" onClick={() => window.print()}>Cetak / PDF</button></footer></TutorModalV77>}
+
+    {sendOpen && <TutorModalV77 title={`Info honor · ${tutorName}`} onClose={() => setSendOpen(false)}><div className="tutor-v77-form"><label>Pesan (bisa diedit)<textarea rows="9" value={sendText} onChange={(event) => setSendText(event.target.value)} /></label><label>Dikirim ke nomor WhatsApp<input value={data?.tutor?.wa || ''} readOnly placeholder="Nomor WA Tutor belum tersedia" /></label><footer><button onClick={() => copyText(sendText)}>Salin</button><button className="primary" disabled={!safeWa(data?.tutor?.wa)} onClick={() => window.open(`https://wa.me/${safeWa(data?.tutor?.wa)}?text=${encodeURIComponent(sendText)}`, '_blank', 'noopener,noreferrer')}>Buka WhatsApp</button></footer></div></TutorModalV77>}
+  </main>;
+}
+
 function TutorDashboard({ user, token, overview, loading, message, onRefresh, onLogout, language, theme, onThemeChange }) {
   const isID = language === 'ID';
   const classes = overview?.classes || [];
@@ -2075,7 +2259,10 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
   const [academicCreateClassId, setAcademicCreateClassId] = useState('');
   const [reviewItem, setReviewItem] = useState(null);
   const [review, setReview] = useState({ score: '', feedback: '', expAwarded: 0 });
-  const [attendanceControl, setAttendanceControl] = useState({ date: new Date().toISOString().slice(0, 10), meetingNumber: 1, statuses: {} });
+  const [attendanceControl, setAttendanceControl] = useState({
+    date: new Date().toISOString().slice(0, 10), meetingNumber: 1, statuses: {},
+    material: '', objective: '', activities: '', classNotes: ''
+  });
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
 
   function goTutorBack() {
@@ -2353,32 +2540,79 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     } catch (error) { setNotice(error.message || (isID ? 'Penilaian gagal disimpan.' : 'Review could not be saved.')); } finally { setSaving(false); }
   }
 
-  function openAttendanceControl(classItem = selectedClass) {
+  function openAttendanceControl(classItem = selectedClass, useToday = false) {
     if (!classItem) return;
-    const date = attendanceControl.date || new Date().toISOString().slice(0, 10);
-    const statuses = {};
-    (classItem.attendanceRecords || []).filter((record) => record.date === date).forEach((record) => { statuses[record.studentId] = record.status === 'Present' ? 'Present' : 'Absent'; });
+    const today = new Date().toISOString().slice(0, 10);
+    const date = useToday ? today : (attendanceControl.date || today);
+    const monthKey = date.slice(0, 7);
+    const classMonthPlans = (classItem.learningPlans || []).filter((item) => String(item.month || item.plannedDate || '').startsWith(monthKey));
+    const classMonthJournals = (classItem.journals || []).filter((item) => String(item.date || '').startsWith(monthKey));
+    const suggestedMeetingNumber = Math.min(8, Math.max(classMonthPlans.length, classMonthJournals.length) + 1);
+    const savedAttendance = (classItem.attendanceRecords || []).filter((record) => record.date === date);
+    const statuses = Object.fromEntries((classItem.students || []).map((student) => [student.studentId, 'Present']));
+    savedAttendance.forEach((record) => { statuses[record.studentId] = record.status === 'Present' ? 'Present' : 'Absent'; });
+    const savedJournal = (classItem.journals || []).find((item) => item.date === date) || null;
+    const meetingNumber = Number(savedAttendance[0]?.meetingNumber || savedJournal?.meetingNumber || suggestedMeetingNumber || 1);
+    const lessonPlan = (classItem.learningPlans || []).find((item) => item.plannedDate === date)
+      || (classItem.learningPlans || []).find((item) => Number(item.meetingNumber) === meetingNumber)
+      || null;
     setSelectedClassId(classItem.classId);
-    setAttendanceControl((current) => ({ ...current, date, statuses }));
+    setAttendanceControl({
+      date,
+      meetingNumber,
+      statuses,
+      material: savedJournal?.title || lessonPlan?.title || '',
+      objective: savedJournal?.objective || lessonPlan?.objective || lessonPlan?.targetCompetency || '',
+      activities: savedJournal?.activities || lessonPlan?.activities || '',
+      classNotes: savedJournal?.notes || ''
+    });
     setPage('attendance');
   }
 
   function loadAttendanceDate(date) {
-    const statuses = {};
-    (selectedClass?.attendanceRecords || []).filter((record) => record.date === date).forEach((record) => { statuses[record.studentId] = record.status === 'Present' ? 'Present' : 'Absent'; });
-    setAttendanceControl((current) => ({ ...current, date, statuses }));
+    const savedAttendance = (selectedClass?.attendanceRecords || []).filter((record) => record.date === date);
+    const statuses = Object.fromEntries((selectedClass?.students || []).map((student) => [student.studentId, 'Present']));
+    savedAttendance.forEach((record) => { statuses[record.studentId] = record.status === 'Present' ? 'Present' : 'Absent'; });
+    const savedJournal = (selectedClass?.journals || []).find((item) => item.date === date) || null;
+    const meetingNumber = Number(savedAttendance[0]?.meetingNumber || savedJournal?.meetingNumber || attendanceControl.meetingNumber || currentMeetingNumber || 1);
+    const lessonPlan = (selectedClass?.learningPlans || []).find((item) => item.plannedDate === date)
+      || (selectedClass?.learningPlans || []).find((item) => Number(item.meetingNumber) === meetingNumber)
+      || null;
+    setAttendanceControl({
+      date,
+      meetingNumber,
+      statuses,
+      material: savedJournal?.title || lessonPlan?.title || '',
+      objective: savedJournal?.objective || lessonPlan?.objective || lessonPlan?.targetCompetency || '',
+      activities: savedJournal?.activities || lessonPlan?.activities || '',
+      classNotes: savedJournal?.notes || ''
+    });
   }
 
   async function saveClassAttendance(event) {
     event.preventDefault();
     const records = (selectedClass?.students || []).map((student) => ({ studentId: student.studentId, status: attendanceControl.statuses[student.studentId] || '' }));
     if (records.some((record) => !record.status)) { setNotice(isID ? 'Tetapkan Hadir atau Tidak Hadir untuk seluruh siswa.' : 'Set Present or Absent for every student.'); return; }
+    if (!attendanceControl.material.trim() || !attendanceControl.objective.trim() || !attendanceControl.activities.trim()) {
+      setNotice(isID ? 'Materi, tujuan pembelajaran, dan kegiatan pembelajaran wajib diisi.' : 'Material, learning objective, and learning activities are required.');
+      return;
+    }
     setSaving(true); setNotice('');
     try {
-      const result = await callApi({ action: 'saveTutorClassAttendance', token, attendance: { classId: selectedClassId, date: attendanceControl.date, meetingNumber: attendanceControl.meetingNumber, records } });
+      const result = await callApi({
+        action: 'saveTutorClassAttendance', token,
+        attendance: {
+          classId: selectedClassId, date: attendanceControl.date,
+          meetingNumber: attendanceControl.meetingNumber, records,
+          material: attendanceControl.material,
+          objective: attendanceControl.objective,
+          activities: attendanceControl.activities,
+          classNotes: attendanceControl.classNotes
+        }
+      });
       setAttendanceSavedModal({
-        title: isID ? 'Kehadiran Berhasil Disimpan' : 'Attendance Saved',
-        message: result.message || (isID ? 'Data kehadiran kelas telah tersimpan dengan baik.' : 'Class attendance has been saved successfully.'),
+        title: isID ? 'Pertemuan Berhasil Dicatat' : 'Class Session Saved',
+        message: result.message || (isID ? 'Kehadiran, tutor, materi, dan catatan kelas berhasil disimpan.' : 'Attendance, tutor, material, and class notes were saved.'),
         alertCount: Number(result.followUpAlertsCreated || 0),
       });
       await onRefresh();
@@ -2386,12 +2620,12 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     finally { setSaving(false); }
   }
 
-  function classCard(item) {
+  function classCard(item, openAttendanceDirectly = false) {
     return (
-      <button className="tutor-class-card" type="button" key={item.classId} onClick={() => { setSelectedClassId(item.classId); setPage('class'); }}>
+      <button className="tutor-class-card" type="button" key={item.classId} onClick={() => openAttendanceDirectly ? openAttendanceControl(item, true) : (setSelectedClassId(item.classId), setPage('class'))}>
         <span className="tutor-class-icon">▤</span>
         <div><small>{item.program || (isID ? 'PROGRAM' : 'PROGRAM')}</small><strong>{item.className}</strong><p>{item.schedules.map((schedule) => `${schedule.day} ${schedule.start}–${schedule.end}`).join(' • ') || '—'}</p></div>
-        <b>{item.students.length} {isID ? 'siswa' : 'students'} →</b>
+        <b>{openAttendanceDirectly ? (isID ? 'Buka Absensi →' : 'Open Attendance →') : `${item.students.length} ${isID ? 'siswa' : 'students'} →`}</b>
       </button>
     );
   }
@@ -2453,7 +2687,7 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
         <>
           <section className="tutor-welcome"><span>● SYSTEM CONNECTED</span><h1>{isID ? 'Selamat datang,' : 'Welcome,'}<strong>{overview?.tutor?.name || user.fullName || 'Tutor'}</strong></h1><p>{isID ? 'Berikut jadwal mengajar Anda hari ini.' : 'Here is your teaching schedule for today.'}</p></section>
           <section className="tutor-stat-grid"><article><span>▤</span><strong>{todayClasses.length}</strong><small>{isID ? 'Kelas Hari Ini' : 'Classes Today'}</small></article><article><span>⌂</span><strong>{classes.length}</strong><small>{isID ? 'Kelas Saya' : 'My Classes'}</small></article><article><span>♙</span><strong>{classes.reduce((sum, item) => sum + item.students.length, 0)}</strong><small>{isID ? 'Total Siswa' : 'Total Students'}</small></article></section>
-          <section className="tutor-section"><div className="tutor-section-heading"><div><span>{isID ? 'AGENDA' : 'AGENDA'}</span><h2>{isID ? 'Kelas Hari Ini' : "Today's Classes"}</h2></div><button type="button" onClick={() => setPage('classes')}>{isID ? 'Lihat Semua' : 'View All'}</button></div>{todayClasses.length ? <div className="tutor-class-list">{todayClasses.map(classCard)}</div> : <div className="tutor-empty">{isID ? 'Tidak ada kelas yang dijadwalkan hari ini.' : 'No classes are scheduled today.'}</div>}</section>
+          <section className="tutor-section"><div className="tutor-section-heading"><div><span>{isID ? 'AGENDA' : 'AGENDA'}</span><h2>{isID ? 'Kelas Hari Ini' : "Today's Classes"}</h2></div><button type="button" onClick={() => setPage('classes')}>{isID ? 'Lihat Semua' : 'View All'}</button></div>{todayClasses.length ? <div className="tutor-class-list">{todayClasses.map((item) => classCard(item, true))}</div> : <div className="tutor-empty">{isID ? 'Tidak ada kelas yang dijadwalkan hari ini.' : 'No classes are scheduled today.'}</div>}</section>
         </>
       )}
 
@@ -2465,7 +2699,33 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
           <button className="open-attendance-control" type="button" onClick={() => openAttendanceControl(selectedClass)}><span>✓</span><div><strong>Attendance Control</strong><small>{isID ? 'Periksa check-in dan lengkapi kehadiran kelas' : 'Review check-ins and complete class attendance'}</small></div><b>→</b></button><div className="tutor-roster-heading"><span>DAFTAR SISWA AKTIF</span><strong>{selectedClass.students.length} siswa</strong></div><div className="tutor-student-list">{selectedClass.students.map((student, index) => <button type="button" key={student.studentId} onClick={() => { setSelectedStudentId(student.studentId); setStudentNote({ ...studentNote, studentId: student.studentId }); setPage('student'); }}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.grade || '—'}</small></div><b>→</b></button>)}</div></section>
       )}
 
-      {page === 'attendance' && selectedClass && <section className="tutor-section tutor-page-section tutor-attendance-control"><button className="tutor-back" type="button" onClick={() => setPage('class')}>← {isID ? 'Kembali ke Kelas' : 'Back to Class'}</button><div className="tutor-section-heading"><div><span>ATTENDANCE CONTROL</span><h2>{selectedClass.className}</h2></div></div><form onSubmit={saveClassAttendance}><div className="tutor-form-grid tutor-attendance-settings"><label><span>{isID ? 'Tanggal Pertemuan' : 'Meeting Date'}</span><input type="date" value={attendanceControl.date} onChange={(event) => loadAttendanceDate(event.target.value)} required /></label><label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={attendanceControl.meetingNumber} onChange={(event) => setAttendanceControl({ ...attendanceControl, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div><div className="attendance-bulk-actions"><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Present'])) })}>{isID ? 'Semua Hadir' : 'All Present'}</button><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Absent'])) })}>{isID ? 'Semua Tidak Hadir' : 'All Absent'}</button></div><div className="tutor-attendance-roster">{selectedClass.students.map((student, index) => { const status = attendanceControl.statuses[student.studentId] || ''; return <article key={student.studentId}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId}</small></div><div className="attendance-status-buttons"><button className={status === 'Present' ? 'selected present' : ''} type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: { ...attendanceControl.statuses, [student.studentId]: 'Present' } })}>{isID ? 'Hadir' : 'Present'}</button><button className={status === 'Absent' ? 'selected absent' : ''} type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: { ...attendanceControl.statuses, [student.studentId]: 'Absent' } })}>{isID ? 'Tidak Hadir' : 'Absent'}</button></div></article>; })}</div><div className="attendance-save-bar"><div><strong>{Object.keys(attendanceControl.statuses).length}/{selectedClass.students.length}</strong><small>{isID ? 'status telah ditetapkan' : 'statuses selected'}</small></div><button type="submit" disabled={saving}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Kehadiran' : 'Save Attendance')}</button></div></form></section>}
+      {page === 'attendance' && selectedClass && (
+        <section className="tutor-section tutor-page-section tutor-attendance-control tutor-session-attendance">
+          <button className="tutor-back" type="button" onClick={() => setPage('home')}>← {isID ? 'Kembali ke Jadwal' : 'Back to Schedule'}</button>
+          <div className="tutor-section-heading">
+            <div><span>ABSENSI & JURNAL KELAS</span><h2>{selectedClass.className}</h2><p>{isID ? 'Semua siswa otomatis ditandai hadir. Hilangkan centang hanya pada siswa yang tidak datang.' : 'All students are marked present automatically. Uncheck only absent students.'}</p></div>
+          </div>
+          <form onSubmit={saveClassAttendance}>
+            <div className="tutor-form-grid tutor-attendance-settings">
+              <label><span>{isID ? 'Tanggal Pertemuan' : 'Meeting Date'}</span><input type="date" value={attendanceControl.date} onChange={(event) => loadAttendanceDate(event.target.value)} required /></label>
+              <label><span>{isID ? 'Pertemuan Ke' : 'Meeting Number'}</span><select value={attendanceControl.meetingNumber} onChange={(event) => setAttendanceControl({ ...attendanceControl, meetingNumber: Number(event.target.value) })}>{Array.from({ length: 8 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+            </div>
+            <section className="attendance-session-details">
+              <div className="attendance-session-details-heading"><span>01</span><div><strong>{isID ? 'Materi & Catatan Kelas' : 'Material & Class Notes'}</strong><small>{isID ? 'Otomatis mengambil Lesson Plan dan tetap dapat disesuaikan.' : 'Automatically taken from the Lesson Plan and can still be adjusted.'}</small></div></div>
+              <label><span>{isID ? 'Materi Pembelajaran' : 'Learning Material'}</span><input value={attendanceControl.material} onChange={(event) => setAttendanceControl({ ...attendanceControl, material: event.target.value })} required /></label>
+              <label><span>{isID ? 'Tujuan Pembelajaran' : 'Learning Objective'}</span><textarea rows="2" value={attendanceControl.objective} onChange={(event) => setAttendanceControl({ ...attendanceControl, objective: event.target.value })} required /></label>
+              <label><span>{isID ? 'Kegiatan Pembelajaran' : 'Learning Activities'}</span><textarea rows="2" value={attendanceControl.activities} onChange={(event) => setAttendanceControl({ ...attendanceControl, activities: event.target.value })} required /></label>
+              <label><span>{isID ? 'Catatan Kelas' : 'Class Notes'}</span><textarea rows="3" value={attendanceControl.classNotes} onChange={(event) => setAttendanceControl({ ...attendanceControl, classNotes: event.target.value })} placeholder={isID ? 'Contoh: Materi tercapai dengan baik; beberapa siswa masih perlu latihan.' : 'Example: The material was completed; several students still need practice.'} /></label>
+            </section>
+            <section className="attendance-checklist-section">
+              <div className="attendance-session-details-heading"><span>02</span><div><strong>{isID ? 'Kehadiran Siswa' : 'Student Attendance'}</strong><small>{isID ? 'Centang = hadir. Hilangkan centang = tidak hadir.' : 'Checked = present. Unchecked = absent.'}</small></div></div>
+              <div className="attendance-bulk-actions"><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Present'])) })}>{isID ? 'Centang Semua' : 'Check All'}</button><button type="button" onClick={() => setAttendanceControl({ ...attendanceControl, statuses: Object.fromEntries(selectedClass.students.map((student) => [student.studentId, 'Absent'])) })}>{isID ? 'Hapus Semua Centang' : 'Uncheck All'}</button></div>
+              <div className="tutor-attendance-roster attendance-checkbox-roster">{selectedClass.students.map((student, index) => { const present = attendanceControl.statuses[student.studentId] !== 'Absent'; return <label className={present ? 'attendance-check-row present' : 'attendance-check-row absent'} key={student.studentId}><input type="checkbox" checked={present} onChange={(event) => setAttendanceControl({ ...attendanceControl, statuses: { ...attendanceControl.statuses, [student.studentId]: event.target.checked ? 'Present' : 'Absent' } })} /><i>{present ? '✓' : '×'}</i><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {present ? (isID ? 'Hadir' : 'Present') : (isID ? 'Tidak Hadir' : 'Absent')}</small></div></label>; })}</div>
+            </section>
+            <div className="attendance-save-bar"><div><strong>{Object.values(attendanceControl.statuses).filter((status) => status === 'Present').length}/{selectedClass.students.length}</strong><small>{isID ? 'siswa hadir' : 'students present'}</small></div><button type="submit" disabled={saving}>{saving ? (isID ? 'Menyimpan...' : 'Saving...') : (isID ? 'Simpan Absensi & Jurnal' : 'Save Attendance & Journal')}</button></div>
+          </form>
+        </section>
+      )}
 
       {page === 'student' && selectedStudent && <button className="tutor-report-launch" type="button" onClick={() => setPage('report')}><span>▤</span><div><strong>{isID ? 'Laporan Bulanan Siswa' : 'Monthly Student Report'}</strong><small>{isID ? 'Periksa laporan dan cetak sebagai PDF' : 'Review the report and print it as PDF'}</small></div><b>→</b></button>}
 
@@ -4830,6 +5090,23 @@ function Dashboard({
           { label: 'Pembayaran Menunggu', value: metrics?.pendingPayments || 0, icon: '💳', page: 'payment-confirmations' },
         ];
 
+  if (user.role === 'Admin') {
+    return <AdminWorkspaceV76
+      user={user}
+      token={token}
+      activePage={activePage}
+      onNavigate={onNavigate}
+      onLogout={onLogout}
+      registrations={registrations}
+      registrationsLoading={registrationsLoading}
+      onRefreshRegistrations={onRefreshRegistrations}
+      onApproveRegistration={onApproveRegistration}
+      onRejectRegistration={onRejectRegistration}
+      onCancelRegistrationVerification={onCancelRegistrationVerification}
+      message={message}
+    />;
+  }
+
   return (
     <main className={`app-dashboard ${user.role === 'Admin' ? 'admin-dashboard' : user.role === 'CEO' ? 'ceo-dashboard' : ''}`}>
       <header className="app-header">
@@ -5104,6 +5381,203 @@ function Dashboard({
       </nav>
     </main>
   );
+}
+
+function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, registrations, registrationsLoading, onRefreshRegistrations, onApproveRegistration, onRejectRegistration, onCancelRegistrationVerification, message }) {
+  const nowDate = new Date();
+  const currentPeriod = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}`;
+  const [period, setPeriod] = useState(currentPeriod);
+  const [workspace, setWorkspace] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [clock, setClock] = useState(new Date());
+  const [search, setSearch] = useState('');
+  const [showManualInvoice, setShowManualInvoice] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({ studentId: '', description: 'Biaya les', amount: '', period: currentPeriod });
+  const [studentModal, setStudentModal] = useState(null);
+  const [studentDelete, setStudentDelete] = useState(null);
+  const [classModal, setClassModal] = useState(null);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [selectedReceipt, setSelectedReceipt] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const page = activePage === 'admin-spp' ? 'spp' : activePage === 'admin-students' ? 'students' : activePage === 'admin-classes' ? 'classes' : activePage === 'admin-reports' ? 'reports' : 'home';
+  const months = Array.from({ length: 12 }, (_, index) => ({ value: `2026-${String(index + 1).padStart(2, '0')}`, label: `${['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][index]} 2026` }));
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => { loadWorkspace(period); }, [period]);
+
+  async function loadWorkspace(selectedPeriod = period) {
+    setLoading(true);
+    setNotice('');
+    try {
+      const result = await callApi({ action: 'getAdminWorkspace', token, period: selectedPeriod });
+      setWorkspace(result);
+    } catch (error) {
+      setNotice(error.message || 'Data operasional Admin gagal dimuat.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function mutate(request, successAction) {
+    setBusy(true);
+    setNotice('');
+    try {
+      const result = await callApi({ ...request, token });
+      setNotice(result.message || 'Perubahan berhasil disimpan.');
+      if (successAction) successAction(result);
+      await loadWorkspace(request.period || request.invoice?.period || period);
+      return true;
+    } catch (error) {
+      setNotice(error.message || 'Perubahan belum berhasil disimpan.');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function normalizeWa(value) {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (digits.startsWith('0')) digits = `62${digits.slice(1)}`;
+    return digits;
+  }
+
+  function openWa(item, customText = '') {
+    const number = normalizeWa(item.waStudent || item.waParent);
+    if (!number) return setNotice(`Nomor WhatsApp ${item.studentName || item.fullName || 'murid'} belum tersedia.`);
+    const text = customText || `Halo, kami dari Mr One Course ingin mengingatkan tagihan ${item.description || 'SPP'} ${workspace?.periodLabel || ''} atas nama ${item.studentName || item.fullName}. Jumlah ${formatRupiah(item.amount || 0)}. Mohon konfirmasi setelah pembayaran dilakukan. Terima kasih.`;
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function openBirthdayWa(item) {
+    const useParentNumber = !normalizeWa(item.waStudent) && Boolean(normalizeWa(item.waParent));
+    const number = normalizeWa(item.waStudent || item.waParent);
+    if (!number) return setNotice(`Nomor WhatsApp ${item.fullName || 'murid'} belum tersedia.`);
+    const ageText = item.age ? ` yang ke-${item.age}` : '';
+    const text = useParentNumber
+      ? `Halo Bapak/Ibu, keluarga besar Mr One Course mengucapkan selamat ulang tahun${ageText} untuk Ananda ${item.fullName}! 🎉🎂 Semoga panjang umur, sehat, bahagia, semakin rajin belajar, dan semua cita-citanya tercapai. ✨`
+      : `Selamat ulang tahun${ageText}, ${item.fullName}! 🎉🎂 Semoga panjang umur, sehat, bahagia, semakin rajin belajar, dan semua cita-citanya tercapai. Salam hangat dari keluarga besar Mr One Course. ✨`;
+    window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  async function saveManualInvoice(event) {
+    event.preventDefault();
+    const ok = await mutate({ action: 'adminCreateSppInvoice', invoice: invoiceForm });
+    if (ok) { setShowManualInvoice(false); setInvoiceForm({ studentId: '', description: 'Biaya les', amount: '', period }); }
+  }
+
+  async function copyUnpaidList(share = false) {
+    const rows = (workspace?.billingRows || []).filter((item) => !/lunas|paid/i.test(item.status));
+    const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const text = [`Daftar belum bayar ${workspace?.periodLabel || ''} - Mr One Course`, ...rows.map((item, index) => `${index + 1}. ${item.studentName} - ${formatRupiah(item.amount)}`), '', `Total: ${formatRupiah(total)}`].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice('Daftar belum bayar berhasil disalin.');
+    } catch { setNotice('Daftar siap dibagikan.'); }
+    if (share) window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  }
+
+  function emptyStudent() {
+    return { studentId: '', fullName: '', grade: '', school: '', program: '', classId: '', className: '', parentName: '', waStudent: '', waParent: '', monthlyFee: 150000, joinDate: '', billingStartPeriod: currentPeriod, status: 'Aktif', notes: '' };
+  }
+
+  async function saveStudent(event) {
+    event.preventDefault();
+    const ok = await mutate({ action: 'adminSaveStudentProfile', student: studentModal });
+    if (ok) setStudentModal(null);
+  }
+
+  async function deleteStudent() {
+    const ok = await mutate({ action: 'adminDeleteStudentRecord', studentId: studentDelete.studentId });
+    if (ok) setStudentDelete(null);
+  }
+
+  function openClass(item = null) {
+    const first = item?.schedules?.[0] || {};
+    let duration = 60;
+    if (first.start && first.end) {
+      const [sh, sm] = first.start.split(':').map(Number); const [eh, em] = first.end.split(':').map(Number);
+      duration = Math.max(15, (eh * 60 + em) - (sh * 60 + sm));
+    }
+    setClassModal(item ? { ...item, start: first.start || '19:00', duration } : { classId: '', className: '', program: '', days: [], start: '19:00', duration: 60, tutor: '', location: '', studentIds: [] });
+  }
+
+  async function saveClass(event) {
+    event.preventDefault();
+    const ok = await mutate({ action: 'adminSaveClassSchedule', classData: classModal });
+    if (ok) setClassModal(null);
+  }
+
+  async function deleteClass() {
+    if (!classModal?.classId || !window.confirm(`Hapus kelas ${classModal.className}? Murid tidak ikut terhapus.`)) return;
+    const ok = await mutate({ action: 'adminDeleteClassSchedule', classId: classModal.classId });
+    if (ok) setClassModal(null);
+  }
+
+  const filteredStudents = (workspace?.students || []).filter((student) => [student.fullName, student.parentName, student.program, student.className, student.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const filteredBills = (workspace?.billingRows || []).filter((item) => [item.studentName, item.parentName, item.description, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const filteredReports = (workspace?.reports || []).filter((item) => [item.fullName, item.program, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const unpaidRows = (workspace?.billingRows || []).filter((item) => !/lunas|paid/i.test(item.status));
+  const greeting = clock.getHours() < 11 ? 'Selamat pagi' : clock.getHours() < 15 ? 'Selamat siang' : clock.getHours() < 18 ? 'Selamat sore' : 'Selamat malam';
+
+  if (verificationOpen) return <main className="app-dashboard admin-dashboard admin-v76"><header className="app-header"><button className="admin-v76-back" onClick={() => setVerificationOpen(false)}>← Murid</button><button className="logout-button" onClick={onLogout}>Keluar</button></header><StudentRegistrationsPage registrations={registrations} loading={registrationsLoading} message={message} onApprove={onApproveRegistration} onReject={onRejectRegistration} onCancelVerification={onCancelRegistrationVerification} token={token} onRefresh={onRefreshRegistrations} /></main>;
+
+  return <main className="app-dashboard admin-dashboard admin-v76">
+    <header className="app-header"><div className="brand-small"><PaperPlaneLogo /><div><strong>Mr One Course</strong><span>Admin Operations</span></div></div><button className="logout-button" onClick={onLogout}>Keluar</button></header>
+    {notice && <div className={`admin-v76-notice ${/berhasil|disalin|tersedia/i.test(notice) ? 'success' : ''}`}>{notice}</div>}
+    {loading && !workspace ? <div className="dashboard-loading">Memuat pusat operasional Admin...</div> : <>
+      {page === 'home' && <section className="admin-v76-page admin-v76-home">
+        <div className="admin-v76-greeting"><div><span className="eyebrow">BERANDA ADMIN</span><h1>{greeting}, {user.fullName || 'Admin'}.</h1><p>{clock.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })} • {clock.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</p></div><article><small>MURID AKTIF</small><strong>{workspace?.activeStudentCount || 0}</strong><span>terdaftar di Academic Suite</span></article></div>
+        <div className="admin-v76-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama murid atau orang tua..." /></div>
+        {search && <div className="admin-v76-search-results">{filteredStudents.slice(0,8).map((student) => <button key={student.studentId} onClick={() => { setStudentModal(student); setSearch(''); }}><span>{student.fullName.charAt(0)}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.parentName || 'Orang tua belum diisi'}</small></div><b>→</b></button>)}</div>}
+        <div className="admin-v76-shortcuts"><button onClick={() => onNavigate('admin-spp')}><span>Rp</span><div><strong>Tagih SPP</strong><small>Buat dan tindak lanjuti tagihan</small></div><b>→</b></button><button onClick={() => onNavigate('admin-reports')}><span>➤</span><div><strong>KIRIM</strong><small>Laporan untuk orang tua</small></div><b>→</b></button><button onClick={async () => { setVerificationOpen(true); await onRefreshRegistrations(); }}><span>✓</span><div><strong>Verifikasi Murid</strong><small>{workspace?.pendingRegistrations || 0} pendaftaran menunggu</small></div><b>→</b></button></div>
+        <section className="admin-v76-attention"><header><div><span className="eyebrow">PERLU PERHATIAN</span><h2>SPP Belum Dibayar</h2></div><strong>{formatRupiah(workspace?.billingSummary?.unpaidAmount || 0)}</strong></header>{unpaidRows.length ? <div>{unpaidRows.slice(0,8).map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small>{item.description} • {workspace.periodLabel}</small></div><b>{formatRupiah(item.amount)}</b><button onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></article>)}</div> : <div className="empty-state">Tidak ada tagihan yang perlu ditindaklanjuti.</div>}</section>
+        <section className="admin-v76-attention birthday"><header><div><span className="eyebrow">PERLU PERHATIAN</span><h2>Ulang Tahun Siswa</h2><p>Hari ini dan 7 hari ke depan</p></div><strong>{workspace?.birthdays?.length || 0} siswa</strong></header>{workspace?.birthdays?.length ? <div>{workspace.birthdays.map((item) => <article key={item.studentId}><div><strong>🎂 {item.fullName}</strong><small>{item.daysUntil === 0 ? 'Ulang tahun hari ini' : item.daysUntil === 1 ? 'Ulang tahun besok' : `${item.daysUntil} hari lagi`} • {item.birthdayLabel}{item.age ? ` • ${item.age} tahun` : ''}</small></div><b>{item.studentId}</b><button onClick={() => openBirthdayWa(item)}><WhatsAppIcon /> Kirim WA</button></article>)}</div> : <div className="empty-state">Tidak ada siswa yang berulang tahun dalam 7 hari ke depan.</div>}</section>
+      </section>}
+
+      {page === 'spp' && <section className="admin-v76-page">
+        <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • BILLING</span><h1>Tagihan SPP</h1><p>Buat tagihan sekali klik, tagih lewat WhatsApp, cetak kuitansi.</p></div><div><button className="secondary" onClick={() => { setInvoiceForm({ studentId:'', description:'Biaya les', amount:'', period }); setShowManualInvoice(true); }}>＋ Tagihan manual</button><button onClick={() => mutate({ action:'adminGenerateMonthlySppInvoices', period })} disabled={busy}>Buat Tagihan {workspace?.periodLabel}</button></div></div>
+        <div className="admin-v76-kpis"><article><small>TOTAL TAGIHAN</small><strong>{workspace?.billingSummary?.totalInvoices || 0}</strong><span>jumlah tagihan</span></article><article className="paid"><small>SUDAH LUNAS</small><strong>{workspace?.billingSummary?.paidStudents || 0}</strong><span>murid</span></article><article><small>BELUM BAYAR</small><strong>{workspace?.billingSummary?.unpaidStudents || 0}</strong><span>murid</span></article></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small>{item.parentName || item.studentId}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId })} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}</div></div>
+      </section>}
+
+      {page === 'students' && <section className="admin-v76-page">
+        <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • STUDENTS</span><h1>Murid</h1><p>{workspace?.activeStudentCount || 0} murid aktif</p></div><div><button className="secondary" onClick={async () => { setVerificationOpen(true); await onRefreshRegistrations(); }}>{workspace?.pendingRegistrations || 0} Pendaftaran Baru</button><button onClick={() => setStudentModal(emptyStudent())}>＋ Murid baru</button></div></div>
+        <div className="admin-v76-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid, orang tua, atau program..." /></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-table student-table"><div className="head"><span>Murid</span><span>Orang Tua</span><span>Kelas</span><span>SPP</span><span>Status</span><span>Aksi</span></div>{filteredStudents.map((student) => <article key={student.studentId}><div><strong>{student.fullName}</strong><small>{student.grade || 'Jenjang belum diisi'} • {student.program || 'Program belum diisi'}</small></div><div><strong>{student.parentName || '—'}</strong><small>{student.waParent || student.waStudent || 'Nomor belum diisi'}</small></div><span>{student.className || '—'}</span><b>{formatRupiah(student.monthlyFee)}</b><em className={/aktif|active/i.test(student.status) ? 'paid' : ''}>{student.status}</em><div className="actions"><button onClick={() => setStudentModal({ ...student })}>Edit</button><button className="danger" onClick={() => setStudentDelete(student)}>Hapus</button></div></article>)}</div></div>
+      </section>}
+
+      {page === 'classes' && <section className="admin-v76-page">
+        <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • SCHEDULE</span><h1>Jadwal & Kelas</h1><p>{workspace?.classes?.length || 0} kelas aktif per minggu</p></div><button onClick={() => openClass()}>＋ Kelas baru</button></div>
+        <div className="admin-v76-class-grid">{(workspace?.classes || []).map((item) => <article key={item.classId}><header><span>{item.program || 'Program'}</span><button onClick={() => openClass(item)}>Edit kelas</button></header><h2>{item.className}</h2><div className="class-schedules">{item.schedules.map((schedule,index) => <span key={`${schedule.day}-${index}`}><b>{schedule.day}</b>{schedule.start}–{schedule.end}</span>)}</div><p>{item.tutor || 'Tutor belum ditentukan'}</p><footer><strong>{item.studentIds.length}</strong> murid</footer></article>)}</div>
+      </section>}
+
+      {page === 'reports' && <section className="admin-v76-page">
+        <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • PARENT REPORT</span><h1>Laporan ke Orang Tua</h1><p>Kehadiran + catatan perkembangan, siap dikirim via WhatsApp atau dicetak.</p></div></div>
+        <div className="admin-v76-toolbar report"><select value={period} onChange={(event) => setPeriod(event.target.value)}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-table report-table"><div className="head"><span>Murid</span><span>Kehadiran</span><span>Catatan Terakhir</span><span>Aksi</span></div>{filteredReports.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{item.program || item.studentId}</small></div><b>{item.attendancePresent}/{item.attendanceTotal} <em className={item.attendancePercentage >= 75 ? 'paid' : ''}>{item.attendancePercentage}%</em></b><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setSelectedReport(item)}>Rapor</button><button className="wa" onClick={() => openWa(item, `Halo Bapak/Ibu, berikut ringkasan perkembangan ${item.fullName} untuk ${workspace.periodLabel}. Kehadiran: ${item.attendancePresent}/${item.attendanceTotal} (${item.attendancePercentage}%). Catatan tutor: ${item.latestNote || 'Belum ada catatan tambahan.'}. Terima kasih atas dukungannya.`)}><WhatsAppIcon /> Kirim</button></div></article>)}</div></div>
+      </section>}
+    </>}
+
+    <nav className="mobile-navigation admin-v76-nav"><button className={page==='home'?'active':''} onClick={() => {setSearch('');onNavigate('home');}}><span>⌂</span>Beranda</button><button className={page==='spp'?'active':''} onClick={() => {setSearch('');onNavigate('admin-spp');}}><span>Rp</span>Tagihan SPP</button><button className={page==='students'?'active':''} onClick={() => {setSearch('');onNavigate('admin-students');}}><span>♙</span>Murid</button><button className={page==='classes'?'active':''} onClick={() => {setSearch('');onNavigate('admin-classes');}}><span>▦</span>Jadwal & Kelas</button><button className={page==='reports'?'active':''} onClick={() => {setSearch('');onNavigate('admin-reports');}}><span>➤</span>Laporan Ortu</button></nav>
+
+    {showManualInvoice && <div className="admin-v76-modal"><form onSubmit={saveManualInvoice}><header><div><span className="eyebrow">TAGIHAN SPP</span><h2>Tagihan Manual</h2></div><button type="button" onClick={() => setShowManualInvoice(false)}>×</button></header><label><span>Nama murid</span><select required value={invoiceForm.studentId} onChange={(event) => setInvoiceForm({ ...invoiceForm, studentId:event.target.value })}><option value="">Pilih murid...</option>{(workspace?.students || []).filter((student) => /aktif|active/i.test(student.status)).map((student) => <option key={student.studentId} value={student.studentId}>{student.fullName}</option>)}</select></label>{invoiceForm.studentId && <div className="modal-id">Student ID <strong>{invoiceForm.studentId}</strong></div>}<div className="form-grid"><label><span>Keterangan</span><select value={invoiceForm.description} onChange={(event) => setInvoiceForm({ ...invoiceForm, description:event.target.value })}><option>Biaya les</option><option>Modul</option><option>Try Out</option><option>ID Card</option></select></label><label><span>Jumlah (Rp)</span><input required type="number" min="1" value={invoiceForm.amount} onChange={(event) => setInvoiceForm({ ...invoiceForm, amount:event.target.value })} /></label></div><label><span>Periode</span><select value={invoiceForm.period} onChange={(event) => setInvoiceForm({ ...invoiceForm, period:event.target.value })}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select></label><footer><button type="button" className="secondary" onClick={() => setShowManualInvoice(false)}>Batal</button><button disabled={busy}>Simpan</button></footer></form></div>}
+
+    {studentModal && <div className="admin-v76-modal"><form onSubmit={saveStudent}><header><div><span className="eyebrow">DATA MURID</span><h2>{studentModal.studentId ? 'Edit Murid' : 'Murid Baru'}</h2></div><button type="button" onClick={() => setStudentModal(null)}>×</button></header><label><span>Nama murid *</span><input required value={studentModal.fullName} onChange={(event) => setStudentModal({ ...studentModal, fullName:event.target.value })} /></label><div className="form-grid"><label><span>Kelas / jenjang sekolah</span><input value={studentModal.grade} onChange={(event) => setStudentModal({ ...studentModal, grade:event.target.value })} /></label><label><span>Program</span><input value={studentModal.program} onChange={(event) => setStudentModal({ ...studentModal, program:event.target.value })} /></label><label><span>Nama orang tua / wali</span><input value={studentModal.parentName} onChange={(event) => setStudentModal({ ...studentModal, parentName:event.target.value })} /></label><label><span>Kelas</span><select value={studentModal.classId} onChange={(event) => { const selected=(workspace?.classes||[]).find((item)=>item.classId===event.target.value);setStudentModal({...studentModal,classId:event.target.value,className:selected?.className||''}); }}><option value="">Belum ada kelas</option>{(workspace?.classes||[]).map((item)=><option key={item.classId} value={item.classId}>{item.className}</option>)}</select></label><label><span>No. WhatsApp murid</span><input value={studentModal.waStudent} onChange={(event) => setStudentModal({ ...studentModal, waStudent:event.target.value })} /></label><label><span>No. WhatsApp orang tua</span><input value={studentModal.waParent} onChange={(event) => setStudentModal({ ...studentModal, waParent:event.target.value })} /></label><label><span>SPP per bulan (Rp)</span><input type="number" min="0" value={studentModal.monthlyFee} onChange={(event) => setStudentModal({ ...studentModal, monthlyFee:event.target.value })} /></label><label><span>Tanggal masuk</span><input type="date" value={studentModal.joinDate} onChange={(event) => setStudentModal({ ...studentModal, joinDate:event.target.value, billingStartPeriod:event.target.value.slice(0,7) })} /></label><label><span>Mulai ditagihkan</span><input type="month" value={studentModal.billingStartPeriod || ''} onChange={(event) => setStudentModal({ ...studentModal, billingStartPeriod:event.target.value })} /></label><label><span>Status</span><select value={studentModal.status} onChange={(event) => setStudentModal({ ...studentModal, status:event.target.value })}><option>Aktif</option><option>Berhenti</option><option>Cuti</option></select></label></div><label><span>Catatan</span><textarea rows="3" value={studentModal.notes} onChange={(event) => setStudentModal({ ...studentModal, notes:event.target.value })} /></label><footer><button type="button" className="secondary" onClick={() => setStudentModal(null)}>Batal</button><button disabled={busy}>Simpan</button></footer></form></div>}
+
+    {studentDelete && <div className="admin-v76-modal compact"><div className="confirm"><span>!</span><h2>Yakin?</h2><p>Hapus murid <strong>{studentDelete.fullName}</strong>? Riwayat tagihannya ikut terhapus.</p><footer><button className="secondary" onClick={() => setStudentDelete(null)}>Batal</button><button className="danger" disabled={busy} onClick={deleteStudent}>Hapus</button></footer></div></div>}
+
+    {classModal && <div className="admin-v76-modal"><form onSubmit={saveClass} className="class-form"><header><div><span className="eyebrow">JADWAL & KELAS</span><h2>{classModal.classId ? 'Edit Kelas' : 'Kelas Baru'}</h2></div><button type="button" onClick={() => setClassModal(null)}>×</button></header><label><span>Nama kelas *</span><input required value={classModal.className} onChange={(event)=>setClassModal({...classModal,className:event.target.value})} /></label><div className="form-grid"><label><span>Program *</span><input required value={classModal.program} onChange={(event)=>setClassModal({...classModal,program:event.target.value})} /></label><label><span>Ruang / lokasi</span><input value={classModal.location} onChange={(event)=>setClassModal({...classModal,location:event.target.value})} /></label></div><label><span>Hari *</span><div className="day-picker">{['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'].map((day)=><button type="button" className={classModal.days.includes(day)?'active':''} key={day} onClick={()=>setClassModal({...classModal,days:classModal.days.includes(day)?classModal.days.filter((item)=>item!==day):[...classModal.days,day]})}>{classModal.days.includes(day)?'✓ ':''}{day}</button>)}</div></label><div className="form-grid"><label><span>Jam mulai *</span><input required type="time" value={classModal.start} onChange={(event)=>setClassModal({...classModal,start:event.target.value})} /></label><label><span>Durasi (menit)</span><input type="number" min="15" step="15" value={classModal.duration} onChange={(event)=>setClassModal({...classModal,duration:event.target.value})} /></label></div><label><span>Tutor</span><input value={classModal.tutor} onChange={(event)=>setClassModal({...classModal,tutor:event.target.value})} placeholder="Contoh: Miss Vita" /></label><label><span>Murid di kelas ini</span><div className="student-check-picker">{(workspace?.students||[]).filter((student)=>/aktif|active/i.test(student.status)).map((student)=><button type="button" className={classModal.studentIds.includes(student.studentId)?'active':''} key={student.studentId} onClick={()=>setClassModal({...classModal,studentIds:classModal.studentIds.includes(student.studentId)?classModal.studentIds.filter((id)=>id!==student.studentId):[...classModal.studentIds,student.studentId]})}>{classModal.studentIds.includes(student.studentId)?'✓ ':'○ '}{student.fullName}</button>)}</div></label><footer>{classModal.classId?<button type="button" className="danger push-left" onClick={deleteClass}>Hapus kelas</button>:<span className="push-left"/>}<button type="button" className="secondary" onClick={()=>setClassModal(null)}>Batal</button><button disabled={busy}>Simpan</button></footer></form></div>}
+
+    {selectedReport && <div className="admin-v76-modal report-modal"><div className="admin-parent-report-print"><header><PaperPlaneLogo /><div><strong>MR ONE COURSE</strong><span>LAPORAN PERKEMBANGAN SISWA</span></div></header><h1>{selectedReport.fullName}</h1><p>{selectedReport.studentId} • {selectedReport.program || 'Program'}</p><section><article><small>PERIODE</small><strong>{workspace.periodLabel}</strong></article><article><small>KEHADIRAN</small><strong>{selectedReport.attendancePresent}/{selectedReport.attendanceTotal} ({selectedReport.attendancePercentage}%)</strong></article></section><div><small>CATATAN PERKEMBANGAN</small><p>{selectedReport.latestNote || 'Belum ada catatan perkembangan pada periode ini.'}</p></div><footer>Terima kasih atas dukungan Bapak/Ibu dalam proses belajar putra/putri di Mr One Course.</footer></div><div className="report-actions"><button className="secondary" onClick={()=>setSelectedReport(null)}>Tutup</button><button onClick={()=>window.print()}>Cetak / PDF</button><button onClick={()=>openWa(selectedReport,`Halo Bapak/Ibu, laporan perkembangan ${selectedReport.fullName} periode ${workspace.periodLabel} siap dilihat. Kehadiran: ${selectedReport.attendancePresent}/${selectedReport.attendanceTotal} (${selectedReport.attendancePercentage}%). Catatan: ${selectedReport.latestNote||'Belum ada catatan tambahan.'}. Terima kasih.`)}><WhatsAppIcon /> Kirim WA</button></div></div>}
+    {selectedReceipt && <div className="admin-v76-modal report-modal"><div className="admin-receipt-print"><header><PaperPlaneLogo /><div><strong>MR ONE COURSE</strong><span>KUITANSI PEMBAYARAN</span></div><b>LUNAS</b></header><div className="receipt-title"><small>DITERIMA DARI</small><h1>{selectedReceipt.studentName}</h1><p>{selectedReceipt.studentId} • {selectedReceipt.parentName || 'Orang tua/wali'}</p></div><section><div><span>Keterangan</span><strong>{selectedReceipt.description}</strong></div><div><span>Periode</span><strong>{workspace.periodLabel}</strong></div><div><span>Jumlah</span><strong>{formatRupiah(selectedReceipt.amount)}</strong></div><div><span>Status</span><strong>Lunas</strong></div></section><footer><p>Terima kasih atas kepercayaan dan pembayaran Bapak/Ibu. Pembayaran ini telah tercatat pada sistem Mr One Course.</p><div><span>Balikpapan, {new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'})}</span><strong>Administrasi Mr One Course</strong></div></footer></div><div className="report-actions"><button className="secondary" onClick={()=>setSelectedReceipt(null)}>Tutup</button><button onClick={()=>window.print()}>Cetak / PDF</button><button onClick={()=>openWa(selectedReceipt,`Halo Bapak/Ibu, pembayaran ${selectedReceipt.description} ${workspace.periodLabel} atas nama ${selectedReceipt.studentName} sebesar ${formatRupiah(selectedReceipt.amount)} telah kami terima. Terima kasih atas kepercayaannya kepada Mr One Course.`)}><WhatsAppIcon /> Kirim WA</button></div></div>}
+  </main>;
 }
 
 function WhatsAppIcon() {
@@ -5919,7 +6393,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
     </div>}
 
-    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div></form>}
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div></form>}
 
     {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice. Pilihan tetap tersimpan setelah invoice dibuka.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
 
@@ -5936,7 +6410,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
         <label><span>Jenis Pembayaran</span><select value={historical.paymentCategory} onChange={(event) => chooseCategory(event.target.value)}><option value="Book Package">Paket 4 Buku</option><option value="ID Card">ID Card</option><option value="Tuition">Les Bulanan</option></select></label>
         <label><span>Nominal</span><input type="number" value={historical.amount} onChange={(event) => setHistorical({ ...historical, amount: Number(event.target.value) })} required /></label>
         <label><span>Tanggal Pembayaran</span><input type="date" value={historical.paymentDate} onChange={(event) => setHistorical({ ...historical, paymentDate: event.target.value })} required /></label>
-        <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option><option>GoPay / DANA</option></select></label>
+        <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option></select></label>
         {historical.paymentCategory === 'Tuition' && <label><span>Periode Les</span><input type="month" value={historical.period} onChange={(event) => setHistorical({ ...historical, period: event.target.value })} required /></label>}
         {historical.paymentCategory !== 'Tuition' && <label><span>Status Penyerahan</span><select value={historical.fulfillmentStatus} onChange={(event) => setHistorical({ ...historical, fulfillmentStatus: event.target.value })}><option>Sedang Disiapkan</option><option>Siap Diambil</option><option>Sudah Diterima Siswa</option></select></label>}
         <label className="wide historical-proof-upload"><span>Bukti Pembayaran</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={chooseHistoricalProof} required /><small>{historical.proof?.fileName || 'Upload JPG, PNG, WEBP, atau PDF • Maks. 4 MB'}</small></label>
