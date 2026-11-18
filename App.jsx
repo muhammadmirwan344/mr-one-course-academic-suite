@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbyiQzb_Ej475Vn5cCs32COuRVYqPyL-KmX5GrbW224_r0X19vUMe-6b2EbiYMOipTIi/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbzfUIPS9HUPsfICvBP0ifyb_T2YaipO2SKhjlGnNSctszY9gjWXb7vTotWUoecZt5lRAw/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -367,8 +367,37 @@ function BadgeGlyph({ name }) {
 }
 
 function buildStudentBadges(overview, isID) {
+  const backendBadges = Array.isArray(overview?.gamification?.badges) ? overview.gamification.badges : [];
+  if (backendBadges.length) {
+    const badgeMeta = {
+      'BADGE-LOYAL': { icon: 'learner', targetPage: 'attendance-record', requirementID: 'Hadir minimal 4 pertemuan bulan ini', requirementEN: 'Attend at least 4 meetings this month' },
+      'BADGE-PERFECT': { icon: 'perfect', targetPage: 'attendance-record', requirementID: 'Hadir 8 dari 8 pertemuan', requirementEN: 'Attend all 8 meetings' },
+      'BADGE-LEARNING': { icon: 'learning', targetPage: 'journal', requirementID: 'Baca seluruh ringkasan pembelajaran yang tersedia bulan ini', requirementEN: 'Read every available learning summary this month' },
+      'BADGE-TASK': { icon: 'task', targetPage: 'missions', requirementID: 'Selesaikan semua tugas bulan ini', requirementEN: 'Complete all assignments this month' },
+      'BADGE-CHALLENGE': { icon: 'challenge', targetPage: 'missions', requirementID: 'Selesaikan semua tantangan sesuai program', requirementEN: 'Complete every program challenge' },
+      'BADGE-QUIZ': { icon: 'quiz', targetPage: 'score', requirementID: 'Selesaikan quiz atau tes berhadiah EXP', requirementEN: 'Complete an EXP quiz or test' },
+      'BADGE-PROJECT': { icon: 'project', targetPage: 'score', requirementID: 'Selesaikan project program', requirementEN: 'Complete a program project' },
+      'BADGE-ALLROUND': { icon: 'allround', targetPage: 'badges', requirementID: 'Tuntas tugas, tantangan, pembelajaran, dan hadir sempurna', requirementEN: 'Complete assignments, challenges, learning, and perfect attendance' },
+    };
+    return backendBadges.map((badge) => {
+      const meta = badgeMeta[badge.badgeId] || badgeMeta['BADGE-LOYAL'];
+      return {
+        type: String(badge.missionType || '').toLowerCase(),
+        icon: meta.icon,
+        name: badge.name,
+        requirement: isID ? meta.requirementID : meta.requirementEN,
+        current: Number(badge.current || 0),
+        target: Math.max(1, Number(badge.target || 1)),
+        expReward: Number(badge.expReward || 0),
+        unlocked: Boolean(badge.unlocked),
+        claimed: Boolean(badge.claimed),
+        targetPage: meta.targetPage,
+      };
+    });
+  }
+
   const monthly = overview?.experience?.monthly || {};
-  const breakdown = overview?.experience?.breakdown || {};
+  const breakdown = overview?.gamification?.breakdown || overview?.experience?.breakdown || {};
   const attendance = overview?.monthly?.attendance || {};
   const assignments = Array.isArray(overview?.assignments) ? overview.assignments : [];
   const challenges = Array.isArray(overview?.challenges) ? overview.challenges : [];
@@ -407,7 +436,7 @@ function buildStudentBadges(overview, isID) {
       type: 'learning', icon: 'learning',
       name: isID ? 'Learning Explorer' : 'Learning Explorer',
       requirement: isID ? 'Baca seluruh ringkasan pembelajaran bulan ini' : 'Read every learning summary this month',
-      current: learningRead, target: Math.max(learningTarget, 1), expReward: 25 * Math.max(learningTarget, 1),
+      current: learningRead, target: Math.max(learningTarget, 1), expReward: 200,
       unlocked: allLearningRead, targetPage: 'journal'
     },
     {
@@ -428,8 +457,8 @@ function buildStudentBadges(overview, isID) {
       type: 'quiz', icon: 'quiz',
       name: isID ? 'Quiz Master' : 'Quiz Master',
       requirement: isID ? 'Raih EXP dari quiz atau tes' : 'Earn EXP from a quiz or test',
-      current: Number(breakdown.quizTest || 0) > 0 ? 1 : 0, target: 1, expReward: 150,
-      unlocked: Number(breakdown.quizTest || 0) > 0, targetPage: 'score'
+      current: Number(breakdown.quiz || breakdown.quizTest || 0) > 0 ? 1 : 0, target: 1, expReward: 150,
+      unlocked: Number(breakdown.quiz || breakdown.quizTest || 0) > 0, targetPage: 'score'
     },
     {
       type: 'project', icon: 'project',
@@ -2055,6 +2084,10 @@ function TutorOperationsV77({ user, token, onLogout }) {
   const [sendOpen, setSendOpen] = useState(false);
   const [sendText, setSendText] = useState('');
   const [replacementOpen, setReplacementOpen] = useState(false);
+  const [scheduleSection, setScheduleSection] = useState('schedule');
+  const [assignmentModal, setAssignmentModal] = useState(null);
+  const [challengeModal, setChallengeModal] = useState(null);
+  const [activityReviewModal, setActivityReviewModal] = useState(null);
 
   const monthOptions = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`);
   const monthLabel = (value) => new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(new Date(`${value}-01T12:00:00`));
@@ -2080,6 +2113,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
   const reports = data?.reports || [];
   const filteredReports = reports.filter((item) => `${item.fullName} ${item.studentId} ${item.className} ${item.program}`.toLowerCase().includes(search.toLowerCase()));
   const tutorName = data?.tutor?.name || user?.fullName || user?.name || user?.username || 'Tutor';
+  const pendingReviews = classes.reduce((total, item) => total + (item.submissions || []).filter((entry) => String(entry.status || '').toLowerCase() === 'submitted').length + (item.challengeResults || []).filter((entry) => String(entry.status || '').toLowerCase() === 'submitted').length, 0);
 
   function openAttendance(item, session = null, selectedDate = today) {
     const tutorClass = classes.find((entry) => entry.classId === (session?.classId || item?.classId));
@@ -2133,9 +2167,67 @@ function TutorOperationsV77({ user, token, onLogout }) {
     finally { setSaving(false); }
   }
 
+  function openAssignment(classItem) {
+    setAssignmentModal({
+      classId: classItem.classId, className: classItem.className, title: '', instructions: '',
+      assignedDate: today, dueDate: today, expReward: 100, question: '',
+      options: ['', '', '', ''], correctOption: 0
+    });
+  }
+
+  async function saveAssignment(event) {
+    event.preventDefault(); setSaving(true); setNotice('');
+    try {
+      const payload = {
+        classId: assignmentModal.classId, title: assignmentModal.title, instructions: assignmentModal.instructions,
+        assignedDate: assignmentModal.assignedDate, dueDate: assignmentModal.dueDate,
+        expReward: Number(assignmentModal.expReward || 0), taskType: 'multiple-choice',
+        questions: [{ id: 'q-1', type: 'multiple-choice', text: assignmentModal.question, points: 100, options: assignmentModal.options, correctOption: Number(assignmentModal.correctOption || 0) }]
+      };
+      const result = await callApi({ action: 'createTutorAssignment', token, assignment: payload });
+      setNotice(`${result.message || 'Tugas berhasil dibuat.'} Tugas langsung tampil di akun Siswa dan dapat dipantau Admin/CEO.`);
+      setAssignmentModal(null); await load(false);
+    } catch (error) { setNotice(error.message || 'Tugas belum berhasil dibuat.'); }
+    finally { setSaving(false); }
+  }
+
+  function openChallenge(classItem) {
+    setChallengeModal({ classId: classItem.classId, className: classItem.className, title: '', instructions: '', responseType: 'text', dueDate: today, expReward: 150, gradingMode: 'automatic', answerKey: '' });
+  }
+
+  async function saveChallenge(event) {
+    event.preventDefault(); setSaving(true); setNotice('');
+    try {
+      const result = await callApi({ action: 'createTutorChallenge', token, challenge: challengeModal });
+      setNotice(`${result.message || 'Challenge berhasil dibuat.'} Challenge langsung tampil di akun Siswa dan tercatat pada pemantauan bersama.`);
+      setChallengeModal(null); await load(false);
+    } catch (error) { setNotice(error.message || 'Challenge belum berhasil dibuat.'); }
+    finally { setSaving(false); }
+  }
+
+  function openActivityReview(kind, item, classItem) {
+    setActivityReviewModal({ kind, classId: classItem.classId, className: classItem.className, studentName: item.studentName, response: item.response, submissionId: item.submissionId, resultId: item.resultId, score: item.score === '' || item.score == null ? 0 : Number(item.score), feedback: item.feedback || '', expAwarded: Number(item.expAwarded || 0) });
+  }
+
+  async function saveActivityReview(event) {
+    event.preventDefault(); setSaving(true); setNotice('');
+    try {
+      const review = { score: Number(activityReviewModal.score || 0), feedback: activityReviewModal.feedback, expAwarded: Number(activityReviewModal.expAwarded || 0) };
+      const request = activityReviewModal.kind === 'assignment'
+        ? { action: 'reviewTutorAssignment', token, review: { ...review, submissionId: activityReviewModal.submissionId } }
+        : { action: 'reviewTutorChallenge', token, review: { ...review, resultId: activityReviewModal.resultId } };
+      const result = await callApi(request);
+      setNotice(`${result.message || 'Penilaian berhasil disimpan.'} Nilai dan EXP sudah sinkron ke akun Siswa.`);
+      setActivityReviewModal(null); await load(false);
+    } catch (error) { setNotice(error.message || 'Penilaian belum berhasil disimpan.'); }
+    finally { setSaving(false); }
+  }
+
   function openSendHonor() {
     const honor = data?.honor || {};
-    setSendText(`Halo ${tutorName},\n\nRekap honor ${monthLabel(period)} di Mr One Course:\n${honor.sessions || 0} sesi\nTotal *${formatRupiah(honor.total || 0)}*\n\nTerima kasih atas kerja kerasnya 😊`);
+    const official = data?.officialSettings || {};
+    const template = official.tutorHonorTemplate || 'Halo {tutor}, rekap honor {bulan} di {lembaga}: {sesi} sesi, total *{total}*. Terima kasih atas kerja kerasnya. 🙏';
+    setSendText(template.replaceAll('{tutor}', tutorName).replaceAll('{bulan}', monthLabel(period)).replaceAll('{lembaga}', official.institutionName || 'Mr One Course').replaceAll('{sesi}', String(honor.sessions || 0)).replaceAll('{total}', formatRupiah(honor.total || 0)));
     setSendOpen(true);
   }
 
@@ -2157,8 +2249,8 @@ function TutorOperationsV77({ user, token, onLogout }) {
         <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama murid..." />
       </section>
       <div className="tutor-v77-home-grid">
-        <section className="tutor-v77-card tutor-v77-today-summary"><header><div><small>Kelas hari ini</small><strong>{data?.todayClasses?.length || 0}</strong><span>kelas dalam jadwal Anda</span></div></header>
-          <div className="tutor-v77-shortcuts"><button type="button" onClick={() => setPage('attendance')}><b>✓</b><span>Absen</span></button><button type="button" onClick={() => setPage('reports')}><b>➤</b><span>Laporan Ortu</span></button></div>
+        <section className="tutor-v77-card tutor-v77-today-summary"><header><div><small>Kelas hari ini</small><strong>{data?.todayClasses?.length || 0}</strong><span>kelas dalam jadwal Anda · {pendingReviews} penilaian menunggu</span></div></header>
+          <div className="tutor-v77-shortcuts"><button type="button" onClick={() => setPage('attendance')}><b>✓</b><span>Absen</span></button><button type="button" onClick={() => { setPage('schedule'); setScheduleSection('activities'); }}><b>★</b><span>Tugas & EXP</span></button><button type="button" onClick={() => setPage('reports')}><b>➤</b><span>Laporan Ortu</span></button></div>
         </section>
         <section><div className="tutor-v77-section-title"><h2>Jadwal hari ini</h2><button onClick={() => setPage('schedule')}>Semua</button></div><div className="tutor-v77-card tutor-v77-agenda">
           {(data?.todayClasses || []).length ? data.todayClasses.map((item) => <article key={item.classId}><time>{item.start || '--:--'}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid{item.location ? ` · ${item.location}` : ''}</small></div><button onClick={() => openAttendance(item)}>Absen</button></article>) : <p className="tutor-v77-empty">Tidak ada kelas dalam jadwal hari ini.</p>}
@@ -2189,8 +2281,12 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
   function SchedulePage() {
     const dayOrder = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Jadwal & Kelas</h1><p>{classes.length} kelas aktif yang ditugaskan kepada Anda.</p></div></div>
-      <div className="tutor-v77-schedule-grid">{dayOrder.map((day) => { const dayClasses = classes.filter((item) => item.schedules.some((schedule) => schedule.day === day)); return <section className="tutor-v77-card" key={day}><div className="tutor-v77-card-heading"><h2>{day}</h2><span>{dayClasses.length}</span></div>{dayClasses.length ? dayClasses.map((item) => { const schedule = item.schedules.find((entry) => entry.day === day) || {}; return <article key={item.classId}><time>{schedule.start}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid</small></div><button onClick={() => openSchedule(item)}>Edit</button></article>; }) : <p className="tutor-v77-empty">Tidak ada kelas.</p>}</section>; })}</div>
+    return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Jadwal & Kelas</h1><p>{classes.length} kelas aktif yang ditugaskan kepada Anda. Semua aktivitas memakai data yang sama dengan Siswa, Admin, dan CEO.</p></div><div className="tutor-v80-tabs"><button className={scheduleSection === 'schedule' ? 'active' : ''} onClick={() => setScheduleSection('schedule')}>Jadwal</button><button className={scheduleSection === 'activities' ? 'active' : ''} onClick={() => setScheduleSection('activities')}>Tugas, Challenge & EXP {pendingReviews ? `(${pendingReviews})` : ''}</button></div></div>
+      {scheduleSection === 'schedule' ? <div className="tutor-v77-schedule-grid">{dayOrder.map((day) => { const dayClasses = classes.filter((item) => item.schedules.some((schedule) => schedule.day === day)); return <section className="tutor-v77-card" key={day}><div className="tutor-v77-card-heading"><h2>{day}</h2><span>{dayClasses.length}</span></div>{dayClasses.length ? dayClasses.map((item) => { const schedule = item.schedules.find((entry) => entry.day === day) || {}; return <article key={item.classId}><time>{schedule.start}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid</small></div><button onClick={() => openSchedule(item)}>Edit</button></article>; }) : <p className="tutor-v77-empty">Tidak ada kelas.</p>}</section>; })}</div> : <div className="tutor-v80-activity-grid">{classes.map((item) => {
+        const pendingAssignments = (item.submissions || []).filter((entry) => String(entry.status || '').toLowerCase() === 'submitted');
+        const pendingChallenges = (item.challengeResults || []).filter((entry) => String(entry.status || '').toLowerCase() === 'submitted');
+        return <section className="tutor-v77-card tutor-v80-activity-card" key={item.classId}><div className="tutor-v77-card-heading"><div><h2>{item.className}</h2><small>{item.program} · {item.students.length} murid</small></div><span>{pendingAssignments.length + pendingChallenges.length} menunggu</span></div><div className="tutor-v80-create-actions"><button onClick={() => openAssignment(item)}>＋ Tugas</button><button onClick={() => openChallenge(item)}>＋ Challenge</button></div><div className="tutor-v80-activity-stats"><span><b>{(item.assignments || []).length}</b> tugas aktif</span><span><b>{(item.challenges || []).length}</b> challenge</span></div>{pendingAssignments.length + pendingChallenges.length ? <div className="tutor-v80-review-list">{pendingAssignments.map((entry) => <button key={entry.submissionId} onClick={() => openActivityReview('assignment', entry, item)}><span><b>{entry.studentName}</b><small>Tugas menunggu penilaian</small></span><strong>Nilai →</strong></button>)}{pendingChallenges.map((entry) => <button key={entry.resultId} onClick={() => openActivityReview('challenge', entry, item)}><span><b>{entry.studentName}</b><small>Challenge menunggu penilaian</small></span><strong>Nilai →</strong></button>)}</div> : <p className="tutor-v77-empty">Tidak ada kiriman yang menunggu penilaian.</p>}</section>;
+      })}</div>}
     </div>;
   }
 
@@ -2206,7 +2302,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
   function ReportsPage() {
     return <div className="tutor-v77-page"><div className="tutor-v77-heading"><div><h1>Laporan Ortu</h1><p>Kehadiran + catatan perkembangan. Admin yang mengirimkan laporan kepada orang tua.</p></div></div>
       <section className="tutor-v77-card tutor-v77-table-card"><div className="tutor-v77-report-toolbar"><select value={period} onChange={(event) => setPeriod(event.target.value)}>{monthOptions.map((value) => <option value={value} key={value}>{monthLabel(value)}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /></div>
-        <div className="tutor-v77-report-list">{filteredReports.map((item) => <article key={`${item.classId}-${item.studentId}`}><div><strong>{item.fullName}</strong><small>{item.program} · {item.studentId}</small></div><span>{item.attendancePresent}/{item.attendanceTotal} <b>{item.attendancePercentage}%</b></span><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setNoteModal({ classId: item.classId, studentId: item.studentId, fullName: item.fullName, date: today, score: '', comment: '' })}>＋ Catatan</button><button onClick={() => setReportModal(item)}>Rapor</button></div></article>)}</div>
+        <div className="tutor-v77-report-list">{filteredReports.map((item) => <article key={`${item.classId}-${item.studentId}`}><div><strong>{item.fullName}</strong><small>{item.program} · {item.studentId}</small></div><span>{item.attendancePresent}/{item.attendanceTotal} <b>{item.attendancePercentage}%</b></span><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setNoteModal({ classId: item.classId, studentId: item.studentId, fullName: item.fullName, date: today, score: '', comment: '', participation: '', expAwarded: 0, expCategory: 'Participation' })}>＋ Catatan</button><button onClick={() => setReportModal(item)}>Rapor</button></div></article>)}</div>
       </section>
     </div>;
   }
@@ -2221,11 +2317,17 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
     {scheduleModal && <TutorModalV77 title="Edit jadwal kelas" onClose={() => setScheduleModal(null)} wide><form className="tutor-v77-form" onSubmit={saveSchedule}><label>Nama kelas *<input required value={scheduleModal.className} onChange={(event) => setScheduleModal({ ...scheduleModal, className: event.target.value })} /></label><div className="two"><label>Program *<input required value={scheduleModal.program} onChange={(event) => setScheduleModal({ ...scheduleModal, program: event.target.value })} /></label><label>Ruang / lokasi<input value={scheduleModal.location} onChange={(event) => setScheduleModal({ ...scheduleModal, location: event.target.value })} /></label></div><label>Hari *<div className="tutor-v77-checks">{['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'].map((day) => { const checked = scheduleModal.days.includes(day); return <button type="button" className={checked ? 'checked' : ''} key={day} onClick={() => setScheduleModal({ ...scheduleModal, days: checked ? scheduleModal.days.filter((value) => value !== day) : [...scheduleModal.days, day] })}>{checked ? '✓' : '○'} {day}</button>; })}</div></label><div className="two"><label>Jam mulai *<input type="time" required value={scheduleModal.start} onChange={(event) => setScheduleModal({ ...scheduleModal, start: event.target.value })} /></label><label>Durasi (menit)<input type="number" min="15" step="15" value={scheduleModal.duration} onChange={(event) => setScheduleModal({ ...scheduleModal, duration: Number(event.target.value) })} /></label></div><label>Murid di kelas ini<div className="tutor-v77-checks">{(classes.find((item) => item.classId === scheduleModal.classId)?.students || []).map((student) => { const checked = scheduleModal.studentIds.includes(student.studentId); return <button type="button" className={checked ? 'checked' : ''} key={student.studentId} onClick={() => setScheduleModal({ ...scheduleModal, studentIds: checked ? scheduleModal.studentIds.filter((id) => id !== student.studentId) : [...scheduleModal.studentIds, student.studentId] })}>{checked ? '✓' : '○'} {student.fullName}</button>; })}</div></label><footer><button type="button" onClick={() => setScheduleModal(null)}>Batal</button><button className="primary" disabled={saving}>Simpan</button></footer></form></TutorModalV77>}
 
-    {noteModal && <TutorModalV77 title={`Catatan perkembangan · ${noteModal.fullName}`} onClose={() => setNoteModal(null)}><form className="tutor-v77-form" onSubmit={saveNote}><div className="two"><label>Tanggal *<input type="date" required value={noteModal.date} onChange={(event) => setNoteModal({ ...noteModal, date: event.target.value })} /></label><label>Nilai / skor (opsional)<input value={noteModal.score} placeholder="mis. 85 atau B+" onChange={(event) => setNoteModal({ ...noteModal, score: event.target.value })} /></label></div><label>Catatan untuk orang tua *<textarea rows="5" required placeholder="Tuliskan perkembangan dan hal yang perlu dilatih." value={noteModal.comment} onChange={(event) => setNoteModal({ ...noteModal, comment: event.target.value })} /></label><footer><button type="button" onClick={() => setNoteModal(null)}>Batal</button><button className="primary" disabled={saving}>Simpan</button></footer></form></TutorModalV77>}
+    {noteModal && <TutorModalV77 title={`Catatan perkembangan · ${noteModal.fullName}`} onClose={() => setNoteModal(null)}><form className="tutor-v77-form" onSubmit={saveNote}><div className="two"><label>Tanggal *<input type="date" required value={noteModal.date} onChange={(event) => setNoteModal({ ...noteModal, date: event.target.value })} /></label><label>Nilai / skor (opsional)<input value={noteModal.score} placeholder="mis. 85 atau B+" onChange={(event) => setNoteModal({ ...noteModal, score: event.target.value })} /></label></div><div className="two"><label>Partisipasi<select value={noteModal.participation} onChange={(event) => setNoteModal({ ...noteModal, participation: event.target.value })}><option value="">—</option><option value="Sangat Aktif">Sangat Aktif</option><option value="Aktif">Aktif</option><option value="Cukup">Cukup</option><option value="Perlu Dukungan">Perlu Dukungan</option></select></label><label>Jenis bonus EXP<select value={noteModal.expCategory} onChange={(event) => setNoteModal({ ...noteModal, expCategory: event.target.value })}><option value="Participation">Partisipasi</option><option value="Quiz">Quiz / Tes</option><option value="Project">Project</option><option value="Achievement">Pencapaian</option></select></label></div><label>Bonus EXP (opsional)<input type="number" min="0" max="100" value={noteModal.expAwarded} onChange={(event) => setNoteModal({ ...noteModal, expAwarded: Number(event.target.value) })} /></label><label>Catatan untuk orang tua *<textarea rows="5" required placeholder="Tuliskan perkembangan dan hal yang perlu dilatih." value={noteModal.comment} onChange={(event) => setNoteModal({ ...noteModal, comment: event.target.value })} /></label><footer><button type="button" onClick={() => setNoteModal(null)}>Batal</button><button className="primary" disabled={saving}>Simpan</button></footer></form></TutorModalV77>}
 
     {reportModal && <TutorModalV77 title={`Laporan bulanan · ${reportModal.fullName}`} onClose={() => setReportModal(null)} wide printClass="tutor-parent-report-print"><div className="tutor-v77-print-paper"><header><strong>Mr One Course</strong><span>LAPORAN PERKEMBANGAN BELAJAR</span><small>{monthLabel(period)}</small></header><dl><dt>Nama</dt><dd>{reportModal.fullName}</dd><dt>Kelas sekolah</dt><dd>{reportModal.grade || '-'}</dd><dt>Program</dt><dd>{reportModal.program || '-'}</dd><dt>Kehadiran</dt><dd>{reportModal.attendancePresent} dari {reportModal.attendanceTotal} pertemuan</dd></dl><h3>Catatan perkembangan</h3>{reportModal.notes?.length ? reportModal.notes.map((note) => <p key={`${note.date}-${note.comment}`}><b>{dateLabel(note.date)}{note.score ? ` · ${note.score}` : ''}</b><br />{note.comment}</p>) : <p>Belum ada catatan perkembangan.</p>}<h3>Materi yang dipelajari</h3><table><thead><tr><th>Tanggal</th><th>Kelas</th><th>Materi</th><th>Hadir</th></tr></thead><tbody>{sessions.filter((item) => item.classId === reportModal.classId).map((item) => <tr key={item.sessionId}><td>{dateLabel(item.date)}</td><td>{item.className}</td><td>{item.material || '-'}</td><td>{item.studentStatuses?.[reportModal.studentId] === 'Present' ? '✓' : '—'}</td></tr>)}</tbody></table></div><footer className="tutor-v77-print-actions"><button onClick={() => setReportModal(null)}>Tutup</button><button className="primary" onClick={() => window.print()}>Cetak / PDF</button></footer></TutorModalV77>}
 
     {slipOpen && <TutorModalV77 title={`Slip honor · ${tutorName}`} onClose={() => setSlipOpen(false)} wide printClass="tutor-honor-slip-print"><div className="tutor-v77-print-paper"><header><strong>Mr One Course</strong><span>SLIP HONOR TUTOR</span><small>Periode {monthLabel(period)}</small></header><dl><dt>Nama tutor</dt><dd>{tutorName}</dd><dt>Mata pelajaran</dt><dd>{data?.honor?.subjects || '-'}</dd></dl><table><thead><tr><th>No</th><th>Tanggal</th><th>Kelas</th><th>Materi</th><th>Hadir</th></tr></thead><tbody>{sessions.map((item, index) => <tr key={item.sessionId}><td>{index + 1}</td><td>{dateLabel(item.date)}</td><td>{item.className}</td><td>{item.material || '-'}</td><td>{item.presentCount}</td></tr>)}</tbody></table><dl className="totals"><dt>Jumlah sesi</dt><dd>{data?.honor?.sessions || 0} sesi × {formatRupiah(data?.honor?.honorPerSession || 0)}</dd><dt>Total honor</dt><dd><strong>{formatRupiah(data?.honor?.total || 0)}</strong></dd></dl></div><footer className="tutor-v77-print-actions"><button onClick={() => setSlipOpen(false)}>Tutup</button><button className="primary" onClick={() => window.print()}>Cetak / PDF</button></footer></TutorModalV77>}
+
+    {assignmentModal && <TutorModalV77 title={`Buat tugas · ${assignmentModal.className}`} onClose={() => setAssignmentModal(null)} wide><form className="tutor-v77-form" onSubmit={saveAssignment}><div className="two"><label>Judul tugas *<input required value={assignmentModal.title} onChange={(event) => setAssignmentModal({ ...assignmentModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="200" value={assignmentModal.expReward} onChange={(event) => setAssignmentModal({ ...assignmentModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="3" value={assignmentModal.instructions} onChange={(event) => setAssignmentModal({ ...assignmentModal, instructions: event.target.value })} /></label><div className="two"><label>Tanggal diberikan *<input type="date" required value={assignmentModal.assignedDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, assignedDate: event.target.value })} /></label><label>Tenggat *<input type="date" required min={assignmentModal.assignedDate} value={assignmentModal.dueDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, dueDate: event.target.value })} /></label></div><label>Pertanyaan pilihan ganda *<textarea required rows="2" value={assignmentModal.question} onChange={(event) => setAssignmentModal({ ...assignmentModal, question: event.target.value })} /></label><div className="tutor-v80-option-grid">{assignmentModal.options.map((option, index) => <label key={index}>Pilihan {String.fromCharCode(65 + index)} *<input required value={option} onChange={(event) => { const options = [...assignmentModal.options]; options[index] = event.target.value; setAssignmentModal({ ...assignmentModal, options }); }} /></label>)}</div><label>Jawaban benar<select value={assignmentModal.correctOption} onChange={(event) => setAssignmentModal({ ...assignmentModal, correctOption: Number(event.target.value) })}>{assignmentModal.options.map((_, index) => <option key={index} value={index}>Pilihan {String.fromCharCode(65 + index)}</option>)}</select></label><p className="tutor-v80-sync-note">Setelah disimpan: tampil di akun Siswa, hasil masuk ke antrean Tutor, EXP masuk ke ledger, dan ringkasannya dapat dibaca Admin/CEO.</p><footer><button type="button" onClick={() => setAssignmentModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
+
+    {challengeModal && <TutorModalV77 title={`Buat challenge · ${challengeModal.className}`} onClose={() => setChallengeModal(null)}><form className="tutor-v77-form" onSubmit={saveChallenge}><div className="two"><label>Judul challenge *<input required value={challengeModal.title} onChange={(event) => setChallengeModal({ ...challengeModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="250" value={challengeModal.expReward} onChange={(event) => setChallengeModal({ ...challengeModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="4" value={challengeModal.instructions} onChange={(event) => setChallengeModal({ ...challengeModal, instructions: event.target.value })} /></label><div className="two"><label>Jenis jawaban<select value={challengeModal.responseType} onChange={(event) => setChallengeModal({ ...challengeModal, responseType: event.target.value })}><option value="text">Teks</option><option value="speech">Speaking</option></select></label><label>Tenggat *<input type="date" required value={challengeModal.dueDate} onChange={(event) => setChallengeModal({ ...challengeModal, dueDate: event.target.value })} /></label></div><label>Metode penilaian<select value={challengeModal.gradingMode} onChange={(event) => setChallengeModal({ ...challengeModal, gradingMode: event.target.value })}><option value="automatic">Otomatis</option><option value="review">Dinilai Tutor</option></select></label>{challengeModal.gradingMode === 'automatic' && <label>Kunci / contoh jawaban *<textarea required rows="3" value={challengeModal.answerKey} onChange={(event) => setChallengeModal({ ...challengeModal, answerKey: event.target.value })} /></label>}<p className="tutor-v80-sync-note">Challenge langsung tersedia untuk seluruh murid di kelas ini. Penilaian otomatis maupun Tutor memakai EXP Ledger yang sama.</p><footer><button type="button" onClick={() => setChallengeModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
+
+    {activityReviewModal && <TutorModalV77 title={`Nilai ${activityReviewModal.kind === 'assignment' ? 'tugas' : 'challenge'} · ${activityReviewModal.studentName}`} onClose={() => setActivityReviewModal(null)}><form className="tutor-v77-form" onSubmit={saveActivityReview}><label>Jawaban murid<textarea rows="5" readOnly value={activityReviewModal.response || '-'} /></label><div className="two"><label>Nilai 0–100<input type="number" required min="0" max="100" value={activityReviewModal.score} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, score: Number(event.target.value) })} /></label><label>EXP diberikan<input type="number" min="0" max={activityReviewModal.kind === 'assignment' ? 200 : 250} value={activityReviewModal.expAwarded} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, expAwarded: Number(event.target.value) })} /></label></div><label>Umpan balik<textarea rows="4" value={activityReviewModal.feedback} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, feedback: event.target.value })} /></label><p className="tutor-v80-sync-note">Saat disimpan, nilai tampil di akun Siswa dan EXP diperbarui tanpa menggandakan poin lama.</p><footer><button type="button" onClick={() => setActivityReviewModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Penilaian'}</button></footer></form></TutorModalV77>}
 
     {sendOpen && <TutorModalV77 title={`Info honor · ${tutorName}`} onClose={() => setSendOpen(false)}><div className="tutor-v77-form"><label>Pesan (bisa diedit)<textarea rows="9" value={sendText} onChange={(event) => setSendText(event.target.value)} /></label><label>Dikirim ke nomor WhatsApp<input value={data?.tutor?.wa || ''} readOnly placeholder="Nomor WA Tutor belum tersedia" /></label><footer><button onClick={() => copyText(sendText)}>Salin</button><button className="primary" disabled={!safeWa(data?.tutor?.wa)} onClick={() => window.open(`https://wa.me/${safeWa(data?.tutor?.wa)}?text=${encodeURIComponent(sendText)}`, '_blank', 'noopener,noreferrer')}>Buka WhatsApp</button></footer></div></TutorModalV77>}
   </main>;
@@ -2941,7 +3043,7 @@ function StudentMainMenu({ user, token, overview, overviewLoading, overviewMessa
   ];
   const monthlyAttendance = overview?.monthly?.attendance;
   const experience = overview?.experience || {};
-  const totalExp = Number(experience.totalExp || 0);
+  const totalExp = Number(overview?.gamification?.lifetimeExp ?? experience.totalExp ?? 0);
   const rankInfo = getExpRank(totalExp);
   const currentRank = rankInfo.current.name;
   const expProgress = rankInfo.progress;
@@ -3831,12 +3933,12 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
     schedule: isID ? 'Jadwal Kelas' : 'Class Schedule', attendance: isID ? 'Check-in Kehadiran' : 'Attendance Check-in', 'attendance-record': isID ? 'Riwayat Kehadiran Saya' : 'My Attendance Record', payment: 'Tuition',
     profile: isID ? 'Profil Siswa' : 'Student Profile', program: isID ? 'Program Saya' : 'My Program', assignments: isID ? 'Tugas' : 'Assignments',
     missions: isID ? 'Tugas & Tantangan' : 'Assignments & Challenges',
-    score: isID ? 'Level & Skor Akademik' : 'Academic Level & Score', journal: isID ? 'Aktivitas Pembelajaran' : 'Learning Activities', challenge: programChallenge.name, badges: isID ? 'Badge Saya' : 'My Badges', 'full-report': isID ? 'Ringkasan Akademik' : 'Academic Overview', 'monthly-report': isID ? 'Laporan Akademik Bulanan' : 'Monthly Academic Report',
+    score: isID ? 'Level EXP & Nilai Akademik' : 'EXP Level & Academic Score', journal: isID ? 'Aktivitas Pembelajaran' : 'Learning Activities', challenge: programChallenge.name, badges: isID ? 'Badge Saya' : 'My Badges', 'full-report': isID ? 'Ringkasan Akademik' : 'Academic Overview', 'monthly-report': isID ? 'Laporan Akademik Bulanan' : 'Monthly Academic Report',
   };
   const attendance = overview?.monthly?.attendance;
   const academicSummary = overview?.academicSummary || {};
   const experience = overview?.experience || {};
-  const totalExp = Number(experience.totalExp || 0);
+  const totalExp = Number(overview?.gamification?.lifetimeExp ?? experience.totalExp ?? 0);
   const rankInfo = getExpRank(totalExp);
   const expBreakdown = experience.breakdown || {};
   const rawLevelValue = String(academicSummary?.levelAndScore?.cefrLevel || overview?.program?.level || '').trim();
@@ -3886,7 +3988,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState('');
-  const [paymentForm, setPaymentForm] = useState({ paymentMethod: '', cashRecipient: 'Mr One', paymentDate: new Date().toISOString().slice(0, 10), proof: null });
+  const [paymentForm, setPaymentForm] = useState({ paymentMethod: 'BCA', cashRecipient: '', paymentDate: new Date().toISOString().slice(0, 10), proof: null });
   const monthNames = isID
     ? ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember']
     : ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -3944,16 +4046,13 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
   async function submitPaymentProof(event) {
     event.preventDefault();
     setPaymentMessage('');
-    const isCashPayment = paymentForm.paymentMethod === 'Tunai';
-    if (!paymentForm.paymentMethod || !paymentForm.paymentDate || (isCashPayment && !paymentForm.cashRecipient) || (!isCashPayment && !paymentForm.proof)) {
-      setPaymentMessage(isID
-        ? (isCashPayment ? 'Pilih penerima pembayaran tunai dan tanggal pembayaran.' : 'Pilih metode, tanggal, dan bukti pembayaran.')
-        : (isCashPayment ? 'Choose the cash recipient and payment date.' : 'Choose a method, date, and payment proof.'));
+    if (paymentForm.paymentMethod !== 'BCA' || !paymentForm.paymentDate || !paymentForm.proof) {
+      setPaymentMessage(isID ? 'Lengkapi tanggal dan bukti transfer BCA.' : 'Complete the date and BCA transfer proof.');
       return;
     }
     setPaymentSubmitting(true);
     try {
-      const method = isCashPayment ? `Tunai - ${paymentForm.cashRecipient}` : paymentForm.paymentMethod;
+      const method = 'BCA';
       const item = selectedPaymentItem || paymentItems[0];
       const itemInvoice = `MOC-${overview?.profile?.studentId || 'STUDENT'}-${item.category.replace(/\s+/g, '-').toUpperCase()}-${now.getTime()}`;
       const result = await callApi({
@@ -3962,7 +4061,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
         payment: {
           paymentMethod: method,
           paymentDate: paymentForm.paymentDate,
-          proof: isCashPayment ? null : paymentForm.proof,
+          proof: paymentForm.proof,
           senderName: overview?.profile?.fullName || '',
           invoiceNumber: itemInvoice,
           paymentCategory: item.category,
@@ -3974,6 +4073,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
       setPaymentMessage(result.message);
       setShowPaymentForm(false);
       setSelectedPaymentItem(null);
+      setPaymentForm({ paymentMethod: 'BCA', cashRecipient: '', paymentDate: new Date().toISOString().slice(0, 10), proof: null });
       await onRefreshOverview();
     } catch (error) {
       setPaymentMessage(error.message);
@@ -4279,7 +4379,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
                   <i />
                   <div className={paymentForm.paymentMethod ? 'active' : ''}><b>2</b><span>{isID ? 'Metode' : 'Method'}</span></div>
                   <i />
-                  <div className={paymentForm.paymentMethod && (paymentForm.paymentMethod === 'Tunai' || paymentForm.proof) ? 'active' : ''}><b>3</b><span>{isID ? 'Konfirmasi' : 'Confirm'}</span></div>
+                  <div className={paymentForm.paymentMethod && paymentForm.proof ? 'active' : ''}><b>3</b><span>{isID ? 'Konfirmasi' : 'Confirm'}</span></div>
                 </div>
 
                 <section className="checkout-summary-card">
@@ -4290,25 +4390,18 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
                   <div className="checkout-total-row"><span>TOTAL</span><strong>{formatRupiah(selectedPaymentItem.amount)}</strong></div>
                 </section>
 
-                <div className="payment-form-heading"><span>2</span><div><h2>{isID ? 'Pilih Metode Pembayaran' : 'Choose Payment Method'}</h2><p>{isID ? 'Tidak menggunakan virtual account dan tidak ada biaya tambahan.' : 'No virtual account and no additional fee.'}</p></div></div>
+                <div className="payment-form-heading"><span>2</span><div><h2>{isID ? 'Rekening Pembayaran Resmi' : 'Official Payment Account'}</h2><p>{isID ? 'Semua pembayaran siswa ditransfer hanya ke rekening BCA resmi berikut.' : 'All student payments are transferred only to the official BCA account below.'}</p></div></div>
                 <div className="payment-method-grid checkout-method-grid">
                   {[
-                    ['GoPay / DANA', '085249684865', 'Muhammad Mirwan Salmani', 'EW'],
-                    ['BPD Kaltimtara', '1022075914', 'Muhammad Mirwan Salmani', 'BK'],
-                    ['BCA', '1912628901', 'Muhammad Mirwan Salmani', 'BCA'],
-                    ['SeaBank', '901182598278', 'Muhammad Mirwan Salmani, S.Pd.', 'SB'],
-                    ['QRIS Mr One Course', isID ? 'Pindai QRIS' : 'Scan QRIS', 'MR ONE COURSE', 'QR'],
-                    ['Tunai', isID ? 'Bayar langsung' : 'Pay in person', isID ? 'Pilih penerima di bawah' : 'Choose the recipient below', 'CA'],
-                  ].map(([name, number, owner, badge]) => <label className={paymentForm.paymentMethod === name ? 'selected' : ''} key={name}><input type="radio" name="payment-method" value={name} checked={paymentForm.paymentMethod === name} onChange={(event) => setPaymentForm({ ...paymentForm, paymentMethod: event.target.value, proof: event.target.value === 'Tunai' ? null : paymentForm.proof })} /><i>{badge}</i><span><b>{name}</b><strong>{number}</strong><small>{name === 'Tunai' ? owner : `a.n. ${owner}`}</small></span>{number.match(/^\d+$/) && <button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button>}</label>)}
+                    ['BCA', '7815846478', 'Novita Rohmawati', 'BCA'],
+                  ].map(([name, number, owner, badge]) => <label className="selected" key={name}><input type="radio" name="payment-method" value={name} checked readOnly /><i>{badge}</i><span><b>{name} • {isID ? 'REKENING RESMI' : 'OFFICIAL ACCOUNT'}</b><strong>{number}</strong><small>{`a.n. ${owner}`}</small></span><button type="button" onClick={() => navigator.clipboard?.writeText(number)}>{isID ? 'Salin' : 'Copy'}</button></label>)}
                 </div>
-                {paymentForm.paymentMethod === 'QRIS Mr One Course' && <QrisPaymentDisplay isID={isID} />}
-                {paymentForm.paymentMethod === 'Tunai' && <div className="cash-recipient-box"><span>{isID ? 'PEMBAYARAN TUNAI DITERIMA OLEH' : 'CASH PAYMENT RECEIVED BY'}</span><div>{['Mr One', 'Miss Vita'].map((recipient) => <label className={paymentForm.cashRecipient === recipient ? 'selected' : ''} key={recipient}><input type="radio" name="cash-recipient" value={recipient} checked={paymentForm.cashRecipient === recipient} onChange={(event) => setPaymentForm({ ...paymentForm, cashRecipient: event.target.value })} /><strong>{recipient}</strong></label>)}</div></div>}
                 {paymentForm.paymentMethod && <section className="checkout-confirmation-section">
                   <div className="checkout-verification-note"><span>✓</span><div><strong>{isID ? 'Verifikasi oleh Admin Mr One Course' : 'Verified by Mr One Course Admin'}</strong><p>{isID ? 'Status akan diperbarui setelah bukti pembayaran diperiksa.' : 'The status will be updated after the payment proof is reviewed.'}</p></div></div>
-                  <div className="payment-form-heading"><span>3</span><div><h2>{paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? 'Kirim Bukti Pembayaran' : 'Submit Payment Proof')}</h2><p>{isID ? 'Pastikan nominal dan tujuan pembayaran sudah benar.' : 'Make sure the amount and payment destination are correct.'}</p></div></div>
+                  <div className="payment-form-heading"><span>3</span><div><h2>{isID ? 'Kirim Bukti Transfer BCA' : 'Submit BCA Transfer Proof'}</h2><p>{isID ? 'Pastikan nominal dan rekening tujuan sudah benar.' : 'Make sure the amount and destination account are correct.'}</p></div></div>
                   <div className="payment-input-grid payment-date-only"><label><span>{isID ? 'Tanggal pembayaran' : 'Payment date'}</span><input type="date" value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} required /></label></div>
-                  {paymentForm.paymentMethod !== 'Tunai' && <label className="payment-proof-upload"><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={choosePaymentProof} /><span>↑</span><strong>{paymentForm.proof?.fileName || (isID ? 'Pilih foto atau PDF bukti pembayaran' : 'Choose payment proof image or PDF')}</strong><small>JPG, PNG, WEBP, PDF • Maks. 4 MB</small></label>}
-                  <button className="submit-payment-proof checkout-submit-payment" type="submit" disabled={paymentSubmitting}>{paymentSubmitting ? (isID ? 'Mengirim...' : 'Submitting...') : paymentForm.paymentMethod === 'Tunai' ? (isID ? 'Konfirmasi Pembayaran Tunai' : 'Confirm Cash Payment') : (isID ? `Saya Sudah Membayar • ${formatRupiah(selectedPaymentItem.amount)}` : `I Have Paid • ${formatRupiah(selectedPaymentItem.amount)}`)}</button>
+                  <label className="payment-proof-upload"><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={choosePaymentProof} /><span>↑</span><strong>{paymentForm.proof?.fileName || (isID ? 'Pilih foto atau PDF bukti transfer BCA' : 'Choose BCA transfer proof image or PDF')}</strong><small>JPG, PNG, WEBP, PDF • Maks. 4 MB</small></label>
+                  <button className="submit-payment-proof checkout-submit-payment" type="submit" disabled={paymentSubmitting}>{paymentSubmitting ? (isID ? 'Mengirim...' : 'Submitting...') : (isID ? `Saya Sudah Transfer • ${formatRupiah(selectedPaymentItem.amount)}` : `I Have Transferred • ${formatRupiah(selectedPaymentItem.amount)}`)}</button>
                 </section>}
               </form>}
             </>
@@ -4700,7 +4793,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
           <span className="detail-label">{isID ? 'HASIL AKADEMIK & GAMIFIKASI' : 'ACADEMIC & GAMIFICATION RESULT'}</span>
           <div className="score-highlight-grid">
             <article><small>{isID ? 'LEVEL BAHASA INGGRIS' : 'ENGLISH LEVEL'}</small><strong>{cefrLevel}</strong><span>{rawCefrLevel ? (isID ? 'Berdasarkan hasil tes CEFR' : 'Based on CEFR assessment') : (isID ? 'Selesaikan penilaian untuk melihat level Anda' : 'Complete an assessment to see your level')}</span></article>
-            <article><small>{isID ? 'ACADEMIC SCORE' : 'ACADEMIC SCORE'}</small><strong>{totalExp}</strong><span>Total EXP</span></article>
+            <article><small>{isID ? 'EXP SEPANJANG WAKTU' : 'LIFETIME EXP'}</small><strong>{totalExp}</strong><span>Total EXP</span></article>
           </div>
           <div className="detail-row"><span>{isID ? 'Current Status' : 'Current Status'}</span><strong>{rankInfo.current.name}</strong></div>
           <div className="detail-row"><span>{isID ? 'Rank Berikutnya' : 'Next Rank'}</span><strong>{rankInfo.next?.name || (isID ? 'Rank tertinggi' : 'Highest rank')}</strong></div>
@@ -4972,6 +5065,110 @@ function AttendanceFollowUpPanel({ alerts = [], role, token, onRefresh, compact 
   );
 }
 
+function CeoSettingsPageV81({ token }) {
+  const emptySettings = {
+    institutionName: 'Mr One Course', leaderName: 'Novita Rohmawati, S.Pd., Gr.', institutionWhatsApp: '', city: 'Balikpapan', address: '',
+    paymentBank: 'BCA', paymentAccountNumber: '7815846478', paymentAccountName: 'Novita Rohmawati', ownerPin: '', hasOwnerPin: false,
+    tuitionReminderTemplate: '', paymentThankYouTemplate: '', monthlyReportTemplate: '', tutorHonorTemplate: ''
+  };
+  const [settings, setSettings] = useState(emptySettings);
+  const [codes, setCodes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [backupBusy, setBackupBusy] = useState(false);
+  const restoreInputRef = useRef(null);
+
+  async function loadSettings() {
+    setLoading(true);
+    try {
+      const result = await callApi({ action: 'getCeoSettings', token });
+      setSettings({ ...emptySettings, ...(result.settings || {}), ownerPin: '' });
+      setCodes(result.templateCodes || []);
+    } catch (error) { setNotice(error.message || 'Pengaturan CEO belum dapat dimuat.'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { loadSettings(); }, [token]);
+
+  function update(field, value) { setSettings((current) => ({ ...current, [field]: value })); }
+
+  async function save(event) {
+    event.preventDefault(); setSaving(true); setNotice('');
+    try {
+      const result = await callApi({ action: 'saveCeoSettings', token, settings });
+      setSettings((current) => ({ ...current, ...(result.settings || {}), ownerPin: '' }));
+      setNotice(result.message || 'Pengaturan berhasil disimpan.');
+    } catch (error) { setNotice(error.message || 'Pengaturan belum berhasil disimpan.'); }
+    finally { setSaving(false); }
+  }
+
+  async function createBackup(mode) {
+    setBackupBusy(true); setNotice('');
+    try {
+      const result = await callApi({ action: 'getCeoOperationalBackup', token });
+      const text = JSON.stringify(result.backup, null, 2);
+      if (mode === 'copy') {
+        await navigator.clipboard.writeText(text);
+        setNotice('Cadangan berhasil disalin. Simpan di tempat yang aman.');
+      } else {
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = `MOC-Cadangan-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+        setNotice(result.message || 'Cadangan berhasil diunduh.');
+      }
+    } catch (error) { setNotice(error.message || 'Cadangan belum berhasil dibuat.'); }
+    finally { setBackupBusy(false); }
+  }
+
+  async function restoreSettings(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!window.confirm('Pulihkan profil, rekening, dan template pesan dari cadangan ini? Data murid, pembayaran, absensi, dan nilai tidak akan ditimpa.')) return;
+    setBackupBusy(true); setNotice('');
+    try {
+      const backup = JSON.parse(await file.text());
+      const result = await callApi({ action: 'restoreCeoSettingsBackup', token, backup });
+      setSettings({ ...emptySettings, ...(result.settings || {}), ownerPin: '' });
+      setNotice(result.message || 'Pengaturan berhasil dipulihkan.');
+    } catch (error) { setNotice(error.message || 'Berkas cadangan tidak dapat dipulihkan.'); }
+    finally { setBackupBusy(false); }
+  }
+
+  if (loading) return <section className="ceo-settings-loading">Memuat pengaturan resmi Mr One Course...</section>;
+  return <section className="ceo-settings-page">
+    <div className="page-heading"><div><span className="eyebrow">CEO • SYSTEM SETTINGS</span><h1>Pengaturan</h1><p>Profil lembaga, rekening resmi, template pesan WhatsApp, keamanan, dan cadangan data.</p></div></div>
+    {notice && <div className="ceo-settings-notice"><span>{notice}</span><button type="button" onClick={() => setNotice('')}>×</button></div>}
+    <form onSubmit={save} className="ceo-settings-layout">
+      <section className="ceo-settings-card ceo-settings-profile">
+        <header><div><span>01</span><h2>Profil & Rekening Resmi</h2></div><small>Dipakai sebagai identitas utama Academic Suite</small></header>
+        <div className="ceo-settings-fields two"><label>Nama lembaga *<input required value={settings.institutionName} onChange={(event) => update('institutionName', event.target.value)} /></label><label>Nama pimpinan / admin<input value={settings.leaderName} onChange={(event) => update('leaderName', event.target.value)} /></label></div>
+        <div className="ceo-settings-fields two"><label>No. WhatsApp lembaga<input inputMode="tel" value={settings.institutionWhatsApp} onChange={(event) => update('institutionWhatsApp', event.target.value)} placeholder="08xxxxxxxxxx" /></label><label>Kota untuk tanda tangan<input value={settings.city} onChange={(event) => update('city', event.target.value)} /></label></div>
+        <div className="ceo-settings-fields"><label>Alamat<textarea rows="2" value={settings.address} onChange={(event) => update('address', event.target.value)} /></label></div>
+        <div className="ceo-settings-bank"><div className="ceo-bank-mark">{settings.paymentBank || 'BANK'}</div><div><small>REKENING PEMBAYARAN RESMI</small><strong>{settings.paymentAccountNumber || '—'}</strong><span>a.n. {settings.paymentAccountName || '—'}</span></div></div>
+        <div className="ceo-settings-fields three"><label>Bank resmi<input readOnly value="BCA" /></label><label>Nomor rekening resmi<input readOnly inputMode="numeric" value="7815846478" /></label><label>Nama pemilik rekening<input readOnly value="Novita Rohmawati" /></label></div>
+        <p className="ceo-settings-locked-note">Rekening pembayaran siswa dikunci sebagai rekening resmi agar tidak dapat berbeda antarhalaman.</p>
+        <div className="ceo-settings-fields"><label>PIN owner {settings.hasOwnerPin && <small>PIN sudah aktif—kosongkan jika tidak ingin mengganti</small>}<input type="password" inputMode="numeric" minLength="4" maxLength="8" value={settings.ownerPin} onChange={(event) => update('ownerPin', event.target.value.replace(/\D/g, '').slice(0, 8))} placeholder={settings.hasOwnerPin ? '••••••' : '4–8 angka'} /></label></div>
+      </section>
+
+      <aside className="ceo-settings-side">
+        <section className="ceo-settings-card"><header><div><span>02</span><h2>Cadangan Data</h2></div></header><p>Unduh cadangan operasional secara berkala. Password, PIN, dan sesi login tidak disertakan.</p><div className="ceo-backup-actions"><button type="button" className="primary" disabled={backupBusy} onClick={() => createBackup('download')}>⇩ Unduh cadangan</button><button type="button" disabled={backupBusy} onClick={() => createBackup('copy')}>Salin cadangan</button><button type="button" disabled={backupBusy} onClick={() => restoreInputRef.current?.click()}>Pulihkan pengaturan</button><input ref={restoreInputRef} hidden type="file" accept="application/json,.json" onChange={restoreSettings} /></div></section>
+        <section className="ceo-settings-card ceo-settings-safety"><header><div><span>03</span><h2>Keamanan Data</h2></div></header><ul><li>Hanya CEO yang dapat membuka dan menyimpan pengaturan ini.</li><li>PIN disimpan sebagai hash, bukan angka asli.</li><li>Pemulihan hanya mengubah profil dan template—data akademik tidak ditimpa.</li></ul></section>
+        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V82 • BCA Official Account</small></section>
+      </aside>
+
+      <section className="ceo-settings-card ceo-settings-templates">
+        <header><div><span>05</span><h2>Template Pesan WhatsApp</h2></div><small>Admin akan memakai format resmi yang ditetapkan CEO</small></header>
+        <div className="ceo-template-grid"><label>Template pengingat biaya les<textarea rows="8" value={settings.tuitionReminderTemplate} onChange={(event) => update('tuitionReminderTemplate', event.target.value)} /></label><label>Template terima kasih / lunas<textarea rows="8" value={settings.paymentThankYouTemplate} onChange={(event) => update('paymentThankYouTemplate', event.target.value)} /></label><label>Template laporan bulanan<textarea rows="9" value={settings.monthlyReportTemplate} onChange={(event) => update('monthlyReportTemplate', event.target.value)} /></label><label>Template info honor Tutor<textarea rows="9" value={settings.tutorHonorTemplate} onChange={(event) => update('tutorHonorTemplate', event.target.value)} /></label></div>
+        <div className="ceo-template-codes"><strong>Kode yang dapat digunakan:</strong><span>{codes.join(' ')}</span></div>
+      </section>
+      <footer className="ceo-settings-save"><button type="submit" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan pengaturan resmi'}</button></footer>
+    </form>
+  </section>;
+}
+
 function Dashboard({
   user,
   metrics,
@@ -5120,6 +5317,7 @@ function Dashboard({
         </div>
 
         <div className="dashboard-header-actions">
+          {user.role === 'CEO' && <button className={`ceo-header-settings ${activePage === 'ceo-settings' ? 'active' : ''}`} type="button" onClick={() => onNavigate('ceo-settings')}>⚙ Pengaturan</button>}
           <button
             className="logout-button"
             onClick={onLogout}
@@ -5308,6 +5506,8 @@ function Dashboard({
             <div><span>{ceoMonitoring?.attendanceCurrentMonth?.present || 0} hadir</span><span>dari {ceoMonitoring?.attendanceCurrentMonth?.totalRecords || 0} catatan kehadiran</span></div>
           </div>
         </section>
+      ) : activePage === 'ceo-settings' && user.role === 'CEO' ? (
+        <CeoSettingsPageV81 token={token} />
       ) : activePage === 'students' && user.role === 'Admin' ? (
         <StudentsPage
           students={students}
@@ -5345,6 +5545,7 @@ function Dashboard({
             {user.role === 'Admin' && <button type="button" onClick={() => onNavigate('alumni')}><span>◇</span><div><strong>Daftar Alumni</strong><small>Arsip alumni Mr One Course</small></div><b>→</b></button>}
             {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-classes')}><span>🏫</span><div><strong>Kelas & Perkembangan</strong><small>Tren akademik, kehadiran, tugas, dan tantangan</small></div><b>→</b></button>}
             {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-revenue')}><span>▥</span><div><strong>Business Overview</strong><small>Keuangan 3 bulan, tuition, produk, dan rekening penerima</small></div><b>→</b></button>}
+            {user.role === 'CEO' && <button type="button" onClick={() => onNavigate('ceo-settings')}><span>⚙</span><div><strong>Pengaturan</strong><small>Profil lembaga, rekening resmi, template pesan, keamanan, dan cadangan data</small></div><b>→</b></button>}
           </div>
         </section>
       ) : (
@@ -5371,13 +5572,8 @@ function Dashboard({
 
         {user.role === 'Admin' && <button className={activePage === 'contact-students' ? 'active' : ''} onClick={() => onNavigate('contact-students')}><span><WhatsAppIcon /></span>Hubungi</button>}
 
-        <button
-          className={['menu', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''}
-          onClick={() => onNavigate('menu')}
-        >
-          <span>☰</span>
-          Menu
-        </button>
+        {user.role === 'CEO' && <button className={activePage === 'ceo-settings' ? 'active' : ''} onClick={() => onNavigate('ceo-settings')}><span>⚙</span>Pengaturan</button>}
+        <button className={['menu', 'attendance-watch', 'alumni'].includes(activePage) ? 'active' : ''} onClick={() => onNavigate('menu')}><span>☰</span>Menu</button>
       </nav>
     </main>
   );
@@ -5448,10 +5644,22 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
     return digits;
   }
 
+  function fillOfficialTemplate(template, values = {}) {
+    const official = workspace?.officialSettings || {};
+    const replacements = {
+      nama: values.nama || '', ortu: values.ortu || 'Bapak/Ibu', program: values.program || '', bulan: values.bulan || workspace?.periodLabel || '',
+      jumlah: values.jumlah || '', tanggal: values.tanggal || new Date().toLocaleDateString('id-ID'),
+      rekening: `${official.paymentBank || 'BCA'} ${official.paymentAccountNumber || '7815846478'} a.n. ${official.paymentAccountName || 'Novita Rohmawati'}`,
+      lembaga: official.institutionName || 'Mr One Course', hadir: values.hadir || '', total: values.total || '', catatan: values.catatan || '', tutor: values.tutor || '', sesi: values.sesi || ''
+    };
+    return Object.keys(replacements).reduce((text, key) => text.replaceAll(`{${key}}`, replacements[key]), String(template || ''));
+  }
+
   function openWa(item, customText = '') {
     const number = normalizeWa(item.waStudent || item.waParent);
     if (!number) return setNotice(`Nomor WhatsApp ${item.studentName || item.fullName || 'murid'} belum tersedia.`);
-    const text = customText || `Halo, kami dari Mr One Course ingin mengingatkan tagihan ${item.description || 'SPP'} ${workspace?.periodLabel || ''} atas nama ${item.studentName || item.fullName}. Jumlah ${formatRupiah(item.amount || 0)}. Mohon konfirmasi setelah pembayaran dilakukan. Terima kasih.`;
+    const official = workspace?.officialSettings || {};
+    const text = customText || fillOfficialTemplate(official.tuitionReminderTemplate || `Yth. Bapak/Ibu {ortu},\n\nKami informasikan biaya les {program} ananda *{nama}* bulan *{bulan}* sebesar *{jumlah}* belum kami terima.\n\nPembayaran dapat ditransfer melalui:\n{rekening}\n\nTerima kasih. 🙏`, { nama:item.studentName || item.fullName, ortu:item.parentName, program:item.program || item.description || 'Mr One Course', jumlah:formatRupiah(item.amount || 0) });
     window.open(`https://wa.me/${number}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
   }
 
@@ -5475,7 +5683,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   async function copyUnpaidList(share = false) {
     const rows = (workspace?.billingRows || []).filter((item) => !/lunas|paid/i.test(item.status));
     const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const text = [`Daftar belum bayar ${workspace?.periodLabel || ''} - Mr One Course`, ...rows.map((item, index) => `${index + 1}. ${item.studentName} - ${formatRupiah(item.amount)}`), '', `Total: ${formatRupiah(total)}`].join('\n');
+    const text = [`Daftar belum bayar ${workspace?.periodLabel || ''} - ${workspace?.officialSettings?.institutionName || 'Mr One Course'}`, ...rows.map((item, index) => `${index + 1}. ${item.studentName} - ${formatRupiah(item.amount)}`), '', `Total: ${formatRupiah(total)}`].join('\n');
     try {
       await navigator.clipboard.writeText(text);
       setNotice('Daftar belum bayar berhasil disalin.');
@@ -5561,7 +5769,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
       {page === 'reports' && <section className="admin-v76-page">
         <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • PARENT REPORT</span><h1>Laporan ke Orang Tua</h1><p>Kehadiran + catatan perkembangan, siap dikirim via WhatsApp atau dicetak.</p></div></div>
         <div className="admin-v76-toolbar report"><select value={period} onChange={(event) => setPeriod(event.target.value)}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /></div>
-        <div className="admin-v76-table-card"><div className="admin-v76-table report-table"><div className="head"><span>Murid</span><span>Kehadiran</span><span>Catatan Terakhir</span><span>Aksi</span></div>{filteredReports.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{item.program || item.studentId}</small></div><b>{item.attendancePresent}/{item.attendanceTotal} <em className={item.attendancePercentage >= 75 ? 'paid' : ''}>{item.attendancePercentage}%</em></b><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setSelectedReport(item)}>Rapor</button><button className="wa" onClick={() => openWa(item, `Halo Bapak/Ibu, berikut ringkasan perkembangan ${item.fullName} untuk ${workspace.periodLabel}. Kehadiran: ${item.attendancePresent}/${item.attendanceTotal} (${item.attendancePercentage}%). Catatan tutor: ${item.latestNote || 'Belum ada catatan tambahan.'}. Terima kasih atas dukungannya.`)}><WhatsAppIcon /> Kirim</button></div></article>)}</div></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-table report-table"><div className="head"><span>Murid</span><span>Kehadiran</span><span>Catatan Terakhir</span><span>Aksi</span></div>{filteredReports.map((item) => <article key={item.studentId}><div><strong>{item.fullName}</strong><small>{item.program || item.studentId}</small></div><b>{item.attendancePresent}/{item.attendanceTotal} <em className={item.attendancePercentage >= 75 ? 'paid' : ''}>{item.attendancePercentage}%</em></b><p>{item.latestNote || 'Belum ada catatan perkembangan.'}</p><div className="actions"><button onClick={() => setSelectedReport(item)}>Rapor</button><button className="wa" onClick={() => openWa(item, fillOfficialTemplate(workspace?.officialSettings?.monthlyReportTemplate || `Yth. Bapak/Ibu {ortu},\nberikut laporan belajar ananda *{nama}* bulan *{bulan}*:\n\n📅 Kehadiran: {hadir} dari {total} pertemuan\n📝 Catatan:\n{catatan}\n\nTerima kasih atas kepercayaannya. 🙏\n— {lembaga}`, { nama:item.fullName, program:item.program, hadir:item.attendancePresent, total:item.attendanceTotal, catatan:item.latestNote || 'Belum ada catatan tambahan.' }))}><WhatsAppIcon /> Kirim</button></div></article>)}</div></div>
       </section>}
     </>}
 
@@ -6393,7 +6601,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
       <div><span>{paymentJobCopy[activePaymentJob]?.eyebrow}</span><h2>{paymentJobCopy[activePaymentJob]?.title}</h2><p>{paymentJobCopy[activePaymentJob]?.description}</p></div>
     </div>}
 
-    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div></form>}
+    {activePaymentJob === 'bulk' && showBulkPayment && <form className="bulk-tuition-payment-form" onSubmit={submitBulkTuitionPayment}><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Pembayaran les akan dicatat sesuai periode tagihan masing-masing.</small></div><label><span>Tanggal pembayaran</span><input type="date" value={bulkPayment.paymentDate} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentDate: event.target.value })} required /></label><label><span>Metode</span><select value={bulkPayment.paymentMethod} onChange={(event) => setBulkPayment({ ...bulkPayment, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option></select></label><div className="bulk-payment-actions"><button type="submit" disabled={bulkSubmitting || !selectedTuitionIds.length}>{bulkSubmitting ? 'Menyimpan...' : 'Simpan Pembayaran'}</button></div></form>}
 
     {activePaymentJob === 'invoice' && <div className="invoice-selection-action"><div><strong>{selectedTuitionIds.length} siswa dipilih</strong><small>Satu siswa akan dibuatkan satu lembar invoice. Pilihan tetap tersimpan setelah invoice dibuka.</small></div><button type="button" disabled={!selectedTuitionIds.length} onClick={createInvoice}>▤ Buat {selectedTuitionIds.length || ''} Invoice</button></div>}
 
@@ -6410,7 +6618,7 @@ function PaymentConfirmationsPage({ confirmations, payments, loading, message, o
         <label><span>Jenis Pembayaran</span><select value={historical.paymentCategory} onChange={(event) => chooseCategory(event.target.value)}><option value="Book Package">Paket 4 Buku</option><option value="ID Card">ID Card</option><option value="Tuition">Les Bulanan</option></select></label>
         <label><span>Nominal</span><input type="number" value={historical.amount} onChange={(event) => setHistorical({ ...historical, amount: Number(event.target.value) })} required /></label>
         <label><span>Tanggal Pembayaran</span><input type="date" value={historical.paymentDate} onChange={(event) => setHistorical({ ...historical, paymentDate: event.target.value })} required /></label>
-        <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option><option>BPD Kaltimtara</option><option>SeaBank</option></select></label>
+        <label><span>Metode</span><select value={historical.paymentMethod} onChange={(event) => setHistorical({ ...historical, paymentMethod: event.target.value })}><option>Tunai</option><option>QRIS / GoPay / DANA</option><option>BCA</option></select></label>
         {historical.paymentCategory === 'Tuition' && <label><span>Periode Les</span><input type="month" value={historical.period} onChange={(event) => setHistorical({ ...historical, period: event.target.value })} required /></label>}
         {historical.paymentCategory !== 'Tuition' && <label><span>Status Penyerahan</span><select value={historical.fulfillmentStatus} onChange={(event) => setHistorical({ ...historical, fulfillmentStatus: event.target.value })}><option>Sedang Disiapkan</option><option>Siap Diambil</option><option>Sudah Diterima Siswa</option></select></label>}
         <label className="wide historical-proof-upload"><span>Bukti Pembayaran</span><input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={chooseHistoricalProof} required /><small>{historical.proof?.fileName || 'Upload JPG, PNG, WEBP, atau PDF • Maks. 4 MB'}</small></label>
