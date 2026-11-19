@@ -1,8 +1,10 @@
 /**
  * MR ONE COURSE ACADEMIC SUITE
- * V18 AUTH CLEAN — Login semua role + aktivasi siswa
+ * V23 API SYNC — Login semua role + aktivasi siswa + pembayaran massal
  * ID akun singkat tetap: TUT1, TUT2, ADM1, CEO
  */
+
+const API_VERSION = 'V87-ADMIN-TUTOR-CEO-REFINEMENT-2026-11-19';
 
 const SHEET_NAMES = {
   STUDENTS: 'Data Siswa',
@@ -51,6 +53,128 @@ function testConnection() {
 }
 
 /**
+ * PREVIEW — memeriksa referensi kelas yang perlu disamakan dengan Data Siswa.
+ * Fungsi ini tidak mengubah data.
+ */
+function previewStudentClassReferenceSync() {
+  return syncStudentClassReferencesFromDataSiswa_(true);
+}
+
+/**
+ * APPLY — menyamakan Class ID, Class Name, Program, dan Schedule pada seluruh
+ * sheet berbasis Student ID dengan pembagian terbaru di Data Siswa.
+ * Jalankan previewStudentClassReferenceSync() terlebih dahulu.
+ */
+function applyStudentClassReferenceSync() {
+  return syncStudentClassReferencesFromDataSiswa_(false);
+}
+
+function syncStudentClassReferencesFromDataSiswa_(dryRun) {
+  const spreadsheet = getDatabase_();
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  const scheduleSheet = spreadsheet.getSheetByName('Master Jadwal');
+  if (!studentSheet || !scheduleSheet) {
+    throw new Error('Sheet Data Siswa atau Master Jadwal tidak ditemukan.');
+  }
+
+  const normalize = function (value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  };
+  const findColumn = function (headers, aliases) {
+    const normalizedHeaders = headers.map(normalize);
+    for (let index = 0; index < aliases.length; index++) {
+      const found = normalizedHeaders.indexOf(normalize(aliases[index]));
+      if (found >= 0) return found;
+    }
+    return -1;
+  };
+
+  const scheduleRows = getSheetObjects_(scheduleSheet);
+  const classDetails = {};
+  scheduleRows.forEach(function (row) {
+    const classId = String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim();
+    if (!classId) return;
+    if (!classDetails[classId]) {
+      classDetails[classId] = {
+        classId: classId,
+        className: String(getObjectValue_(row, ['Nama kelas', 'Nama Kelas', 'Class Name', 'Class']) || classId).trim(),
+        program: String(getObjectValue_(row, ['Program']) || '').trim(),
+        schedules: []
+      };
+    }
+    const day = String(getObjectValue_(row, ['Hari', 'Day']) || '').trim();
+    const start = formatStudentTime_(getObjectValue_(row, ['Mulai', 'Start']));
+    const end = formatStudentTime_(getObjectValue_(row, ['Selesai', 'End']));
+    const label = [day, start && end ? start + '–' + end : (start || end)].filter(Boolean).join(' ');
+    if (label && classDetails[classId].schedules.indexOf(label) < 0) {
+      classDetails[classId].schedules.push(label);
+    }
+  });
+
+  const students = getSheetObjects_(studentSheet);
+  const studentMap = {};
+  students.forEach(function (row) {
+    const studentId = String(getObjectValue_(row, ['Student ID', 'Student Id']) || '').trim();
+    const classId = String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim();
+    if (!studentId || !classId) return;
+    const master = classDetails[classId] || {};
+    studentMap[studentId] = {
+      classId: classId,
+      className: master.className || String(getObjectValue_(row, ['Class Name', 'Nama Kelas', 'Class']) || classId).trim(),
+      program: String(getObjectValue_(row, ['Program']) || master.program || '').trim(),
+      schedule: String(getObjectValue_(row, ['Schedule', 'Jadwal']) || (master.schedules || []).join(' • ')).trim()
+    };
+  });
+
+  const result = {
+    success: true,
+    mode: dryRun ? 'PREVIEW' : 'APPLY',
+    studentsMapped: Object.keys(studentMap).length,
+    totalChanges: 0,
+    sheets: []
+  };
+
+  spreadsheet.getSheets().forEach(function (sheet) {
+    if (sheet.getName() === 'Data Siswa' || sheet.getName() === 'Master Jadwal') return;
+    const lastRow = sheet.getLastRow();
+    const lastColumn = sheet.getLastColumn();
+    if (lastRow < 2 || lastColumn < 1) return;
+
+    const headers = sheet.getRange(1, 1, 1, lastColumn).getDisplayValues()[0];
+    const studentIdColumn = findColumn(headers, ['Student ID', 'Student Id']);
+    if (studentIdColumn < 0) return;
+
+    const targetColumns = [
+      { index: findColumn(headers, ['Class ID', 'Class Id']), key: 'classId' },
+      { index: findColumn(headers, ['Class Name', 'Nama Kelas', 'Class']), key: 'className' },
+      { index: findColumn(headers, ['Program']), key: 'program' },
+      { index: findColumn(headers, ['Schedule', 'Jadwal']), key: 'schedule' }
+    ].filter(function (item) { return item.index >= 0; });
+    if (!targetColumns.length) return;
+
+    const values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getDisplayValues();
+    let sheetChanges = 0;
+    values.forEach(function (row, rowIndex) {
+      const studentId = String(row[studentIdColumn] || '').trim();
+      const source = studentMap[studentId];
+      if (!source) return;
+      targetColumns.forEach(function (target) {
+        const desired = String(source[target.key] || '').trim();
+        const current = String(row[target.index] || '').trim();
+        if (!desired || current === desired) return;
+        sheetChanges++;
+        result.totalChanges++;
+        if (!dryRun) sheet.getRange(rowIndex + 2, target.index + 1).setValue(desired);
+      });
+    });
+    if (sheetChanges > 0) result.sheets.push({ sheetName: sheet.getName(), changes: sheetChanges });
+  });
+
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
  * Endpoint awal API.
  */
 function doGet(e) {
@@ -61,6 +185,7 @@ function doGet(e) {
     return createJsonResponse_({
       success: true,
       message: 'Mr One Course Academic Suite API is connected.',
+      apiVersion: API_VERSION,
       data: result
     });
   } catch (error) {
@@ -645,6 +770,148 @@ function hashPassword_(password, salt) {
 }
 
 /**
+ * Mengatur ulang akun Admin ADM1 ke password yang telah disepakati.
+ * Jalankan satu kali dari editor Apps Script, lalu hapus fungsi ini setelah
+ * login berhasil agar password tidak tersimpan sebagai teks biasa di kode.
+ */
+function setAdminPasswordSita2026() {
+  const spreadsheet = getDatabase_();
+  const sheet = spreadsheet.getSheetByName('Users');
+
+  if (!sheet) {
+    throw new Error('Sheet Users tidak ditemukan.');
+  }
+
+  ensureHeaders_(sheet, [
+    'User ID',
+    'Username',
+    'Password Hash',
+    'Password Salt',
+    'Role',
+    'Related ID',
+    'Full Name',
+    'Status',
+    'Must Change Password',
+    'Created At',
+    'Last Login'
+  ]);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const headers = sheet
+      .getRange(1, 1, 1, sheet.getLastColumn())
+      .getDisplayValues()[0]
+      .map(function (header) {
+        return String(header || '').trim();
+      });
+
+    const users = getSheetObjects_(sheet);
+    const adminRows = users.filter(function (user) {
+      return String(user.Username || '').trim().toUpperCase() === 'ADM1';
+    });
+    const newPassword = 'Sita2026';
+    const newSalt = Utilities.getUuid();
+    const values = {
+      'User ID': 'ADM1',
+      'Username': 'ADM1',
+      'Password Hash': hashPassword_(newPassword, newSalt),
+      'Password Salt': newSalt,
+      'Role': 'Admin',
+      'Related ID': 'ADM1',
+      'Full Name': 'Miss Sita',
+      'Status': 'Aktif',
+      'Must Change Password': 'Tidak',
+      'Last Login': ''
+    };
+
+    if (adminRows.length) {
+      const primaryAdmin = adminRows[0];
+
+      Object.keys(values).forEach(function (header) {
+        const column = headers.indexOf(header) + 1;
+        if (column > 0) {
+          sheet.getRange(primaryAdmin._rowNumber, column).setValue(values[header]);
+        }
+      });
+
+      adminRows.slice(1).forEach(function (duplicate) {
+        const statusColumn = headers.indexOf('Status') + 1;
+        if (statusColumn > 0) {
+          sheet.getRange(duplicate._rowNumber, statusColumn).setValue('Tidak Aktif');
+        }
+      });
+    } else {
+      values['Created At'] = new Date();
+      appendObjectToSheet_(sheet, values);
+    }
+
+    clearFailedLogin_('ADM1');
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      message: 'Password ADM1 berhasil diatur. Silakan login menggunakan ADM1.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * V87 — Mengatur password resmi akun CEO.
+ * Jalankan satu kali dari dropdown Apps Script setelah menyalin Code.gs.
+ */
+function setCeoPasswordOneVita0730() {
+  const spreadsheet = getDatabase_();
+  const sheet = spreadsheet.getSheetByName('Users');
+  if (!sheet) throw new Error('Sheet Users tidak ditemukan.');
+
+  ensureHeaders_(sheet, [
+    'User ID', 'Username', 'Password Hash', 'Password Salt', 'Role',
+    'Related ID', 'Full Name', 'Status', 'Must Change Password',
+    'Created At', 'Last Login'
+  ]);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const users = getSheetObjects_(sheet);
+    const ceoRows = users.filter(function (user) {
+      return String(getObjectValue_(user, ['Username', 'User ID']) || '').trim().toUpperCase() === 'CEO';
+    });
+    const newSalt = Utilities.getUuid();
+    const newPassword = 'OneVita0730';
+    const values = {
+      'User ID': 'CEO', 'Username': 'CEO',
+      'Password Hash': hashPassword_(newPassword, newSalt),
+      'Password Salt': newSalt, 'Role': 'CEO', 'Related ID': 'CEO',
+      'Full Name': ceoRows.length ? String(getObjectValue_(ceoRows[0], ['Full Name']) || 'Mr Mirwan') : 'Mr Mirwan',
+      'Status': 'Aktif', 'Must Change Password': 'Tidak', 'Last Login': ''
+    };
+    if (ceoRows.length) {
+      updateMappedRow_(sheet, ceoRows[0]._rowNumber, values);
+      ceoRows.slice(1).forEach(function (duplicate) {
+        updateMappedRow_(sheet, duplicate._rowNumber, { 'Status': 'Tidak Aktif' });
+      });
+    } else {
+      values['Created At'] = new Date();
+      appendObjectToSheet_(sheet, values);
+    }
+    clearFailedLogin_('CEO');
+    SpreadsheetApp.flush();
+    return {
+      success: true,
+      username: 'CEO',
+      message: 'Password CEO berhasil diatur. Silakan Sign In dengan username CEO.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Mereset password CEO dan Admin yang sempat terlihat.
  */
 function resetManagementPasswords() {
@@ -759,6 +1026,14 @@ function doPost(e) {
         result = validateSession_(request.token);
         break;
 
+      case 'getApiStatus':
+        result = {
+          success: true,
+          apiVersion: API_VERSION,
+          message: 'API Mr One Course siap digunakan.'
+        };
+        break;
+
       case 'logout':
         result = logoutUser_(request.token);
         break;
@@ -767,12 +1042,86 @@ function doPost(e) {
         result = getDashboardData_(request.token);
         break;
 
+      case 'getAdminWorkspace':
+        result = getAdminWorkspaceV76_(request.token, request.period);
+        break;
+
+      case 'adminCreateSppInvoice':
+        result = adminCreateSppInvoiceV76_(request.token, request.invoice);
+        break;
+
+      case 'adminGenerateMonthlySppInvoices':
+        result = adminGenerateMonthlySppInvoicesV76_(request.token, request.period);
+        break;
+
+      case 'adminMarkSppInvoicePaid':
+        result = adminMarkSppInvoicePaidV76_(request.token, request.invoiceId);
+        break;
+
+      case 'adminSaveStudentProfile':
+        result = adminSaveStudentProfileV76_(request.token, request.student);
+        break;
+
+      case 'adminDeleteStudentRecord':
+        result = adminDeleteStudentRecordV76_(request.token, request.studentId);
+        break;
+
+      case 'adminSaveClassSchedule':
+        result = adminSaveClassScheduleV76_(request.token, request.classData);
+        break;
+
+      case 'adminDeleteClassSchedule':
+        result = adminDeleteClassScheduleV76_(request.token, request.classId);
+        break;
+
+      case 'previewAdminClassMerge':
+        result = previewAdminClassMergeV83_(request.token, request.sourceClassId, request.targetClassId);
+        break;
+
+      case 'adminMergeClasses':
+        result = adminMergeClassesV83_(request.token, request.sourceClassId, request.targetClassId);
+        break;
+
+      case 'adminStandardizePrograms':
+        result = adminStandardizeProgramsV84_(request.token);
+        break;
+
+      case 'sendCeoAdminMessage':
+        result = sendCeoAdminMessage_(request.token, request.message);
+        break;
+
+      case 'getCeoSettings':
+        result = getCeoSettings_(request.token);
+        break;
+
+      case 'saveCeoSettings':
+        result = saveCeoSettings_(request.token, request.settings);
+        break;
+
+      case 'getCeoOperationalBackup':
+        result = getCeoOperationalBackup_(request.token);
+        break;
+
+      case 'restoreCeoSettingsBackup':
+        result = restoreCeoSettingsBackup_(request.token, request.backup);
+        break;
+
       case 'getStudents':
         result = getStudents_(request.token, request);
         break;
 
+      case 'getAdminContactStudents':
+        result = getAdminContactStudents_(request.token);
+        break;
+
       case 'getAdminStudentDetail':
         result = getAdminStudentDetail_(request.token, request.studentId);
+        break;
+      case 'getLegacyStudentActivationGuideWhatsApp':
+        result = getLegacyStudentActivationGuideWhatsApp_(request.token, request.studentId);
+        break;
+      case 'markLegacyStudentActivationGuideSent':
+        result = markLegacyStudentActivationGuideSent_(request.token, request.studentId);
         break;
 
       case 'getRegistrationSchedules':
@@ -787,6 +1136,46 @@ function doPost(e) {
         result = activateStudentAccount_(request.activation);
         break;
 
+      case 'adminSetStudentAccount':
+        result = adminSetStudentAccount_(request.token, request.studentId, request.password);
+        break;
+
+      case 'adminResetStudentPassword':
+        result = adminResetStudentPassword_(request.token, request.studentId);
+        break;
+
+      case 'adminSetStudentLeave':
+        result = adminSetStudentLeave_(request.token, request.studentId, request.leave);
+        break;
+
+      case 'adminReactivateStudent':
+        result = adminReactivateStudent_(request.token, request.studentId);
+        break;
+
+      case 'adminStopStudent':
+        result = adminStopStudent_(request.token, request.studentId, request.note);
+        break;
+
+      case 'adminArchiveStudentToAlumni':
+        result = adminArchiveStudentToAlumni_(request.token, request.studentId);
+        break;
+
+      case 'getAlumniStudents':
+        result = getAlumniStudents_(request.token);
+        break;
+
+      case 'adminMarkLegacyJanJunPaid':
+        result = adminMarkLegacyJanJunPaid_(request.token);
+        break;
+
+      case 'adminResetAllStudentAccounts':
+        result = adminResetAllStudentAccounts_(request.token, request.password);
+        break;
+
+      case 'changeOwnPassword':
+        result = changeOwnPassword_(request.token, request.currentPassword, request.newPassword);
+        break;
+
       case 'getStudentRegistrations':
         result = getStudentRegistrations_(request.token);
         break;
@@ -798,6 +1187,12 @@ function doPost(e) {
       case 'getRegistrationWhatsAppPayload':
         result = getRegistrationWhatsAppPayload_(request.token, request.registrationId);
         break;
+      case 'getStudentAppGuideWhatsApp':
+        result = getStudentAppGuideWhatsApp_(request.token, request.registrationId);
+        break;
+      case 'markStudentAppGuideSent':
+        result = markStudentAppGuideSent_(request.token, request.registrationId);
+        break;
 
       case 'approveStudentRegistration':
         result = approveStudentRegistration_(request.token, request.approval);
@@ -808,6 +1203,10 @@ function doPost(e) {
           registrationId: request.registrationId,
           note: request.note || ''
         });
+        break;
+
+      case 'cancelStudentRegistrationVerification':
+        result = cancelStudentRegistrationVerification_(request.token, request.registrationId);
         break;
 
       case 'getStudentOverview':
@@ -841,6 +1240,10 @@ function doPost(e) {
         result = addHistoricalPayment_(request.token, request.payment);
         break;
 
+      case 'adminBulkMarkTuitionPaid':
+        result = adminBulkMarkTuitionPaid_(request.token, request.payment);
+        break;
+
       case 'updatePaymentFulfillment':
         result = updatePaymentFulfillment_(request.token, request.fulfillment);
         break;
@@ -856,6 +1259,26 @@ function doPost(e) {
 
       case 'getTutorDashboard':
         result = getTutorDashboard_(request.token);
+        break;
+
+      case 'getTutorOperations':
+        result = getTutorOperationsV77_(request.token, request.period);
+        break;
+
+      case 'saveTutorOperationsSession':
+        result = saveTutorOperationsSessionV77_(request.token, request.sessionData);
+        break;
+
+      case 'deleteTutorOperationsSession':
+        result = deleteTutorOperationsSessionV77_(request.token, request.classId, request.date);
+        break;
+
+      case 'saveTutorScheduleEdit':
+        result = saveTutorScheduleEditV77_(request.token, request.classData);
+        break;
+
+      case 'saveTutorParentNote':
+        result = saveTutorParentNoteV77_(request.token, request.note);
         break;
 
       case 'saveTutorJournal':
@@ -910,7 +1333,10 @@ function doPost(e) {
         break;
 
       default:
-        throw new Error('Action API tidak dikenali.');
+        throw new Error(
+          'Action API tidak dikenali: ' + (action || '(kosong)') +
+          ' — ' + API_VERSION
+        );
     }
 
     return createJsonResponse_(result);
@@ -1023,16 +1449,372 @@ function getStudentActivationNameError_(storedName, submittedName) {
 }
 
 function activateStudentAccount_(activation) {
-  activation = activation || {};
-  const studentId = String(activation.studentId || '').trim().toUpperCase();
-  const fullName = String(activation.fullName || '').trim();
-  const dob = String(activation.dob || '').trim();
-  const phone = String(activation.phone || '').replace(/\D/g, '');
-  const username = studentId;
-  const password = String(activation.password || '');
+  throw new Error(
+    'Aktivasi mandiri siswa sudah dinonaktifkan. Akun siswa sekarang disiapkan langsung oleh Manajemen Mr One Course. Gunakan Student ID dan password awal yang diberikan Admin untuk Sign In.'
+  );
+}
 
-  if (!studentId || !fullName) throw new Error('Lengkapi Student ID dan nama lengkap.');
-  validateNewPassword_(password);
+/**
+ * V84 — Admin Controlled Student Accounts
+ * Admin/CEO dapat membuat atau mereset akun siswa tanpa menyentuh data akademik.
+ */
+function requireStudentAccountAdmin_(token) {
+  const session = getSession_(token);
+  const role = String(session.role || '').trim().toLowerCase();
+  if (role !== 'admin' && role !== 'ceo') {
+    throw new Error('Hanya Admin atau CEO yang dapat mengelola akun siswa.');
+  }
+  return session;
+}
+
+function isActiveStudentAccountStatus_(value) {
+  const status = String(value == null ? '' : value).trim().toLowerCase();
+  return status === '' || status === 'aktif' || status === 'active';
+}
+
+/**
+ * V97 — Student Leave / CUTI
+ * Penanda CUTI disimpan pada kolom bulan Data Siswa, misalnya:
+ *   CUTI — Izin keluarga
+ * Nilai CUTI bukan pembayaran dan tidak membuat baris Data Pembayaran.
+ */
+function isStudentLeaveValue_(value) {
+  return /^cuti(?:\b|\s|[-—:])/i.test(String(value == null ? '' : value).trim());
+}
+
+function extractStudentLeaveNote_(value) {
+  const text = String(value == null ? '' : value).trim();
+  if (!isStudentLeaveValue_(text)) return '';
+  return text.replace(/^cuti\s*(?:[-—:]\s*)?/i, '').trim();
+}
+
+function getStudentMonthHeaderForPeriod_(period) {
+  const match = String(period || '').trim().match(/^(\d{4})-(\d{2})$/);
+  if (!match) throw new Error('Periode cuti tidak valid. Gunakan format tahun-bulan.');
+  const monthIndex = Number(match[2]) - 1;
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  if (monthIndex < 0 || monthIndex > 11) throw new Error('Bulan cuti tidak valid.');
+  return { year: Number(match[1]), monthIndex: monthIndex, monthName: monthNames[monthIndex] };
+}
+
+function setStudentOperationalStatus_(studentSheet, rowNumber, status) {
+  let headers = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header || '').trim(); });
+
+  let statusColumn = headers.indexOf('Student Status') + 1;
+  if (statusColumn < 1) statusColumn = headers.indexOf('Status') + 1;
+
+  if (statusColumn < 1) {
+    statusColumn = studentSheet.getLastColumn() + 1;
+    studentSheet.getRange(1, statusColumn).setValue('Student Status');
+    headers.push('Student Status');
+  }
+
+  studentSheet.getRange(rowNumber, statusColumn).setValue(status);
+
+  let updatedColumn = headers.indexOf('Last Updated') + 1;
+  if (updatedColumn > 0) studentSheet.getRange(rowNumber, updatedColumn).setValue(new Date());
+}
+
+function adminSetStudentLeave_(token, studentId, leave) {
+  const session = requireStudentAccountAdmin_(token);
+  const id = String(studentId || '').trim().toUpperCase();
+  const payload = leave || {};
+  const period = String(payload.period || '').trim();
+  const note = String(payload.note || '').trim().replace(/\s+/g, ' ').slice(0, 180);
+  const month = getStudentMonthHeaderForPeriod_(period);
+  const timezone = 'Asia/Makassar';
+  const currentPeriod = Utilities.formatDate(new Date(), timezone, 'yyyy-MM');
+  const currentYear = Number(Utilities.formatDate(new Date(), timezone, 'yyyy'));
+  if (month.year !== currentYear) throw new Error('Fitur CUTI saat ini digunakan untuk tahun berjalan ' + currentYear + '.');
+  if (period > currentPeriod) throw new Error('Bulan cuti belum berjalan. Pilih bulan berjalan atau bulan sebelumnya.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const student = getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+  if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+  const headers = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header || '').trim(); });
+  const monthColumn = headers.indexOf(month.monthName) + 1;
+  if (monthColumn < 1) throw new Error('Kolom ' + month.monthName + ' tidak ditemukan pada Data Siswa.');
+
+  const existing = String(studentSheet.getRange(student._rowNumber, monthColumn).getDisplayValue() || '').trim();
+  if (/lunas|paid|verified/i.test(existing) && !isStudentLeaveValue_(existing)) {
+    throw new Error('Periode ini sudah tercatat Lunas. Status CUTI tidak diterapkan agar data pembayaran tetap aman.');
+  }
+
+  const leaveValue = note ? 'CUTI — ' + note : 'CUTI';
+  studentSheet.getRange(student._rowNumber, monthColumn).setValue(leaveValue);
+  const isCurrentLeave = period === currentPeriod;
+  if (isCurrentLeave) setStudentOperationalStatus_(studentSheet, student._rowNumber, 'Non Aktif');
+
+  return {
+    success: true,
+    studentId: id,
+    period: period,
+    leaveValue: leaveValue,
+    message: isCurrentLeave
+      ? 'Cuti ' + period + ' berhasil disimpan. Bulan tersebut tidak akan ditagihkan dan status siswa menjadi Non Aktif.'
+      : 'Cuti ' + period + ' berhasil disimpan sebagai riwayat. Bulan tersebut tidak akan ditagihkan dan status siswa saat ini tidak diubah.',
+    updatedBy: session.fullName || session.username || 'Admin'
+  };
+}
+
+/**
+ * V98 — Permanent student stop status.
+ * This does not delete historical academic/payment data. It only changes the
+ * operational student status and disables the student's sign-in account.
+ */
+function adminStopStudent_(token, studentId, note) {
+  const session = requireStudentAccountAdmin_(token);
+  const id = String(studentId || '').trim().toUpperCase();
+  const stopNote = String(note || '').trim().replace(/\s+/g, ' ').slice(0, 180);
+  if (!id) throw new Error('Student ID wajib diisi.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const student = getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+  if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+  const currentStatus = String(getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif').trim().toLowerCase();
+  if (currentStatus === 'berhenti les' || currentStatus === 'berhenti' || currentStatus === 'stopped') {
+    throw new Error('Siswa ini sudah berstatus Berhenti Les.');
+  }
+
+  const now = new Date();
+  const timezone = 'Asia/Makassar';
+  ensureHeaders_(studentSheet, ['Stop Date', 'Stop Note', 'Stop Confirmed By', 'Stop Confirmed At', 'Account Status', 'Last Updated']);
+  setStudentOperationalStatus_(studentSheet, student._rowNumber, 'Berhenti Les');
+  updateMappedRow_(studentSheet, student._rowNumber, {
+    'Stop Date': Utilities.formatDate(now, timezone, 'yyyy-MM-dd'),
+    'Stop Note': stopNote,
+    'Stop Confirmed By': session.fullName || session.username || 'Admin',
+    'Stop Confirmed At': now,
+    'Account Status': 'Non Aktif',
+    'Last Updated': now
+  });
+
+  const usersSheet = database.getSheetByName('Users');
+  if (usersSheet) {
+    const user = findStudentUserRow_(usersSheet, id);
+    if (user) {
+      updateMappedRow_(usersSheet, user._rowNumber, { 'Status': 'Non Aktif' });
+    }
+  }
+
+  clearFailedLogin_(id);
+  setStudentSessionReset_(id);
+
+  return {
+    success: true,
+    studentId: id,
+    status: 'Berhenti Les',
+    message: 'Status ' + id + ' berhasil dikonfirmasi sebagai Berhenti Les. Siswa tidak akan masuk tagihan aktif berikutnya dan data lama tetap tersimpan.',
+    updatedBy: session.fullName || session.username || 'Admin'
+  };
+}
+
+function ensureArchiveSheetFromSource_(database, sourceSheet, archiveName, extraHeaders) {
+  if (!sourceSheet) return null;
+  const sourceHeaders = sourceSheet
+    .getRange(1, 1, 1, sourceSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header).trim(); });
+  const requiredHeaders = sourceHeaders.concat(extraHeaders || []).filter(function (header, index, array) {
+    return header && array.indexOf(header) === index;
+  });
+  let archiveSheet = database.getSheetByName(archiveName);
+  if (!archiveSheet) {
+    archiveSheet = database.insertSheet(archiveName);
+    archiveSheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+    archiveSheet.setFrozenRows(1);
+  } else {
+    ensureHeaders_(archiveSheet, requiredHeaders);
+  }
+  return archiveSheet;
+}
+
+function rowValuesAsMap_(sheet, rowNumber) {
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+    return String(header).trim();
+  });
+  const values = sheet.getRange(rowNumber, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const result = {};
+  headers.forEach(function (header, index) {
+    if (header) result[header] = values[index];
+  });
+  return result;
+}
+
+
+/**
+ * V102 — Archive approved registration data separately before releasing a Student ID.
+ * The active registration row is removed so a reused Student ID cannot inherit the
+ * previous student's registration state. Uploaded file IDs stay in the alumni archive
+ * as historical references; they are no longer read by the active registration flow.
+ */
+function archiveStudentRegistrationRows_(database, studentId, registrationId, alumniId, now, archivedBy) {
+  const id = String(studentId || '').trim().toUpperCase();
+  const regId = String(registrationId || '').trim();
+  const registrationSheet = database.getSheetByName('Student Registrations');
+  if (!registrationSheet || registrationSheet.getLastRow() < 2) return 0;
+
+  const rows = getSheetObjects_(registrationSheet).filter(function (item) {
+    const rowStudentId = String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase();
+    const rowRegistrationId = String(getObjectValue_(item, ['Registration ID']) || '').trim();
+    return (id && rowStudentId === id) || (regId && rowRegistrationId === regId);
+  });
+  if (!rows.length) return 0;
+
+  const archiveSheet = ensureArchiveSheetFromSource_(database, registrationSheet, 'Data Pendaftaran Alumni', [
+    'Alumni ID', 'Original Student ID', 'Original Registration ID', 'Archived At', 'Archived By'
+  ]);
+
+  rows.forEach(function (row) {
+    const archived = rowValuesAsMap_(registrationSheet, row._rowNumber);
+    archived['Alumni ID'] = alumniId;
+    archived['Original Student ID'] = id;
+    archived['Original Registration ID'] = String(getObjectValue_(row, ['Registration ID']) || regId || '');
+    archived['Archived At'] = now;
+    archived['Archived By'] = archivedBy;
+    appendMappedRow_(archiveSheet, archived);
+  });
+
+  rows.map(function (row) { return row._rowNumber; })
+    .sort(function (a, b) { return b - a; })
+    .forEach(function (rowNumber) { registrationSheet.deleteRow(rowNumber); });
+
+  return rows.length;
+}
+
+/**
+ * V102 — Verify that an old Student ID is clean in every ACTIVE operational sheet
+ * before its Data Siswa row is released for reuse. Archive sheets are intentionally
+ * ignored because they are historical and are never used as active student data.
+ */
+function findResidualStudentData_(database, studentId, registrationId) {
+  const id = String(studentId || '').trim().toUpperCase();
+  const regId = String(registrationId || '').trim();
+  const residuals = [];
+  const skipNames = {
+    'Data Siswa': true,
+    'Data Alumni': true,
+    'Data Pembayaran Alumni': true,
+    'Data Pendaftaran Alumni': true,
+    'Users Alumni': true,
+    'Master Jadwal': true,
+    'Master_Jadwal': true,
+    'Settings': true,
+    'Gamification Config': true
+  };
+
+  database.getSheets().forEach(function (sheet) {
+    const sheetName = sheet.getName();
+    if (skipNames[sheetName] || /^Alumni\s*-\s*/i.test(sheetName)) return;
+    if (sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+      return String(header).trim();
+    });
+    const studentIdColumn = headers.findIndex(function (header) {
+      return normalizeHeader_(header) === normalizeHeader_('Student ID');
+    });
+    const registrationIdColumn = headers.findIndex(function (header) {
+      return normalizeHeader_(header) === normalizeHeader_('Registration ID');
+    });
+    if (studentIdColumn < 0 && registrationIdColumn < 0) return;
+
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getDisplayValues();
+    let count = 0;
+    values.forEach(function (row) {
+      const rowStudentId = studentIdColumn >= 0 ? String(row[studentIdColumn] || '').trim().toUpperCase() : '';
+      const rowRegistrationId = registrationIdColumn >= 0 ? String(row[registrationIdColumn] || '').trim() : '';
+      if ((id && rowStudentId === id) || (regId && rowRegistrationId === regId)) count += 1;
+    });
+    if (count > 0) residuals.push(sheetName + ' (' + count + ')');
+  });
+
+  return residuals;
+}
+
+function archiveStudentLinkedRows_(database, studentId, alumniId, now, archivedBy) {
+  const id = String(studentId || '').trim().toUpperCase();
+  const skipNames = {
+    'Data Siswa': true,
+    'Data Pembayaran': true,
+    'Data Alumni': true,
+    'Data Pembayaran Alumni': true,
+    'Data Pendaftaran Alumni': true,
+    'Users': true,
+    'Users Alumni': true,
+    'Master Jadwal': true,
+    'Settings': true
+  };
+  const moved = {};
+
+  database.getSheets().forEach(function (sheet) {
+    const sheetName = sheet.getName();
+    if (skipNames[sheetName] || /^Alumni\s*-\s*/i.test(sheetName)) return;
+    if (sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+      return String(header).trim();
+    });
+    const studentIdColumn = headers.findIndex(function (header) {
+      return normalizeHeader_(header) === normalizeHeader_('Student ID');
+    });
+    if (studentIdColumn < 0) return;
+
+    const rows = getSheetObjects_(sheet).filter(function (item) {
+      return String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase() === id;
+    });
+    if (!rows.length) return;
+
+    const archiveNameBase = 'Alumni - ' + sheetName;
+    const archiveName = archiveNameBase.length > 95 ? archiveNameBase.slice(0, 95) : archiveNameBase;
+    const archiveSheet = ensureArchiveSheetFromSource_(database, sheet, archiveName, [
+      'Alumni ID', 'Original Student ID', 'Archived At', 'Archived By'
+    ]);
+
+    rows.forEach(function (row) {
+      const archived = rowValuesAsMap_(sheet, row._rowNumber);
+      archived['Alumni ID'] = alumniId;
+      archived['Original Student ID'] = id;
+      archived['Archived At'] = now;
+      archived['Archived By'] = archivedBy;
+      appendMappedRow_(archiveSheet, archived);
+    });
+    rows.map(function (row) { return row._rowNumber; }).sort(function (a, b) { return b - a; }).forEach(function (rowNumber) {
+      sheet.deleteRow(rowNumber);
+    });
+    moved[sheetName] = rows.length;
+  });
+
+  return moved;
+}
+
+/**
+ * V101 — Final archive for students who have already been confirmed Berhenti Les.
+ * Student record is copied to Data Alumni, payment rows are moved to Data Pembayaran Alumni,
+ * then the active Data Siswa row is cleared while keeping the Student ID as a reusable reserved slot.
+ */
+function adminArchiveStudentToAlumni_(token, studentId) {
+  const session = requireStudentAccountAdmin_(token);
+  const id = String(studentId || '').trim().toUpperCase();
+  if (!id) throw new Error('Student ID wajib diisi.');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -1042,67 +1824,656 @@ function activateStudentAccount_(activation) {
     if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
 
     const student = getSheetObjects_(studentSheet).find(function (item) {
-      return String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase() === studentId;
+      return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
     });
-    if (!student) throw new Error('Student ID tidak ditemukan pada Data Siswa. Silakan hubungi Admin Mr One Course.');
+    if (!student) throw new Error('Data siswa tidak ditemukan.');
 
-    const storedName = String(getObjectValue_(student, ['Full Name', 'Nama']) || '').trim();
-    const nameError = getStudentActivationNameError_(storedName, fullName);
-    if (nameError) throw new Error(nameError);
+    const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+    if (!fullName) throw new Error('Slot Student ID ini sudah kosong dan siap digunakan untuk siswa baru.');
 
-    const usersSheet = getOrCreateStudentUsersSheet_();
-    const existing = getSheetObjects_(usersSheet).some(function (item) {
-      return String(getObjectValue_(item, ['Related ID', 'Username']) || '').trim().toUpperCase() === studentId ||
-             String(getObjectValue_(item, ['Username']) || '').trim().toUpperCase() === studentId;
-    });
-    if (existing) throw new Error('Akun untuk Student ID ini sudah aktif. Silakan langsung Sign In atau gunakan Lupa Password.');
+    const status = String(getObjectValue_(student, ['Student Status', 'Status']) || '').trim().toLowerCase();
+    if (status !== 'berhenti les' && status !== 'berhenti' && status !== 'stopped') {
+      throw new Error('Siswa harus dikonfirmasi Berhenti Les terlebih dahulu sebelum dipindahkan ke Alumni.');
+    }
 
-    const salt = Utilities.getUuid();
-    appendMappedRow_(usersSheet, {
-      'User ID': studentId,
-      'Username': username,
-      'Password Hash': hashPassword_(password, salt),
-      'Role': 'Siswa',
-      'Related ID': studentId,
-      'Full Name': storedName,
-      'Status': 'Aktif',
-      'Created At': new Date(),
-      'Last Login': '',
-      'Password Salt': salt,
-      'Must Change Password': 'Tidak',
-      'WhatsApp': phone
-    });
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    const now = new Date();
+    const timezone = 'Asia/Makassar';
+    const alumniId = 'ALM-' + id + '-' + Utilities.formatDate(now, timezone, 'yyyyMMddHHmmss');
+    const archivedBy = session.fullName || session.username || 'Admin';
+    const archiveNote = String(getObjectValue_(student, ['Stop Note']) || '').trim();
 
-    ensureHeaders_(studentSheet, ['DOB', 'WA Account', 'Account Status', 'Last Updated']);
-    const headers = studentSheet.getRange(1, 1, 1, studentSheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+    // 1) Simpan snapshot Data Siswa ke Data Alumni terlebih dahulu.
+    const alumniSheet = ensureArchiveSheetFromSource_(database, studentSheet, 'Data Alumni', [
+      'Alumni ID', 'Original Student ID', 'Archived At', 'Archived By', 'Archive Note'
+    ]);
+    const studentArchive = rowValuesAsMap_(studentSheet, student._rowNumber);
+    studentArchive['Alumni ID'] = alumniId;
+    studentArchive['Original Student ID'] = id;
+    studentArchive['Archived At'] = now;
+    studentArchive['Archived By'] = archivedBy;
+    studentArchive['Archive Note'] = archiveNote;
+    appendMappedRow_(alumniSheet, studentArchive);
+
+    // 2) Pindahkan data pendaftaran aktif ke arsip pendaftaran alumni.
+    const movedRegistrations = archiveStudentRegistrationRows_(
+      database,
+      id,
+      registrationId,
+      alumniId,
+      now,
+      archivedBy
+    );
+
+    // 3) Pindahkan seluruh transaksi pembayaran dari tabel aktif ke arsip alumni.
+    let movedPayments = 0;
+    const paymentSheet = database.getSheetByName('Data Pembayaran');
+    if (paymentSheet && paymentSheet.getLastRow() > 1) {
+      const paymentArchiveSheet = ensureArchiveSheetFromSource_(database, paymentSheet, 'Data Pembayaran Alumni', [
+        'Alumni ID', 'Original Student ID', 'Archived At', 'Archived By'
+      ]);
+      const paymentRows = getSheetObjects_(paymentSheet).filter(function (item) {
+        return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+      });
+
+      paymentRows.forEach(function (payment) {
+        const archivedPayment = rowValuesAsMap_(paymentSheet, payment._rowNumber);
+        archivedPayment['Alumni ID'] = alumniId;
+        archivedPayment['Original Student ID'] = id;
+        archivedPayment['Archived At'] = now;
+        archivedPayment['Archived By'] = archivedBy;
+        appendMappedRow_(paymentArchiveSheet, archivedPayment);
+      });
+      movedPayments = paymentRows.length;
+      paymentRows
+        .map(function (item) { return item._rowNumber; })
+        .sort(function (a, b) { return b - a; })
+        .forEach(function (rowNumber) { paymentSheet.deleteRow(rowNumber); });
+    }
+
+    // 4) Arsipkan lalu hapus seluruh jejak operasional berdasarkan Student ID.
+    // Ini mencakup Absensi, Payment Confirmations, Student Notes, Assessment Scores,
+    // Assignment Submissions, Challenge Results, Learning Activity Reads, EXP Ledger,
+    // Monthly Gamification, Badge Progress, Attendance Follow-up, dan sheet lain
+    // yang mempunyai kolom Student ID.
+    const movedLinkedRecords = archiveStudentLinkedRows_(database, id, alumniId, now, archivedBy);
+
+    // 5) Hapus akun aktif siswa dan putuskan seluruh session lama.
+    const usersSheet = database.getSheetByName('Users');
+    if (usersSheet) {
+      const user = findStudentUserRow_(usersSheet, id);
+      if (user) usersSheet.deleteRow(user._rowNumber);
+    }
+    clearFailedLogin_(id);
+    setStudentSessionReset_(id);
+
+    // 6) PENGAMAN PENTING: Student ID belum boleh dilepas jika masih ada data aktif
+    // dengan ID/Registration ID lama di sheet operasional mana pun.
+    const residuals = findResidualStudentData_(database, id, registrationId);
+    if (residuals.length) {
+      throw new Error(
+        'Pembersihan Student ID ' + id + ' belum lengkap. Masih ditemukan data aktif pada: ' +
+        residuals.join(', ') + '. Slot ID belum dilepas agar data siswa baru tidak tercampur.'
+      );
+    }
+
+    // 7) Setelah semua data aktif benar-benar bersih, kosongkan SELURUH Data Siswa
+    // dan sisakan hanya Student ID sebagai slot reusable untuk pendaftaran siswa baru.
+    const idHeaders = studentSheet.getRange(1, 1, 1, studentSheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
       return String(header).trim();
     });
+    const studentIdColumn = idHeaders.findIndex(function (header) {
+      return normalizeHeader_(header) === normalizeHeader_('Student ID');
+    }) + 1;
+    if (studentIdColumn < 1) throw new Error('Kolom Student ID tidak ditemukan.');
 
-    if (dob && headers.indexOf('DOB') > -1) {
-      studentSheet.getRange(student._rowNumber, headers.indexOf('DOB') + 1).setValue(dob);
-    }
-    if (phone && headers.indexOf('WA Account') > -1) {
-      studentSheet.getRange(student._rowNumber, headers.indexOf('WA Account') + 1).setValue(phone);
-    }
-    if (headers.indexOf('Account Status') > -1) {
-      studentSheet.getRange(student._rowNumber, headers.indexOf('Account Status') + 1).setValue('Aktif');
-    }
-    if (headers.indexOf('Last Updated') > -1) {
-      studentSheet.getRange(student._rowNumber, headers.indexOf('Last Updated') + 1).setValue(new Date());
+    studentSheet.getRange(student._rowNumber, 1, 1, studentSheet.getLastColumn()).clearContent();
+    studentSheet.getRange(student._rowNumber, studentIdColumn).setValue(id);
+    SpreadsheetApp.flush();
+
+    // Verifikasi terakhir: nama dan Registration ID pada slot Data Siswa wajib kosong.
+    const releasedRow = rowValuesAsMap_(studentSheet, student._rowNumber);
+    const releasedName = String(getObjectValue_(releasedRow, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+    const releasedRegistration = String(getObjectValue_(releasedRow, ['Registration ID']) || '').trim();
+    if (releasedName || releasedRegistration) {
+      throw new Error('Slot Student ID belum berhasil dikosongkan sepenuhnya. Silakan ulangi proses arsip sebelum memakai ID ini untuk siswa baru.');
     }
 
-    clearFailedLogin_(username);
     return {
       success: true,
-      username: username,
-      fullName: storedName,
-      whatsapp: phone,
-      dob: dob,
-      message: 'Akun berhasil diaktifkan. Username Anda adalah ' + username + '.'
+      alumniId: alumniId,
+      studentId: id,
+      fullName: fullName,
+      movedRegistrations: movedRegistrations,
+      movedPayments: movedPayments,
+      movedLinkedRecords: movedLinkedRecords,
+      cleanSlot: true,
+      message:
+        fullName + ' berhasil dipindahkan ke Daftar Alumni Mr One Course. ' +
+        'Data pendaftaran, pembayaran, absensi, aktivitas belajar, assignment/challenge, EXP, badge, dan progress game telah dikeluarkan dari data aktif. ' +
+        'Slot Student ID ' + id + ' sekarang bersih dan siap digunakan untuk siswa baru.'
     };
   } finally {
     lock.releaseLock();
   }
+}
+
+function getAlumniStudents_(token) {
+  const session = getSession_(token);
+  if (session.role !== 'CEO' && session.role !== 'Admin') {
+    throw new Error('Anda tidak memiliki akses ke Daftar Alumni.');
+  }
+
+  const database = getDatabase_();
+  const sheet = database.getSheetByName('Data Alumni');
+  if (!sheet || sheet.getLastRow() < 2) return { success: true, alumni: [] };
+
+  const timezone = 'Asia/Makassar';
+  const alumni = getSheetObjects_(sheet).map(function (item) {
+    const archivedValue = getObjectValue_(item, ['Archived At']);
+    let archivedAt = '';
+    if (archivedValue instanceof Date && !isNaN(archivedValue.getTime())) {
+      archivedAt = Utilities.formatDate(archivedValue, timezone, 'dd MMM yyyy');
+    } else {
+      archivedAt = String(archivedValue || '');
+    }
+    return {
+      alumniId: String(getObjectValue_(item, ['Alumni ID']) || ''),
+      studentId: String(getObjectValue_(item, ['Original Student ID', 'Student ID', 'ID']) || ''),
+      fullName: String(getObjectValue_(item, ['Full Name', 'Nama', 'Student Name']) || ''),
+      program: String(getObjectValue_(item, ['Program']) || ''),
+      classId: String(getObjectValue_(item, ['Class ID', 'Class Id']) || ''),
+      className: String(getObjectValue_(item, ['Class', 'Nama Kelas', 'Kelas']) || ''),
+      stopNote: String(getObjectValue_(item, ['Stop Note', 'Archive Note']) || ''),
+      archivedAt: archivedAt
+    };
+  }).sort(function (a, b) {
+    return String(a.fullName || '').localeCompare(String(b.fullName || ''), 'id');
+  });
+
+  return { success: true, alumni: alumni };
+}
+
+function adminReactivateStudent_(token, studentId) {
+  const session = requireStudentAccountAdmin_(token);
+  const id = String(studentId || '').trim().toUpperCase();
+  if (!id) throw new Error('Student ID wajib diisi.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const student = getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+  if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+  setStudentOperationalStatus_(studentSheet, student._rowNumber, 'Aktif');
+
+  const usersSheet = database.getSheetByName('Users');
+  let hasStudentAccount = false;
+  if (usersSheet) {
+    const user = findStudentUserRow_(usersSheet, id);
+    if (user) {
+      updateMappedRow_(usersSheet, user._rowNumber, { 'Status': 'Aktif' });
+      hasStudentAccount = true;
+    }
+  }
+  writeStudentAccountStatus_(studentSheet, student, hasStudentAccount ? 'Aktif' : String(getObjectValue_(student, ['Account Status']) || ''));
+  clearFailedLogin_(id);
+  setStudentSessionReset_(id);
+
+  return {
+    success: true,
+    studentId: id,
+    message: 'Siswa berhasil diaktifkan kembali. Riwayat CUTI/berhenti sebelumnya tetap tersimpan dan tagihan berikutnya kembali mengikuti status Aktif.',
+    updatedBy: session.fullName || session.username || 'Admin'
+  };
+}
+
+/**
+ * V99 — Historical tuition baseline for legacy students.
+ * Marks January–June 2026 as Lunas only for legacy students that were not
+ * created through the new registration flow. Existing CUTI markers are kept.
+ * July and later months are never changed by this migration.
+ */
+function adminMarkLegacyJanJunPaid_(token) {
+  const session = requireStudentAccountAdmin_(token);
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const historicalMonths = ['January', 'February', 'March', 'April', 'May', 'June'];
+  ensureHeaders_(studentSheet, historicalMonths);
+
+  const students = getSheetObjects_(studentSheet);
+  const cutoff = new Date('2026-08-01T00:00:00+08:00');
+  const legacyRows = {};
+  let skippedNew = 0;
+  let skippedEmpty = 0;
+
+  students.forEach(function (student) {
+    const studentId = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim();
+    const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+    if (!studentId || !fullName) {
+      skippedEmpty += 1;
+      return;
+    }
+
+    // Siswa dari form pendaftaran baru selalu memiliki Registration ID.
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    const joinDate = normalizeStudentDate_(getObjectValue_(student, ['Join Date', 'Tanggal Bergabung', 'Registered At']));
+    const isNewRegistration = Boolean(registrationId) || (joinDate && joinDate.getTime() >= cutoff.getTime());
+    if (isNewRegistration) {
+      skippedNew += 1;
+      return;
+    }
+
+    legacyRows[student._rowNumber] = true;
+  });
+
+  const headers = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header || '').trim(); });
+  const lastRow = studentSheet.getLastRow();
+  let cellsChanged = 0;
+  let leaveCellsPreserved = 0;
+
+  if (lastRow >= 2) {
+    historicalMonths.forEach(function (monthName) {
+      const column = headers.indexOf(monthName) + 1;
+      if (column < 1) return;
+      const range = studentSheet.getRange(2, column, lastRow - 1, 1);
+      const values = range.getValues();
+
+      values.forEach(function (row, index) {
+        const sheetRow = index + 2;
+        if (!legacyRows[sheetRow]) return;
+        const existing = String(row[0] == null ? '' : row[0]).trim();
+        if (isStudentLeaveValue_(existing)) {
+          leaveCellsPreserved += 1;
+          return;
+        }
+        if (!/^lunas$/i.test(existing)) {
+          row[0] = 'Lunas';
+          cellsChanged += 1;
+        }
+      });
+
+      range.setValues(values);
+    });
+  }
+
+  return {
+    success: true,
+    legacyStudents: Object.keys(legacyRows).length,
+    cellsChanged: cellsChanged,
+    leaveCellsPreserved: leaveCellsPreserved,
+    skippedNewStudents: skippedNew,
+    skippedEmptyRows: skippedEmpty,
+    message:
+      'Riwayat Januari–Juni 2026 siswa lama sudah ditetapkan Lunas. ' +
+      'Siswa pendaftaran baru tidak diubah, status CUTI tetap dipertahankan, dan Juli–Desember tidak disentuh.',
+    updatedBy: session.fullName || session.username || 'Admin'
+  };
+}
+
+function getStudentAccountSource_(database, studentId) {
+  const id = String(studentId || '').trim().toUpperCase();
+  if (!id) throw new Error('Student ID wajib diisi.');
+
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const student = getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+
+  if (!student) throw new Error('Student ID tidak ditemukan pada Data Siswa.');
+  if (!isActiveStudentAccountStatus_(getObjectValue_(student, ['Student Status', 'Status']))) {
+    throw new Error('Akun hanya dapat diaktifkan untuk siswa berstatus Aktif.');
+  }
+
+  return { id: id, student: student, studentSheet: studentSheet };
+}
+
+function findStudentUserRow_(usersSheet, studentId) {
+  const id = String(studentId || '').trim().toUpperCase();
+  return getSheetObjects_(usersSheet).find(function (item) {
+    const username = String(getObjectValue_(item, ['Username']) || '').trim().toUpperCase();
+    const relatedId = String(getObjectValue_(item, ['Related ID']) || '').trim().toUpperCase();
+    const userId = String(getObjectValue_(item, ['User ID']) || '').trim().toUpperCase();
+    const role = String(getObjectValue_(item, ['Role']) || '').trim().toLowerCase();
+    return (username === id || relatedId === id || userId === id) && role === 'siswa';
+  }) || null;
+}
+
+function ensureStudentIdNotUsedByNonStudent_(usersSheet, studentId) {
+  const id = String(studentId || '').trim().toUpperCase();
+  const collision = getSheetObjects_(usersSheet).find(function (item) {
+    const username = String(getObjectValue_(item, ['Username']) || '').trim().toUpperCase();
+    const relatedId = String(getObjectValue_(item, ['Related ID']) || '').trim().toUpperCase();
+    const userId = String(getObjectValue_(item, ['User ID']) || '').trim().toUpperCase();
+    const role = String(getObjectValue_(item, ['Role']) || '').trim().toLowerCase();
+    return (username === id || relatedId === id || userId === id) && role !== 'siswa';
+  });
+  if (collision) {
+    throw new Error('Student ID ' + id + ' sudah digunakan oleh akun non-siswa. Hubungi pengelola sistem.');
+  }
+}
+
+function writeStudentAccountStatus_(studentSheet, student, status) {
+  ensureHeaders_(studentSheet, ['Account Status', 'Last Updated']);
+  const headers = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header).trim(); });
+
+  const accountColumn = headers.indexOf('Account Status') + 1;
+  const updatedColumn = headers.indexOf('Last Updated') + 1;
+  if (accountColumn > 0) studentSheet.getRange(student._rowNumber, accountColumn).setValue(status);
+  if (updatedColumn > 0) studentSheet.getRange(student._rowNumber, updatedColumn).setValue(new Date());
+}
+
+function upsertStudentAccount_(usersSheet, student, studentId, password) {
+  validateNewPassword_(password);
+  ensureStudentIdNotUsedByNonStudent_(usersSheet, studentId);
+
+  const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+  const whatsapp = String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WA Account', 'WhatsApp']) || '').trim();
+  const existing = findStudentUserRow_(usersSheet, studentId);
+  const salt = Utilities.getUuid();
+  const values = {
+    'User ID': studentId,
+    'Username': studentId,
+    'Password Hash': hashPassword_(String(password), salt),
+    'Role': 'Siswa',
+    'Related ID': studentId,
+    'Full Name': fullName,
+    'Status': 'Aktif',
+    'Last Login': '',
+    'Password Salt': salt,
+    'Must Change Password': 'Tidak',
+    'WhatsApp': whatsapp
+  };
+
+  if (existing) {
+    const headers = usersSheet
+      .getRange(1, 1, 1, usersSheet.getLastColumn())
+      .getDisplayValues()[0]
+      .map(function (header) { return String(header).trim(); });
+
+    Object.keys(values).forEach(function (header) {
+      const column = headers.indexOf(header) + 1;
+      if (column > 0) usersSheet.getRange(existing._rowNumber, column).setValue(values[header]);
+    });
+    return 'reset';
+  }
+
+  values['Created At'] = new Date();
+  appendMappedRow_(usersSheet, values);
+  return 'created';
+}
+
+function setStudentSessionReset_(studentId) {
+  const id = sanitizeKey_(String(studentId || '').trim().toUpperCase());
+  if (!id) return;
+  PropertiesService.getScriptProperties().setProperty('STUDENT_AUTH_RESET_' + id, new Date().toISOString());
+}
+
+function setAllStudentSessionReset_() {
+  PropertiesService.getScriptProperties().setProperty('STUDENT_AUTH_RESET_ALL', new Date().toISOString());
+}
+
+function adminSetStudentAccount_(token, studentId, password) {
+  requireStudentAccountAdmin_(token);
+  validateNewPassword_(password);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const database = getDatabase_();
+    const source = getStudentAccountSource_(database, studentId);
+    const usersSheet = getOrCreateStudentUsersSheet_();
+    const mode = upsertStudentAccount_(usersSheet, source.student, source.id, password);
+
+    writeStudentAccountStatus_(source.studentSheet, source.student, 'Aktif');
+    clearFailedLogin_(source.id);
+    setStudentSessionReset_(source.id);
+
+    return {
+      success: true,
+      studentId: source.id,
+      mode: mode,
+      message: mode === 'created'
+        ? 'Akun ' + source.id + ' berhasil diaktifkan. Siswa dapat langsung Sign In menggunakan Student ID dan password awal.'
+        : 'Password akun ' + source.id + ' berhasil direset dan akun tetap aktif. Session lama siswa sudah dibatalkan.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * V94 — Dedicated student password reset.
+ * Password is intentionally fixed to Siswa123 so the Admin UI does not need
+ * to send or expose a custom reset password.
+ */
+function adminResetStudentPassword_(token, studentId) {
+  return adminSetStudentAccount_(token, studentId, 'Siswa123');
+}
+
+function adminResetAllStudentAccounts_(token, password) {
+  const session = getSession_(token);
+  const role = String(session.role || '').trim().toLowerCase();
+  if (role !== 'ceo') {
+    throw new Error('Hanya CEO yang dapat mengaktifkan atau mereset semua akun siswa sekaligus.');
+  }
+  validateNewPassword_(password);
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const database = getDatabase_();
+    const studentSheet = database.getSheetByName('Data Siswa');
+    if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+    ensureHeaders_(studentSheet, ['Account Status', 'Last Updated']);
+    const seenActiveStudentIds = {};
+    const students = getSheetObjects_(studentSheet).filter(function (student) {
+      const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+      const name = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+      if (!id || !name || !isActiveStudentAccountStatus_(getObjectValue_(student, ['Student Status', 'Status']))) return false;
+      if (seenActiveStudentIds[id]) return false;
+      seenActiveStudentIds[id] = true;
+      return true;
+    });
+    if (!students.length) throw new Error('Tidak ada siswa aktif yang dapat diproses.');
+
+    const usersSheet = getOrCreateStudentUsersSheet_();
+    const userLastColumn = usersSheet.getLastColumn();
+    const userHeaders = usersSheet
+      .getRange(1, 1, 1, userLastColumn)
+      .getDisplayValues()[0]
+      .map(function (header) { return String(header).trim(); });
+    const userData = usersSheet.getLastRow() >= 2
+      ? usersSheet.getRange(2, 1, usersSheet.getLastRow() - 1, userLastColumn).getValues()
+      : [];
+
+    function userColumn_(header) {
+      return userHeaders.indexOf(header);
+    }
+
+    const requiredUserHeaders = [
+      'User ID', 'Username', 'Password Hash', 'Role', 'Related ID', 'Full Name',
+      'Status', 'Created At', 'Last Login', 'Password Salt', 'Must Change Password', 'WhatsApp'
+    ];
+    requiredUserHeaders.forEach(function (header) {
+      if (userColumn_(header) < 0) throw new Error('Kolom "' + header + '" tidak ditemukan pada sheet Users.');
+    });
+
+    const studentUserRows = {};
+    const nonStudentIds = {};
+    userData.forEach(function (row, rowIndex) {
+      const role = String(row[userColumn_('Role')] || '').trim().toLowerCase();
+      const ids = [
+        row[userColumn_('Username')],
+        row[userColumn_('Related ID')],
+        row[userColumn_('User ID')]
+      ].map(function (value) { return String(value || '').trim().toUpperCase(); }).filter(Boolean);
+
+      ids.forEach(function (id) {
+        if (role === 'siswa') {
+          if (!studentUserRows[id]) studentUserRows[id] = [];
+          if (studentUserRows[id].indexOf(rowIndex) === -1) studentUserRows[id].push(rowIndex);
+        } else {
+          nonStudentIds[id] = true;
+        }
+      });
+    });
+
+    const appendRows = [];
+    let created = 0;
+    let reset = 0;
+    const skipped = [];
+    const now = new Date();
+
+    students.forEach(function (student) {
+      const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+      if (nonStudentIds[id]) {
+        skipped.push(id + ': Student ID digunakan oleh akun non-siswa');
+        return;
+      }
+
+      const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+      const whatsapp = String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WA Account', 'WhatsApp']) || '').trim();
+      const salt = Utilities.getUuid();
+      const hash = hashPassword_(String(password), salt);
+      const rowValues = {
+        'User ID': id,
+        'Username': id,
+        'Password Hash': hash,
+        'Role': 'Siswa',
+        'Related ID': id,
+        'Full Name': fullName,
+        'Status': 'Aktif',
+        'Last Login': '',
+        'Password Salt': salt,
+        'Must Change Password': 'Tidak',
+        'WhatsApp': whatsapp
+      };
+
+      const existingRows = studentUserRows[id] || [];
+      if (existingRows.length) {
+        existingRows.forEach(function (rowIndex) {
+          Object.keys(rowValues).forEach(function (header) {
+            userData[rowIndex][userColumn_(header)] = rowValues[header];
+          });
+        });
+        reset += 1;
+      } else {
+        rowValues['Created At'] = now;
+        appendRows.push(userHeaders.map(function (header) {
+          return Object.prototype.hasOwnProperty.call(rowValues, header) ? rowValues[header] : '';
+        }));
+        created += 1;
+      }
+
+      clearFailedLogin_(id);
+    });
+
+    if (userData.length) {
+      usersSheet.getRange(2, 1, userData.length, userLastColumn).setValues(userData);
+    }
+    if (appendRows.length) {
+      usersSheet.getRange(usersSheet.getLastRow() + 1, 1, appendRows.length, userLastColumn).setValues(appendRows);
+    }
+
+    const studentHeaders = studentSheet
+      .getRange(1, 1, 1, studentSheet.getLastColumn())
+      .getDisplayValues()[0]
+      .map(function (header) { return String(header).trim(); });
+    const accountColumn = studentHeaders.indexOf('Account Status') + 1;
+    const updatedColumn = studentHeaders.indexOf('Last Updated') + 1;
+    const studentRowCount = Math.max(0, studentSheet.getLastRow() - 1);
+
+    if (studentRowCount > 0) {
+      const accountValues = studentSheet.getRange(2, accountColumn, studentRowCount, 1).getValues();
+      const updatedValues = studentSheet.getRange(2, updatedColumn, studentRowCount, 1).getValues();
+      students.forEach(function (student) {
+        const zeroBased = Number(student._rowNumber) - 2;
+        if (zeroBased >= 0 && zeroBased < studentRowCount) {
+          accountValues[zeroBased][0] = 'Aktif';
+          updatedValues[zeroBased][0] = now;
+        }
+      });
+      studentSheet.getRange(2, accountColumn, studentRowCount, 1).setValues(accountValues);
+      studentSheet.getRange(2, updatedColumn, studentRowCount, 1).setValues(updatedValues);
+    }
+
+    setAllStudentSessionReset_();
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      totalActiveStudents: students.length,
+      created: created,
+      reset: reset,
+      skipped: skipped,
+      message:
+        'Selesai. ' + created + ' akun baru dibuat dan ' + reset + ' akun lama direset.' +
+        (skipped.length ? ' ' + skipped.length + ' akun dilewati karena perlu diperiksa.' : '') +
+        ' Semua session siswa lama sudah dibatalkan. CEO, Admin, dan Tutor tidak diubah.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function changeOwnPassword_(token, currentPassword, newPassword) {
+  const session = getSession_(token);
+  const role = String(session.role || '').trim().toLowerCase();
+  if (role !== 'siswa') throw new Error('Fitur ini hanya tersedia untuk akun siswa.');
+
+  validateNewPassword_(newPassword);
+  if (String(currentPassword || '') === String(newPassword || '')) {
+    throw new Error('Password baru harus berbeda dari password saat ini.');
+  }
+
+  const database = getDatabase_();
+  const usersSheet = database.getSheetByName('Users');
+  if (!usersSheet) throw new Error('Sheet Users tidak ditemukan.');
+
+  const user = findUserByUsername_(usersSheet, session.username);
+  if (!user || String(user.Role || '').trim().toLowerCase() !== 'siswa') {
+    throw new Error('Akun siswa tidak ditemukan.');
+  }
+
+  if (!verifyPassword_(String(currentPassword || ''), user['Password Salt'], user['Password Hash'])) {
+    throw new Error('Password saat ini tidak sesuai.');
+  }
+
+  const salt = Utilities.getUuid();
+  const headers = usersSheet
+    .getRange(1, 1, 1, usersSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header).trim(); });
+
+  const hashColumn = headers.indexOf('Password Hash') + 1;
+  const saltColumn = headers.indexOf('Password Salt') + 1;
+  const mustChangeColumn = headers.indexOf('Must Change Password') + 1;
+  if (hashColumn < 1 || saltColumn < 1) throw new Error('Struktur akun belum lengkap.');
+
+  usersSheet.getRange(user._rowNumber, hashColumn).setValue(hashPassword_(String(newPassword), salt));
+  usersSheet.getRange(user._rowNumber, saltColumn).setValue(salt);
+  if (mustChangeColumn > 0) usersSheet.getRange(user._rowNumber, mustChangeColumn).setValue('Tidak');
+  clearFailedLogin_(session.username);
+
+  return {
+    success: true,
+    message: 'Password berhasil diganti. Password baru dapat digunakan pada Sign In berikutnya.'
+  };
 }
 
 
@@ -1563,10 +2934,10 @@ function registerStudent_(registration) {
   const waParent = String(registration.waParent || '').replace(/\D/g, '');
   const school = String(registration.school || '').trim();
   const grade = String(registration.grade || '').trim();
-  const program = String(registration.program || '').trim();
+  const program = assertOfficialProgramV84_(registration.program);
   const classId = String(registration.classId || '').trim();
   const schedule = String(registration.schedule || '').trim();
-  const transferBank = String(registration.transferBank || '').trim();
+  const transferBank = 'BCA';
   const showBook = /^(primary|grammar)$/i.test(program);
   const bookPackage = showBook && !!registration.bookPackage;
   const idCard = !!registration.idCard;
@@ -1578,10 +2949,6 @@ function registerStudent_(registration) {
   if (!fullName || waParent.length < 8 || !school || !grade || !program || !classId || !schedule) {
     throw new Error('Lengkapi nama lengkap, sekolah, kelas, program, nomor WhatsApp orang tua, dan pilihan jadwal.');
   }
-  if (['BCA', 'SeaBank', 'BPD Kaltimtara', 'GoPay / DANA'].indexOf(transferBank) === -1) {
-    throw new Error('Pilih rekening tujuan pembayaran.');
-  }
-
   const available = getRegistrationSchedules_(program).schedules || [];
   const selectedSchedule = available.find(function (item) {
     return String(item.classId || '').toUpperCase() === classId.toUpperCase();
@@ -1650,8 +3017,74 @@ function registerStudent_(registration) {
     success: true,
     registrationId: registrationId,
     totalAmount: totalAmount,
-    message: 'Pendaftaran dan bukti pembayaran berhasil dikirim. Admin akan memverifikasi data dan pembayaran. Setelah disetujui, Admin akan mengirim Student ID untuk Aktivasi Akun Belajar.'
+    message: 'Pendaftaran dan bukti pembayaran berhasil dikirim. Admin akan memverifikasi data dan pembayaran. Setelah disetujui, Manajemen akan menyiapkan akun dan mengirim Student ID beserta password awal.'
   };
+}
+
+function findCanonicalStudentForRegistration_(students, registration) {
+  const registrationId = String(getObjectValue_(registration, ['Registration ID']) || '').trim();
+  const assignedStudentId = String(getObjectValue_(registration, ['Student ID']) || '').trim().toUpperCase();
+  const registrationName = String(getObjectValue_(registration, ['Full Name']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  function phoneKey_(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    return digits.indexOf('62') === 0 ? digits.substring(2) : (digits.indexOf('0') === 0 ? digits.substring(1) : digits);
+  }
+  function dateKey_(value) {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, 'Asia/Makassar', 'yyyy-MM-dd');
+    }
+    return String(value).trim().toLowerCase().replace(/[^0-9a-z]/g, '');
+  }
+
+  // Nama unik pada Data Siswa adalah sumber utama tampilan. Ini menghindari
+  // Registration ID lama atau kolom Student ID duplikat yang pernah tertinggal.
+  const byName = students.filter(function (student) {
+    return String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ') === registrationName;
+  });
+  if (byName.length === 1) return byName[0];
+
+  // Untuk nama pendek/salah eja, cocokkan identitas gabungan tanpa menulis data.
+  const registrationDob = dateKey_(getObjectValue_(registration, ['DOB', 'Tanggal Lahir', 'Date of Birth']));
+  const registrationWaStudent = phoneKey_(getObjectValue_(registration, ['WA Student', 'WA Siswa', 'WhatsApp']));
+  const registrationWaParent = phoneKey_(getObjectValue_(registration, ['WA Parent', 'WA Orang Tua', 'Parent WhatsApp']));
+  const scored = students.map(function (student) {
+    const studentName = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const studentDob = dateKey_(getObjectValue_(student, ['DOB', 'Tanggal Lahir', 'Date of Birth']));
+    const studentWa = phoneKey_(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']));
+    const parentWa = phoneKey_(getObjectValue_(student, ['WA Parent', 'WA Orang Tua', 'Parent WhatsApp']));
+    let score = 0;
+    if (registrationName.length >= 5 && studentName.length >= 5 &&
+        (registrationName.indexOf(studentName) === 0 || studentName.indexOf(registrationName) === 0)) score += 50;
+    if (registrationDob && studentDob && registrationDob === studentDob) score += 40;
+    if (registrationWaStudent && studentWa && registrationWaStudent === studentWa) score += 45;
+    if (registrationWaParent && parentWa && registrationWaParent === parentWa) score += 40;
+    if (registrationWaStudent && parentWa && registrationWaStudent === parentWa) score += 30;
+    if (registrationWaParent && studentWa && registrationWaParent === studentWa) score += 30;
+    return { student: student, score: score };
+  }).filter(function (item) { return item.score >= 80; })
+    .sort(function (a, b) { return b.score - a.score; });
+  if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) return scored[0].student;
+
+  // Fallback terakhir hanya jika Student ID yang tersimpan juga mempunyai nama
+  // yang kompatibel. ID tidak pernah dipercaya sendirian.
+  if (assignedStudentId) {
+    const byStudentId = students.filter(function (student) {
+      const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+      const name = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      return id === assignedStudentId && name && registrationName &&
+        (name === registrationName || name.indexOf(registrationName) === 0 || registrationName.indexOf(name) === 0);
+    });
+    if (byStudentId.length === 1) return byStudentId[0];
+  }
+
+  const byRegistrationAndName = students.filter(function (student) {
+    const studentRegistrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    const studentName = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return studentRegistrationId === registrationId && studentName === registrationName;
+  });
+  return byRegistrationAndName.length === 1 ? byRegistrationAndName[0] : null;
 }
 
 function getStudentRegistrations_(token) {
@@ -1662,15 +3095,9 @@ function getStudentRegistrations_(token) {
   const studentSheet = database.getSheetByName('Data Siswa');
   const students = studentSheet ? getSheetObjects_(studentSheet) : [];
 
-  const studentByRegistrationId = {};
-  students.forEach(function (student) {
-    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
-    if (registrationId) studentByRegistrationId[registrationId] = student;
-  });
-
   const registrations = getSheetObjects_(sheet).map(function (item) {
     const registrationId = String(getObjectValue_(item, ['Registration ID']) || '');
-    const approvedStudent = studentByRegistrationId[registrationId] || null;
+    const approvedStudent = findCanonicalStudentForRegistration_(students, item);
 
     return {
       registrationId: registrationId,
@@ -1695,6 +3122,7 @@ function getStudentRegistrations_(token) {
       paymentStatus: String(getObjectValue_(item, ['Payment Status']) || ''),
       status: String(getObjectValue_(item, ['Status']) || ''),
       adminNote: String(getObjectValue_(item, ['Admin Note']) || ''),
+      appGuideSentAt: String(getObjectValue_(item, ['App Guide Sent At']) || ''),
       studentId: approvedStudent
         ? String(getObjectValue_(approvedStudent, ['Student ID']) || '')
         : String(getObjectValue_(item, ['Student ID']) || ''),
@@ -1759,9 +3187,7 @@ function getRegistrationWhatsAppPayload_(token, registrationId) {
 
   const studentSheet = database.getSheetByName('Data Siswa');
   const approvedStudent = studentSheet
-    ? getSheetObjects_(studentSheet).find(function (student) {
-        return String(getObjectValue_(student, ['Registration ID']) || '').trim() === String(registrationId || '').trim();
-      })
+    ? findCanonicalStudentForRegistration_(getSheetObjects_(studentSheet), item)
     : null;
 
   const fullName = String(
@@ -1770,16 +3196,14 @@ function getRegistrationWhatsAppPayload_(token, registrationId) {
       : getObjectValue_(item, ['Full Name'])
   || '').trim();
 
+  // Untuk pesan follow-up pendaftaran, nomor WA HARUS mengikuti form pendaftaran
+  // yang baru saja dikirim siswa, bukan mengambil nomor lama dari Data Siswa.
   const waStudent = String(
-    approvedStudent
-      ? getObjectValue_(approvedStudent, ['WA Student', 'WA Siswa', 'WhatsApp'])
-      : getObjectValue_(item, ['WA Student'])
+    getObjectValue_(item, ['WA Student'])
   || '').trim();
 
   const waParent = String(
-    approvedStudent
-      ? getObjectValue_(approvedStudent, ['WA Parent', 'WA Orang Tua'])
-      : getObjectValue_(item, ['WA Parent'])
+    getObjectValue_(item, ['WA Parent'])
   || '').trim();
 
   if (statusKey === 'ditolak' || statusKey === 'rejected') {
@@ -1825,23 +3249,33 @@ function getRegistrationWhatsAppPayload_(token, registrationId) {
       : getObjectValue_(item, ['Requested Schedule'])
   || '').trim();
 
+  const program = String(
+    approvedStudent
+      ? getObjectValue_(approvedStudent, ['Program'])
+      : getObjectValue_(item, ['Requested Program'])
+  || '').trim();
+
   const groupLink = getRegistrationClassWhatsApp_(classId);
 
   if (!studentId) throw new Error('Student ID belum tersedia. Setujui pendaftaran terlebih dahulu.');
 
-  const approvalMessage =
-    'Halo ' + fullName + ' 👋\\n\\n' +
-    'Selamat! 🎉 Pendaftaran Anda di *Mr One Course* telah berhasil diverifikasi dan disetujui.\\n\\n' +
-    '*Data Siswa*\\n' +
-    'Student ID: ' + studentId + '\\n' +
-    'Nama: ' + fullName + '\\n' +
-    'Kelas: ' + (classId || '—') + '\\n' +
-    (schedule ? 'Jadwal: ' + schedule + '\\n' : '') +
-    '\\n*Grup WhatsApp Kelas*\\n' +
-    (groupLink ? groupLink : 'Link grup belum tersedia. Manajemen akan menginformasikannya kemudian.') +
-    '\\n\\n*Aktivasi Akun Belajar*\\n' +
-    'Gunakan Student ID *' + studentId + '* untuk melakukan Aktivasi Akun Belajar di Mr One Course Academic Suite, lalu buat password Anda sendiri.\\n\\n' +
-    'Selamat bergabung dan selamat belajar bersama Mr One Course! 🌟';
+  // V95: format WA hasil verifikasi dibuat sebagai blok pendek dan konsisten.
+  // Hanya format pesan yang diubah; alur verifikasi dan data tetap sama.
+  const classLines = [
+    'Student ID: *' + studentId + '*'
+  ];
+  if (program) classLines.push('Program: *' + program + '*');
+  if (schedule) classLines.push('Jadwal: *' + schedule + '*');
+
+  const approvalMessage = [
+    'Halo, *' + fullName + '* 👋',
+    '*Selamat! 🎉*\nPendaftaran dan pembayaran kamu sudah *terverifikasi*.',
+    '*Data Kelas*\n' + classLines.join('\n'),
+    '*Sign In*\nUsername: *' + studentId + '*\nPassword: *Siswa123*',
+    groupLink ? '*Grup Kelas*\n' + groupLink : '',
+    '*Pembayaran Les*\nTanggal *1–7 setiap bulan*.',
+    '_Simpan Student ID dan password kamu, ya._'
+  ].filter(Boolean).join('\n\n');
 
   return {
     success: true,
@@ -1859,6 +3293,95 @@ function getRegistrationWhatsAppPayload_(token, registrationId) {
   };
 }
 
+
+
+function getStudentAppGuideWhatsApp_(token, registrationId) {
+  requireRegistrationAdmin_(token);
+  const database = getDatabase_();
+  const registrationSheet = getOrCreateStudentRegistrationSheet_();
+  ensureHeaders_(registrationSheet, ['App Guide Sent At']);
+
+  const registration = getSheetObjects_(registrationSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Registration ID']) || '').trim() === String(registrationId || '').trim();
+  });
+  if (!registration) throw new Error('Pendaftaran tidak ditemukan.');
+
+  const status = String(getObjectValue_(registration, ['Status']) || '').trim().toLowerCase();
+  if (status !== 'disetujui' && status !== 'approved') throw new Error('Panduan aplikasi hanya dapat dikirim setelah pendaftaran disetujui.');
+
+  const studentSheet = database.getSheetByName('Data Siswa');
+  const student = studentSheet ? getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Registration ID']) || '').trim() === String(registrationId || '').trim();
+  }) : null;
+
+  const studentId = String((student ? getObjectValue_(student, ['Student ID']) : getObjectValue_(registration, ['Student ID'])) || '').trim().toUpperCase();
+  const fullName = String((student ? getObjectValue_(student, ['Full Name', 'Nama']) : getObjectValue_(registration, ['Full Name'])) || '').trim();
+  const classId = String((student ? getObjectValue_(student, ['Class ID', 'Class Id']) : getObjectValue_(registration, ['Class ID', 'Requested Class ID'])) || '').trim();
+  // Nomor tujuan panduan aplikasi siswa baru mengikuti WA yang diisi
+  // pada form pendaftaran agar tidak tersasar ke nomor lama di Data Siswa.
+  const waStudent = String(getObjectValue_(registration, ['WA Student']) || '').trim();
+  const waParent = String(getObjectValue_(registration, ['WA Parent']) || '').trim();
+
+  if (!studentId) throw new Error('Student ID belum tersedia.');
+
+  const groupLink = getRegistrationClassWhatsApp_(classId);
+  const appUrl = 'https://moc-academic-suite.vercel.app/';
+
+  const message =
+    'Halo ' + fullName + ' 👋\\n\\n' +
+    'Selamat bergabung di *Mr One Course Academic Suite*. Berikut panduan awal akun belajar Anda.\\n\\n' +
+    '*1. Buka Aplikasi*\\n' + appUrl + '\\n\\n' +
+    '*2. Tambahkan ke Home Screen*\\n' +
+    '• Android/Chrome: buka link → tekan menu ⋮ → pilih *Add to Home screen / Tambahkan ke layar utama*.\\n' +
+    '• iPhone/Safari: buka link → tekan tombol Share → pilih *Add to Home Screen*.\\n\\n' +
+    '*3. Sign In Akun Belajar*\\n' +
+    'Username: *' + studentId + '*\\n' +
+    'Password: gunakan password awal yang diberikan Manajemen Mr One Course.\\n\\n' +
+    '*4. Ganti Password (Opsional)*\\n' +
+    'Password awal boleh tetap digunakan. Jika ingin password pribadi, buka *Profil → Keamanan Akun → Ganti Password*.\\n\\n' +
+    '*5. Menu utama siswa*\\n' +
+    '• Home: ringkasan kelas dan progress\\n' +
+    '• Akademik: pembelajaran, tugas, dan tantangan\\n' +
+    '• Check-in: absensi saat datang di kelas\\n' +
+    '• My Badge: EXP, rank, dan badge\\n' +
+    '• Profil: data siswa, pembayaran, laporan perkembangan, dan keamanan akun\\n\\n' +
+    (groupLink ? '*6. Grup WhatsApp Kelas*\\n' + groupLink + '\\n\\n' : '') +
+    'Simpan Student ID dan password Anda dengan baik.\\n\\n' +
+    'Selamat belajar bersama Mr One Course! 🌟';
+
+  return {
+    success:true,
+    registrationId:String(registrationId || ''),
+    fullName:fullName,
+    studentId:studentId,
+    waStudent:waStudent,
+    waParent:waParent,
+    groupLink:groupLink,
+    appGuideSentAt:String(getObjectValue_(registration, ['App Guide Sent At']) || ''),
+    combinedMessage:message
+  };
+}
+
+function markStudentAppGuideSent_(token, registrationId) {
+  requireRegistrationAdmin_(token);
+  const sheet = getOrCreateStudentRegistrationSheet_();
+  ensureHeaders_(sheet, ['App Guide Sent At']);
+
+  const rows = getSheetObjects_(sheet);
+  const index = rows.findIndex(function (item) {
+    return String(getObjectValue_(item, ['Registration ID']) || '').trim() === String(registrationId || '').trim();
+  });
+  if (index < 0) throw new Error('Pendaftaran tidak ditemukan.');
+
+  const existing = String(getObjectValue_(rows[index], ['App Guide Sent At']) || '').trim();
+  if (existing) return { success:true, alreadySent:true, sentAt:existing };
+
+  const headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0];
+  const column = headers.indexOf('App Guide Sent At') + 1;
+  const now = new Date();
+  if (column > 0) sheet.getRange(index + 2, column).setValue(now);
+  return { success:true, alreadySent:false, sentAt:now.toISOString() };
+}
 
 function findReservedStudentRow_(studentSheet) {
   if (!studentSheet || studentSheet.getLastRow() < 2) return null;
@@ -1919,7 +3442,7 @@ function approveStudentRegistration_(token, approval) {
 
   const registrationId = String(approval.registrationId || '').trim();
   let studentId = String(approval.studentId || '').trim().toUpperCase();
-  const program = String(approval.program || '').trim();
+  const program = assertOfficialProgramV84_(approval.program);
   const classId = String(approval.classId || '').trim();
   const schedule = String(approval.schedule || '').trim();
 
@@ -2033,7 +3556,9 @@ function approveStudentRegistration_(token, approval) {
   if (paymentSheet) {
     ensureHeaders_(paymentSheet, ['Payment ID', 'Student ID', 'Nama', 'Payment Category', 'Item Label', 'Period', 'Payment Method', 'Payment Date', 'Amount', 'Status', 'Fulfillment Status', 'Verified Date', 'Verified By', 'Invoice Number', 'Notes']);
     const verifiedAt = new Date();
-    const currentPeriod = Utilities.formatDate(verifiedAt, 'Asia/Makassar', 'yyyy-MM');
+    const registeredAt = normalizeStudentDate_(getObjectValue_(registration, ['Registered At', 'Registration Date', 'Tanggal Daftar', 'Created At'])) || verifiedAt;
+    const firstTuitionMonth = new Date(registeredAt.getFullYear(), registeredAt.getMonth() + 1, 1);
+    const firstTuitionPeriod = Utilities.formatDate(firstTuitionMonth, 'Asia/Makassar', 'yyyy-MM');
     const transferBank = String(getObjectValue_(registration, ['Transfer Bank']) || 'Transfer').trim();
     const baseId = 'REGPAY-' + Utilities.formatDate(verifiedAt, 'Asia/Makassar', 'yyyyMMddHHmmss') + '-' + studentId;
 
@@ -2043,7 +3568,7 @@ function approveStudentRegistration_(token, approval) {
       'Nama': getObjectValue_(registration, ['Full Name']),
       'Payment Category': 'Tuition',
       'Item Label': 'Les Bulanan',
-      'Period': currentPeriod,
+      'Period': firstTuitionPeriod,
       'Payment Method': transferBank,
       'Payment Date': verifiedAt,
       'Amount': Number(getObjectValue_(registration, ['First Tuition Amount']) || 150000),
@@ -2054,7 +3579,7 @@ function approveStudentRegistration_(token, approval) {
       'Invoice Number': registrationId,
       'Notes': 'Pembayaran awal dari pendaftaran siswa baru.'
     });
-    markStudentMonthPaid_(database, studentId, currentPeriod);
+    markStudentMonthPaid_(database, studentId, firstTuitionPeriod);
 
     if (String(getObjectValue_(registration, ['Book Package']) || '').toLowerCase() === 'ya') {
       appendMappedRow_(paymentSheet, {
@@ -2131,7 +3656,7 @@ function approveStudentRegistration_(token, approval) {
       (reservedRow
         ? ' telah menggunakan slot Student ID kosong yang tersedia di Data Siswa.'
         : ' telah ditambahkan pada baris terakhir Data Siswa.') +
-      ' Akun login belum dibuat. Silakan sampaikan Student ID kepada siswa agar siswa melakukan Aktivasi Akun dan membuat password sendiri.'
+      ' Akun login belum dibuat. Silakan siapkan akun siswa dari Data Siswa menggunakan password awal yang ditentukan Manajemen.'
   };
 }
 
@@ -2175,6 +3700,25 @@ function rejectStudentRegistration_(token, rejection) {
     status: 'Ditolak',
     message: 'Pendaftaran ditolak. Alasan penolakan sudah disimpan dan siap dikirim melalui WhatsApp.'
   };
+}
+
+function cancelStudentRegistrationVerification_(token, registrationId) {
+  requireRegistrationAdmin_(token);
+  registrationId = String(registrationId || '').trim();
+  if (!registrationId) throw new Error('Registration ID wajib diisi.');
+  const sheet = getOrCreateStudentRegistrationSheet_();
+  const rows = getSheetObjects_(sheet);
+  const index = rows.findIndex(function (item) {
+    return String(getObjectValue_(item, ['Registration ID']) || '').trim() === registrationId;
+  });
+  if (index < 0) throw new Error('Pendaftaran tidak ditemukan.');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (header) { return String(header).trim(); });
+  const values = { 'Status': 'Menunggu Verifikasi', 'Admin Note': 'Verifikasi dibatalkan oleh Admin untuk diperiksa ulang.', 'Reviewed At': '' };
+  Object.keys(values).forEach(function (header) {
+    const column = headers.indexOf(header) + 1;
+    if (column > 0) sheet.getRange(index + 2, column).setValue(values[header]);
+  });
+  return { success: true, registrationId: registrationId, status: 'Menunggu Verifikasi', message: 'Verifikasi dibatalkan. Pendaftaran kembali ke daftar Menunggu untuk diperiksa ulang.' };
 }
 
 
@@ -2641,6 +4185,736 @@ function parseRequest_(e) {
 }
 
 /**
+ * V64 — Data Siswa is the only source of truth for a student identity.
+ * A legacy Users row may contain the correct Username but an old/swapped
+ * Related ID or Full Name. Repair it before a new session is created while
+ * preserving the existing password hash and salt.
+ */
+function alignStudentUserWithMaster_(spreadsheet, usersSheet, user) {
+  const role = String(getObjectValue_(user, ['Role']) || '').trim().toLowerCase();
+  if (role !== 'siswa') return user;
+
+  const username = String(getObjectValue_(user, ['Username']) || '').trim().toUpperCase();
+  const storedName = String(getObjectValue_(user, ['Full Name']) || '').trim();
+  if (!username) throw new Error('Username akun siswa kosong. Hubungi Manajemen.');
+
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const allStudents = getSheetObjects_(studentSheet);
+  const normalizedStoredName = storedName.toLowerCase().replace(/\s+/g, ' ');
+  const nameMatches = normalizedStoredName ? allStudents.filter(function (student) {
+    const masterName = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return masterName && masterName === normalizedStoredName;
+  }) : [];
+  const canonicalId = nameMatches.length === 1
+    ? String(getObjectValue_(nameMatches[0], ['Student ID', 'ID']) || '').trim().toUpperCase()
+    : username;
+  const matches = allStudents.filter(function (student) {
+    return String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase() === canonicalId;
+  });
+  if (!matches.length) {
+    throw new Error('Identitas akun ' + username + ' tidak ditemukan pada Data Siswa. Hubungi Manajemen.');
+  }
+  if (matches.length > 1) {
+    throw new Error('Student ID ' + username + ' tercatat lebih dari satu kali pada Data Siswa. Hubungi Manajemen.');
+  }
+
+  const master = matches[0];
+  const fullName = String(getObjectValue_(master, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+  const whatsapp = String(getObjectValue_(master, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']) || '').trim();
+  if (!fullName) throw new Error('Nama untuk ' + username + ' belum tersedia pada Data Siswa.');
+
+  const currentUserId = String(getObjectValue_(user, ['User ID']) || '').trim().toUpperCase();
+  const currentRelatedId = String(getObjectValue_(user, ['Related ID']) || '').trim().toUpperCase();
+  const currentName = String(getObjectValue_(user, ['Full Name']) || '').trim();
+  const currentWhatsapp = String(getObjectValue_(user, ['WhatsApp']) || '').trim();
+
+  if (canonicalId !== username) {
+    const collision = getSheetObjects_(usersSheet).find(function (candidate) {
+      return candidate._rowNumber !== user._rowNumber &&
+        String(getObjectValue_(candidate, ['Role']) || '').trim().toLowerCase() === 'siswa' &&
+        String(getObjectValue_(candidate, ['Username']) || '').trim().toUpperCase() === canonicalId;
+    });
+    if (collision) {
+      throw new Error('Pemetaan akun siswa tertukar dan perlu diperbaiki Manajemen. Jalankan repairApprovedRegistrationIdentitiesV66 sekali dari Apps Script.');
+    }
+  }
+
+  if (currentUserId !== canonicalId || currentRelatedId !== canonicalId || username !== canonicalId || currentName !== fullName || currentWhatsapp !== whatsapp) {
+    updateMappedRow_(usersSheet, user._rowNumber, {
+      'User ID': canonicalId,
+      'Username': canonicalId,
+      'Related ID': canonicalId,
+      'Full Name': fullName,
+      'WhatsApp': whatsapp
+    });
+  }
+
+  user['User ID'] = canonicalId;
+  user['Username'] = canonicalId;
+  user['Related ID'] = canonicalId;
+  user['Full Name'] = fullName;
+  user['WhatsApp'] = whatsapp;
+  return user;
+}
+
+/**
+ * Jalankan SEKALI dari Apps Script editor setelah memasang V64.
+ * Memperbaiki seluruh pasangan Username / Student ID / nama pada sheet Users.
+ * Password Hash dan Password Salt tidak disentuh.
+ */
+function repairAllStudentIdentityMappingsV64() {
+  const spreadsheet = getDatabase_();
+  const usersSheet = spreadsheet.getSheetByName('Users');
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  if (!usersSheet) throw new Error('Sheet Users tidak ditemukan.');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const studentsById = {};
+  const studentIdsByName = {};
+  const duplicateStudentIds = {};
+  getSheetObjects_(studentSheet).forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const name = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    if (!id || !name) return;
+    if (studentsById[id]) duplicateStudentIds[id] = true;
+    else studentsById[id] = student;
+    const nameKey = name.toLowerCase().replace(/\s+/g, ' ');
+    if (!studentIdsByName[nameKey]) studentIdsByName[nameKey] = [];
+    if (studentIdsByName[nameKey].indexOf(id) === -1) studentIdsByName[nameKey].push(id);
+  });
+
+  const studentUsers = getSheetObjects_(usersSheet).filter(function (user) {
+    return String(getObjectValue_(user, ['Role']) || '').trim().toLowerCase() === 'siswa';
+  });
+  const seenUsernames = {};
+  const duplicateUsernames = {};
+  const missingInStudentMaster = [];
+  const ambiguousNames = [];
+  const repaired = [];
+  let alreadyCorrect = 0;
+  const plans = [];
+
+  studentUsers.forEach(function (user) {
+    const username = String(getObjectValue_(user, ['Username']) || '').trim().toUpperCase();
+    if (!username) return;
+    if (seenUsernames[username]) duplicateUsernames[username] = true;
+    seenUsernames[username] = true;
+
+    const oldName = String(getObjectValue_(user, ['Full Name']) || '').trim();
+    const nameKey = oldName.toLowerCase().replace(/\s+/g, ' ');
+    const nameIds = studentIdsByName[nameKey] || [];
+    if (nameIds.length > 1) {
+      ambiguousNames.push(oldName);
+      return;
+    }
+    const canonicalId = nameIds.length === 1 ? nameIds[0] : username;
+    const master = studentsById[canonicalId];
+    if (!master) {
+      missingInStudentMaster.push(username + (oldName ? ' • ' + oldName : ''));
+      return;
+    }
+    if (duplicateStudentIds[canonicalId]) return;
+
+    const fullName = String(getObjectValue_(master, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    const whatsapp = String(getObjectValue_(master, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']) || '').trim();
+    const before = {
+      userId: String(getObjectValue_(user, ['User ID']) || '').trim(),
+      relatedId: String(getObjectValue_(user, ['Related ID']) || '').trim(),
+      fullName: String(getObjectValue_(user, ['Full Name']) || '').trim()
+    };
+    const correct = username === canonicalId && before.userId.toUpperCase() === canonicalId && before.relatedId.toUpperCase() === canonicalId && before.fullName === fullName;
+    if (correct) {
+      alreadyCorrect += 1;
+      return;
+    }
+    plans.push({ row: user._rowNumber, oldUsername: username, canonicalId: canonicalId, oldRelatedId: before.relatedId, oldName: before.fullName, correctName: fullName, whatsapp: whatsapp });
+  });
+
+  const plannedTargets = {};
+  plans.forEach(function (plan) {
+    if (!plannedTargets[plan.canonicalId]) plannedTargets[plan.canonicalId] = [];
+    plannedTargets[plan.canonicalId].push(plan);
+  });
+  const duplicatePlannedTargets = Object.keys(plannedTargets).filter(function (id) { return plannedTargets[id].length > 1; });
+  if (duplicatePlannedTargets.length) {
+    throw new Error('Perbaikan dihentikan karena beberapa akun menuju Student ID yang sama: ' + duplicatePlannedTargets.join(', ') + '. Periksa nama ganda pada Users.');
+  }
+
+  // Tahap sementara mencegah benturan saat dua username memang saling tertukar.
+  plans.forEach(function (plan) {
+    const temporaryId = 'V64TEMP' + String(plan.row);
+    updateMappedRow_(usersSheet, plan.row, { 'User ID': temporaryId, 'Username': temporaryId, 'Related ID': temporaryId });
+  });
+  SpreadsheetApp.flush();
+  plans.forEach(function (plan) {
+    updateMappedRow_(usersSheet, plan.row, {
+      'User ID': plan.canonicalId,
+      'Username': plan.canonicalId,
+      'Related ID': plan.canonicalId,
+      'Full Name': plan.correctName,
+      'WhatsApp': plan.whatsapp
+    });
+    repaired.push({ usernameBefore: plan.oldUsername, correctStudentId: plan.canonicalId, oldRelatedId: plan.oldRelatedId, oldName: plan.oldName, correctName: plan.correctName });
+  });
+
+  setAllStudentSessionReset_();
+  SpreadsheetApp.flush();
+  const result = {
+    success: true,
+    repairedCount: repaired.length,
+    alreadyCorrectCount: alreadyCorrect,
+    repaired: repaired,
+    duplicateStudentIds: Object.keys(duplicateStudentIds),
+    duplicateUsernames: Object.keys(duplicateUsernames),
+    ambiguousNames: ambiguousNames,
+    missingInStudentMaster: missingInStudentMaster,
+    message: repaired.length + ' akun siswa diperbaiki. Semua siswa harus Sign In kembali.'
+  };
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
+ * V65 — Jalankan SEKALI dari Apps Script editor.
+ *
+ * Memperbaiki hanya akun siswa yang berasal dari Student Registrations dan
+ * sudah Disetujui. Registration ID menjadi kunci tetap sehingga urutan baris
+ * pada Student Registrations, Data Siswa, dan Users tidak pernah dipakai untuk
+ * memasangkan identitas.
+ *
+ * Password Hash dan Password Salt tidak disentuh. Pembayaran awal dengan
+ * Invoice Number = Registration ID ikut diselaraskan ke Student ID yang benar.
+ */
+function repairApprovedRegistrationIdentitiesV66() {
+  const spreadsheet = getDatabase_();
+  const registrationSheet = spreadsheet.getSheetByName('Student Registrations');
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  const usersSheet = spreadsheet.getSheetByName('Users');
+  const paymentSheet = spreadsheet.getSheetByName('Data Pembayaran');
+  if (!registrationSheet) throw new Error('Sheet Student Registrations tidak ditemukan.');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+  if (!usersSheet) throw new Error('Sheet Users tidak ditemukan.');
+
+  function identityNameKey_(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function identityPhoneKey_(value) {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    // 08xx dan 628xx dianggap nomor yang sama.
+    return digits.indexOf('62') === 0 ? digits.substring(2) : (digits.indexOf('0') === 0 ? digits.substring(1) : digits);
+  }
+
+  function identityDateKey_(value) {
+    if (!value) return '';
+    if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, 'Asia/Makassar', 'yyyy-MM-dd');
+    }
+    return String(value).trim().toLowerCase().replace(/[^0-9a-z]/g, '');
+  }
+
+  const approvedRegistrations = getSheetObjects_(registrationSheet).filter(function (row) {
+    const status = String(getObjectValue_(row, ['Status']) || '').trim().toLowerCase();
+    const registrationId = String(getObjectValue_(row, ['Registration ID']) || '').trim();
+    return registrationId && (status === 'disetujui' || status === 'approved');
+  });
+  const students = getSheetObjects_(studentSheet);
+  const studentUsers = getSheetObjects_(usersSheet).filter(function (row) {
+    return String(getObjectValue_(row, ['Role']) || '').trim().toLowerCase() === 'siswa';
+  });
+
+  const studentsByRegistrationId = {};
+  const studentsByName = {};
+  students.forEach(function (student) {
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    if (registrationId) {
+      if (!studentsByRegistrationId[registrationId]) studentsByRegistrationId[registrationId] = [];
+      studentsByRegistrationId[registrationId].push(student);
+    }
+    const nameKey = identityNameKey_(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']));
+    if (nameKey) {
+      if (!studentsByName[nameKey]) studentsByName[nameKey] = [];
+      studentsByName[nameKey].push(student);
+    }
+  });
+
+  const usersByName = {};
+  studentUsers.forEach(function (user) {
+    const key = identityNameKey_(getObjectValue_(user, ['Full Name']));
+    if (!key) return;
+    if (!usersByName[key]) usersByName[key] = [];
+    usersByName[key].push(user);
+  });
+
+  const plans = [];
+  const canonicalRecords = [];
+  const skippedWithoutAccount = [];
+  const unresolved = [];
+  const alreadyCorrect = [];
+  const claimedStudentRows = {};
+
+  approvedRegistrations.forEach(function (registration) {
+    const registrationId = String(getObjectValue_(registration, ['Registration ID']) || '').trim();
+    const registrationName = String(getObjectValue_(registration, ['Full Name']) || '').trim();
+    const registrationNameKey = identityNameKey_(registrationName);
+    const registrationDob = identityDateKey_(getObjectValue_(registration, ['DOB', 'Tanggal Lahir', 'Date of Birth']));
+    const registrationWaStudent = identityPhoneKey_(getObjectValue_(registration, ['WA Student', 'WA Siswa', 'WhatsApp']));
+    const registrationWaParent = identityPhoneKey_(getObjectValue_(registration, ['WA Parent', 'WA Orang Tua', 'Parent WhatsApp']));
+    let master = null;
+    let matchMethod = '';
+
+    // 1. Nama sama persis adalah pencocokan paling aman, walaupun Registration ID
+    //    sebelumnya sudah menempel pada baris siswa lain.
+    const exactNameMatches = studentsByName[registrationNameKey] || [];
+    if (exactNameMatches.length === 1) {
+      master = exactNameMatches[0];
+      matchMethod = 'nama lengkap';
+    }
+
+    // 2. Untuk salah eja/nama pendek, gunakan DOB + WA sebagai identitas gabungan.
+    if (!master) {
+      const scored = students.map(function (student) {
+        const studentDob = identityDateKey_(getObjectValue_(student, ['DOB', 'Tanggal Lahir', 'Date of Birth']));
+        const studentWa = identityPhoneKey_(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']));
+        const parentWa = identityPhoneKey_(getObjectValue_(student, ['WA Parent', 'WA Orang Tua', 'Parent WhatsApp']));
+        let score = 0;
+        if (registrationDob && studentDob && registrationDob === studentDob) score += 40;
+        if (registrationWaStudent && studentWa && registrationWaStudent === studentWa) score += 45;
+        if (registrationWaParent && parentWa && registrationWaParent === parentWa) score += 40;
+        if (registrationWaStudent && parentWa && registrationWaStudent === parentWa) score += 30;
+        if (registrationWaParent && studentWa && registrationWaParent === studentWa) score += 30;
+        return { student: student, score: score };
+      }).filter(function (item) { return item.score >= 80; })
+        .sort(function (a, b) { return b.score - a.score; });
+      if (scored.length === 1 || (scored.length > 1 && scored[0].score > scored[1].score)) {
+        master = scored[0].student;
+        matchMethod = 'tanggal lahir + WhatsApp';
+      }
+    }
+
+    // 3. Registration ID lama hanya diterima bila namanya juga cocok.
+    if (!master) {
+      const oldIdMatches = (studentsByRegistrationId[registrationId] || []).filter(function (student) {
+        return identityNameKey_(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama'])) === registrationNameKey;
+      });
+      if (oldIdMatches.length === 1) {
+        master = oldIdMatches[0];
+        matchMethod = 'Registration ID + nama';
+      }
+    }
+
+    if (!master) {
+      unresolved.push(registrationId + ' • ' + registrationName + ': belum ditemukan pasangan unik berdasarkan nama/DOB/WA');
+      return;
+    }
+    if (claimedStudentRows[master._rowNumber]) {
+      unresolved.push(registrationId + ' • ' + registrationName + ': menuju baris Data Siswa yang juga dipilih oleh ' + claimedStudentRows[master._rowNumber]);
+      return;
+    }
+    claimedStudentRows[master._rowNumber] = registrationId;
+    const canonicalId = String(getObjectValue_(master, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const canonicalName = String(getObjectValue_(master, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    const whatsapp = String(getObjectValue_(master, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']) || '').trim();
+    const classId = String(getObjectValue_(master, ['Class ID', 'Class']) || '').trim();
+    if (!canonicalId || !canonicalName) {
+      unresolved.push(registrationId + ': Student ID atau nama pada Data Siswa kosong');
+      return;
+    }
+    canonicalRecords.push({
+      registrationId: registrationId,
+      registrationRow: registration._rowNumber,
+      studentRow: master._rowNumber,
+      canonicalId: canonicalId,
+      canonicalName: canonicalName,
+      classId: classId,
+      matchMethod: matchMethod
+    });
+
+    const userMatches = usersByName[identityNameKey_(canonicalName)] || [];
+    if (!userMatches.length) {
+      skippedWithoutAccount.push(registrationId + ' • ' + canonicalName + ' • ' + canonicalId);
+      return;
+    }
+    if (userMatches.length !== 1) {
+      unresolved.push(registrationId + ': nama "' + canonicalName + '" ditemukan pada ' + userMatches.length + ' akun Users');
+      return;
+    }
+
+    const user = userMatches[0];
+    const oldUsername = String(getObjectValue_(user, ['Username']) || '').trim().toUpperCase();
+    const oldUserId = String(getObjectValue_(user, ['User ID']) || '').trim().toUpperCase();
+    const oldRelatedId = String(getObjectValue_(user, ['Related ID']) || '').trim().toUpperCase();
+    if (oldUsername === canonicalId && oldUserId === canonicalId && oldRelatedId === canonicalId) {
+      alreadyCorrect.push(registrationId + ' • ' + canonicalName + ' • ' + canonicalId);
+    } else {
+      plans.push({
+        registrationId: registrationId,
+        registrationRow: registration._rowNumber,
+        userRow: user._rowNumber,
+        oldUsername: oldUsername,
+        oldRelatedId: oldRelatedId,
+        canonicalId: canonicalId,
+        canonicalName: canonicalName,
+        whatsapp: whatsapp,
+        classId: classId
+      });
+    }
+  });
+
+  const targetRows = {};
+  plans.forEach(function (plan) {
+    if (targetRows[plan.canonicalId]) {
+      throw new Error('Perbaikan dihentikan: dua akun menuju Student ID ' + plan.canonicalId + '.');
+    }
+    targetRows[plan.canonicalId] = plan.userRow;
+  });
+
+  // Pastikan target ID tidak sedang dimiliki akun yang berada di luar migrasi.
+  studentUsers.forEach(function (user) {
+    const username = String(getObjectValue_(user, ['Username']) || '').trim().toUpperCase();
+    const plannedRow = targetRows[username];
+    if (plannedRow && plannedRow !== user._rowNumber) {
+      const ownerIsAlsoMigrated = plans.some(function (plan) { return plan.userRow === user._rowNumber; });
+      if (!ownerIsAlsoMigrated) {
+        throw new Error('Perbaikan dihentikan: ' + username + ' sedang dipakai akun siswa lain di luar daftar migrasi.');
+      }
+    }
+  });
+
+  // ID sementara mencegah benturan ketika dua atau lebih Student ID saling tertukar.
+  plans.forEach(function (plan) {
+    const temporaryId = 'V66TEMP' + String(plan.userRow);
+    updateMappedRow_(usersSheet, plan.userRow, {
+      'User ID': temporaryId,
+      'Username': temporaryId,
+      'Related ID': temporaryId
+    });
+  });
+  SpreadsheetApp.flush();
+
+  plans.forEach(function (plan) {
+    updateMappedRow_(usersSheet, plan.userRow, {
+      'User ID': plan.canonicalId,
+      'Username': plan.canonicalId,
+      'Related ID': plan.canonicalId,
+      'Full Name': plan.canonicalName,
+      'WhatsApp': plan.whatsapp
+    });
+  });
+
+  // Pulihkan Registration ID pada Data Siswa. Tahap sementara diperlukan
+  // karena Registration ID lama dapat saling tertukar antarsiswa.
+  canonicalRecords.forEach(function (record) {
+    updateMappedRow_(studentSheet, record.studentRow, {
+      'Registration ID': 'V66REGTEMP' + String(record.studentRow)
+    });
+  });
+  SpreadsheetApp.flush();
+  canonicalRecords.forEach(function (record) {
+    updateMappedRow_(studentSheet, record.studentRow, {
+      'Registration ID': record.registrationId
+    });
+    updateMappedRow_(registrationSheet, record.registrationRow, {
+      'Student ID': record.canonicalId,
+      'Class ID': record.classId
+    });
+  });
+
+  let repairedPaymentRows = 0;
+  if (paymentSheet) {
+    const recordByRegistrationId = {};
+    canonicalRecords.forEach(function (record) { recordByRegistrationId[record.registrationId] = record; });
+    getSheetObjects_(paymentSheet).forEach(function (payment) {
+      const invoiceNumber = String(getObjectValue_(payment, ['Invoice Number']) || '').trim();
+      const record = recordByRegistrationId[invoiceNumber];
+      if (!record) return;
+      updateMappedRow_(paymentSheet, payment._rowNumber, {
+        'Student ID': record.canonicalId,
+        'Nama': record.canonicalName
+      });
+      repairedPaymentRows += 1;
+    });
+  }
+
+  setAllStudentSessionReset_();
+  SpreadsheetApp.flush();
+  const result = {
+    success: true,
+    approvedRegistrationCount: approvedRegistrations.length,
+    repairedAccountCount: plans.length,
+    alreadyCorrectCount: alreadyCorrect.length,
+    skippedWithoutAccountCount: skippedWithoutAccount.length,
+    repairedPaymentRowCount: repairedPaymentRows,
+    unresolvedCount: unresolved.length,
+    repaired: plans.map(function (plan) {
+      return {
+        registrationId: plan.registrationId,
+        name: plan.canonicalName,
+        usernameBefore: plan.oldUsername,
+        studentIdCorrect: plan.canonicalId
+      };
+    }),
+    skippedWithoutAccount: skippedWithoutAccount,
+    unresolved: unresolved,
+    recoveredRegistrations: canonicalRecords.map(function (record) {
+      return record.registrationId + ' • ' + record.canonicalName + ' • ' + record.canonicalId + ' • ' + record.matchMethod;
+    }),
+    message: plans.length + ' akun pendaftar aplikasi berhasil dipasangkan kembali; ' + unresolved.length + ' data perlu diperiksa manual. Password tetap sama; seluruh siswa harus Sign In kembali.'
+  };
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
+ * V67 — Jalankan SEKALI setelah V66 selesai dengan unresolvedCount = 0.
+ * Membersihkan Registration ID lama yang masih tertinggal pada baris siswa
+ * lain. Fungsi ini TIDAK mengubah kolom Student ID dan tidak mengubah password.
+ */
+function repairDuplicateRegistrationLinksV67() {
+  const spreadsheet = getDatabase_();
+  const registrationSheet = spreadsheet.getSheetByName('Student Registrations');
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  if (!registrationSheet) throw new Error('Sheet Student Registrations tidak ditemukan.');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const registrations = getSheetObjects_(registrationSheet).filter(function (row) {
+    const status = String(getObjectValue_(row, ['Status']) || '').trim().toLowerCase();
+    return status === 'disetujui' || status === 'approved';
+  });
+  const students = getSheetObjects_(studentSheet);
+  const canonicalByRegistrationId = {};
+  const errors = [];
+
+  registrations.forEach(function (registration) {
+    const registrationId = String(getObjectValue_(registration, ['Registration ID']) || '').trim();
+    const assignedStudentId = String(getObjectValue_(registration, ['Student ID']) || '').trim().toUpperCase();
+    if (!registrationId || !assignedStudentId) return;
+    const matches = students.filter(function (student) {
+      return String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase() === assignedStudentId;
+    });
+    if (matches.length !== 1) {
+      errors.push(registrationId + ': Student ID ' + assignedStudentId + ' ditemukan pada ' + matches.length + ' baris Data Siswa');
+      return;
+    }
+    if (canonicalByRegistrationId[registrationId]) {
+      errors.push(registrationId + ': Registration ID tercatat lebih dari satu kali pada Student Registrations');
+      return;
+    }
+    canonicalByRegistrationId[registrationId] = {
+      row: matches[0]._rowNumber,
+      studentId: assignedStudentId,
+      fullName: String(getObjectValue_(matches[0], ['Full Name', 'Student Name', 'Nama']) || '').trim()
+    };
+  });
+
+  if (errors.length) {
+    throw new Error('Pembersihan dihentikan sebelum mengubah data:\n' + errors.join('\n'));
+  }
+
+  const staleLinks = [];
+  students.forEach(function (student) {
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    const canonical = canonicalByRegistrationId[registrationId];
+    if (!canonical || canonical.row === student._rowNumber) return;
+    staleLinks.push({
+      row: student._rowNumber,
+      registrationId: registrationId,
+      wrongStudentId: String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim(),
+      correctStudentId: canonical.studentId
+    });
+  });
+
+  staleLinks.forEach(function (link) {
+    updateMappedRow_(studentSheet, link.row, { 'Registration ID': '' });
+  });
+  Object.keys(canonicalByRegistrationId).forEach(function (registrationId) {
+    const canonical = canonicalByRegistrationId[registrationId];
+    updateMappedRow_(studentSheet, canonical.row, { 'Registration ID': registrationId });
+  });
+
+  setAllStudentSessionReset_();
+  SpreadsheetApp.flush();
+  const result = {
+    success: true,
+    approvedRegistrationCount: Object.keys(canonicalByRegistrationId).length,
+    staleLinkRemovedCount: staleLinks.length,
+    staleLinks: staleLinks,
+    message: staleLinks.length + ' tautan Registration ID lama dibersihkan. Tidak ada Student ID atau password yang diubah.'
+  };
+  Logger.log(JSON.stringify(result, null, 2));
+  return result;
+}
+
+/**
+ * V68 — Migrasi satu kali untuk pendaftaran duplikat Zaina Raisyaa:
+ * MOC035 (duplikat) -> MOC096 (akun resmi).
+ *
+ * Data utama MOC096 tidak ditimpa. Seluruh baris operasional yang masih memakai
+ * MOC035 dipindahkan ke MOC096, pembayaran tetap dipertahankan, akun duplikat
+ * dihapus, lalu MOC035 dikembalikan menjadi slot kosong.
+ */
+function mergeDuplicateZainaMoc035IntoMoc096V69() {
+  const sourceId = 'MOC035';
+  const targetId = 'MOC096';
+  const duplicateRegistrationId = 'REG-20261004192706';
+  const spreadsheet = getDatabase_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+    const registrationSheet = spreadsheet.getSheetByName('Student Registrations');
+    if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+    if (!registrationSheet) throw new Error('Sheet Student Registrations tidak ditemukan.');
+
+    const students = getSheetObjects_(studentSheet);
+    const source = students.find(function (row) {
+      return String(getObjectValue_(row, ['Student ID', 'ID']) || '').trim().toUpperCase() === sourceId;
+    });
+    const target = students.find(function (row) {
+      return String(getObjectValue_(row, ['Student ID', 'ID']) || '').trim().toUpperCase() === targetId;
+    });
+    if (!source) throw new Error('Baris duplikat ' + sourceId + ' tidak ditemukan.');
+    if (!target) throw new Error('Akun resmi ' + targetId + ' tidak ditemukan.');
+
+    const sourceName = String(getObjectValue_(source, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    const targetName = String(getObjectValue_(target, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    const sourceKey = sourceName.toUpperCase().replace(/\s+/g, ' ');
+    const targetKey = targetName.toUpperCase().replace(/\s+/g, ' ');
+    // Data lama MOC096 memang hanya menyimpan nama "ZAINA", sedangkan baris
+    // duplikat MOC035 menyimpan nama lengkap "Zaina Raisyaa Azzahra".
+    if (sourceKey.indexOf('ZAINA') < 0 || sourceKey.indexOf('RAIS') < 0 || targetKey.indexOf('ZAINA') < 0) {
+      throw new Error('Migrasi dihentikan: MOC035 harus berisi Zaina Raisyaa dan MOC096 harus berisi Zaina.');
+    }
+
+    const duplicateRegistration = getSheetObjects_(registrationSheet).find(function (row) {
+      return String(getObjectValue_(row, ['Registration ID']) || '').trim() === duplicateRegistrationId;
+    });
+    if (!duplicateRegistration) throw new Error('Pendaftaran duplikat Zaina tidak ditemukan.');
+
+    // Simpan snapshot baris duplikat sebelum slot dilepas.
+    const archiveSheet = ensureArchiveSheetFromSource_(spreadsheet, studentSheet, 'Data Siswa Duplicate Archive', [
+      'Merge Source ID', 'Merge Target ID', 'Merged At', 'Merge Note'
+    ]);
+    const archived = rowValuesAsMap_(studentSheet, source._rowNumber);
+    archived['Merge Source ID'] = sourceId;
+    archived['Merge Target ID'] = targetId;
+    archived['Merged At'] = new Date();
+    archived['Merge Note'] = 'Pendaftaran duplikat Zaina Raisyaa dipindahkan ke akun resmi ' + targetId + '.';
+    appendMappedRow_(archiveSheet, archived);
+
+    // Pindahkan seluruh data operasional yang masih menunjuk ke MOC035.
+    const movedBySheet = {};
+    const skipSheets = {
+      'Data Siswa': true,
+      'Users': true,
+      'Student Registrations': true,
+      'Data Siswa Duplicate Archive': true,
+      'Data Alumni': true,
+      'Data Pendaftaran Alumni': true,
+      'Data Pembayaran Alumni': true
+    };
+    spreadsheet.getSheets().forEach(function (sheet) {
+      const sheetName = sheet.getName();
+      if (skipSheets[sheetName] || /^Alumni\s*-\s*/i.test(sheetName)) return;
+      if (sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+        return String(header || '').trim();
+      });
+      const idIndex = headers.findIndex(function (header) {
+        return normalizeHeader_(header) === normalizeHeader_('Student ID');
+      });
+      if (idIndex < 0) return;
+      let moved = 0;
+      const ids = sheet.getRange(2, idIndex + 1, sheet.getLastRow() - 1, 1).getDisplayValues();
+      ids.forEach(function (row, index) {
+        if (String(row[0] || '').trim().toUpperCase() !== sourceId) return;
+        sheet.getRange(index + 2, idIndex + 1).setValue(targetId);
+        moved += 1;
+      });
+      if (moved) movedBySheet[sheetName] = moved;
+    });
+
+    // Pembayaran tuition yang dipindahkan harus tetap menandai bulan akun resmi sebagai Lunas.
+    const paymentSheet = spreadsheet.getSheetByName('Data Pembayaran');
+    if (paymentSheet) {
+      getSheetObjects_(paymentSheet).filter(function (row) {
+        return String(getObjectValue_(row, ['Student ID']) || '').trim().toUpperCase() === targetId &&
+          String(getObjectValue_(row, ['Invoice Number']) || '').trim() === duplicateRegistrationId &&
+          normalizePaymentCategory_(getObjectValue_(row, ['Payment Category', 'Kategori'])) === 'Tuition' &&
+          /lunas|paid|verified/i.test(String(getObjectValue_(row, ['Status']) || ''));
+      }).forEach(function (row) {
+        const period = String(getObjectValue_(row, ['Period', 'Periode']) || '').trim();
+        if (period) markStudentMonthPaid_(spreadsheet, targetId, period);
+      });
+    }
+
+    // Pertahankan akun resmi. Hapus akun duplikat bila pernah dibuat.
+    const usersSheet = spreadsheet.getSheetByName('Users');
+    let duplicateUserRemoved = false;
+    if (usersSheet) {
+      const sourceUser = findStudentUserRow_(usersSheet, sourceId);
+      const targetUser = findStudentUserRow_(usersSheet, targetId);
+      if (sourceUser && !targetUser) {
+        updateMappedRow_(usersSheet, sourceUser._rowNumber, {
+          'User ID': targetId,
+          'Username': targetId,
+          'Related ID': targetId,
+          'Full Name': targetName
+        });
+      } else if (sourceUser && targetUser) {
+        usersSheet.deleteRow(sourceUser._rowNumber);
+        duplicateUserRemoved = true;
+      }
+    }
+
+    // Tandai pendaftaran duplikat sebagai dibatalkan, tetapi simpan hubungan ke
+    // akun resmi agar pembayaran dan audit tetap dapat ditelusuri.
+    updateMappedRow_(registrationSheet, duplicateRegistration._rowNumber, {
+      'Status': 'Dibatalkan',
+      'Student ID': targetId,
+      'Payment Status': 'Dialihkan ke ' + targetId,
+      'Admin Note': 'Pendaftaran duplikat. Siswa sudah terdaftar dengan akun resmi ' + targetId + '.',
+      'Reviewed At': new Date()
+    });
+
+    // Kosongkan seluruh data duplikat dan pertahankan MOC035 sebagai slot reusable.
+    const headers = studentSheet.getRange(1, 1, 1, studentSheet.getLastColumn()).getDisplayValues()[0].map(function (header) {
+      return String(header || '').trim();
+    });
+    const idColumn = headers.findIndex(function (header) {
+      return normalizeHeader_(header) === normalizeHeader_('Student ID');
+    }) + 1;
+    if (idColumn < 1) throw new Error('Kolom Student ID tidak ditemukan pada Data Siswa.');
+    studentSheet.getRange(source._rowNumber, 1, 1, studentSheet.getLastColumn()).clearContent();
+    studentSheet.getRange(source._rowNumber, idColumn).setValue(sourceId);
+
+    setStudentSessionReset_(sourceId);
+    setStudentSessionReset_(targetId);
+    SpreadsheetApp.flush();
+
+    const result = {
+      success: true,
+      sourceId: sourceId,
+      officialStudentId: targetId,
+      officialName: targetName,
+      duplicateRegistrationId: duplicateRegistrationId,
+      movedBySheet: movedBySheet,
+      duplicateUserRemoved: duplicateUserRemoved,
+      sourceSlotCleared: true,
+      message: 'Data duplikat Zaina dari ' + sourceId + ' berhasil dipindahkan ke akun resmi ' + targetId + '. Slot ' + sourceId + ' sekarang kosong dan dapat digunakan kembali.'
+    };
+    Logger.log(JSON.stringify(result, null, 2));
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Proses login.
  */
 function loginUser_(request) {
@@ -2660,7 +4934,7 @@ function loginUser_(request) {
     throw new Error('Sistem akun belum tersedia.');
   }
 
-  const user = findUserByUsername_(usersSheet, username);
+  let user = findUserByUsername_(usersSheet, username);
 
   if (!user) {
     registerFailedLogin_(username);
@@ -2685,6 +4959,10 @@ function loginUser_(request) {
     registerFailedLogin_(username);
     throw new Error('Username atau password tidak sesuai.');
   }
+
+  // Jangan pernah membuat sesi siswa dari Related ID atau nama lama yang
+  // tertukar. Username MOCxxx harus selalu menunjuk baris MOCxxx di Data Siswa.
+  user = alignStudentUserWithMaster_(spreadsheet, usersSheet, user);
 
   clearFailedLogin_(username);
 
@@ -2814,7 +5092,32 @@ function getSession_(token) {
     throw new Error('Session telah berakhir. Silakan login kembali.');
   }
 
-  return JSON.parse(sessionText);
+  let session;
+  try {
+    session = JSON.parse(sessionText);
+  } catch (error) {
+    CacheService.getScriptCache().remove('SESSION_' + cleanToken);
+    throw new Error('Session tidak dapat dibaca. Silakan login kembali.');
+  }
+
+  if (String(session.role || '').trim().toLowerCase() === 'siswa') {
+    const properties = PropertiesService.getScriptProperties();
+    const sessionCreatedText = String(session.createdAt || '').trim();
+    const allResetText = String(properties.getProperty('STUDENT_AUTH_RESET_ALL') || '').trim();
+    const studentKey = sanitizeKey_(String(session.relatedId || session.username || '').trim().toUpperCase());
+    const studentResetText = String(properties.getProperty('STUDENT_AUTH_RESET_' + studentKey) || '').trim();
+    const sessionCreatedAt = sessionCreatedText ? new Date(sessionCreatedText).getTime() : 0;
+    const allResetAt = allResetText ? new Date(allResetText).getTime() : 0;
+    const studentResetAt = studentResetText ? new Date(studentResetText).getTime() : 0;
+    const resetAt = Math.max(isNaN(allResetAt) ? 0 : allResetAt, isNaN(studentResetAt) ? 0 : studentResetAt);
+
+    if (!sessionCreatedAt || isNaN(sessionCreatedAt) || (resetAt && sessionCreatedAt <= resetAt)) {
+      CacheService.getScriptCache().remove('SESSION_' + cleanToken);
+      throw new Error('Akun siswa telah direset oleh Manajemen. Silakan Sign In kembali menggunakan password terbaru.');
+    }
+  }
+
+  return session;
 }
 
 /**
@@ -2933,6 +5236,9 @@ function getDashboardData_(token) {
   const session = getSession_(token);
   const spreadsheet = getDatabase_();
 
+  const dashboardYear = Number(Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyy'));
+  syncPaymentConsistencyForYearV69_(spreadsheet, dashboardYear, '');
+
   const studentsSheet =
     spreadsheet.getSheetByName('Data Siswa');
 
@@ -2947,6 +5253,16 @@ function getDashboardData_(token) {
 
   const registrationsSheet =
     spreadsheet.getSheetByName('Student Registrations');
+
+  const paymentConfirmationsSheet =
+    spreadsheet.getSheetByName('Payment Confirmations');
+
+  const alumniSheet = spreadsheet.getSheetByName('Data Alumni');
+  const assignmentsSheet = spreadsheet.getSheetByName('Assignments');
+  const assignmentSubmissionsSheet = spreadsheet.getSheetByName('Assignment Submissions');
+  const challengesSheet = spreadsheet.getSheetByName('Challenges');
+  const challengeResultsSheet = spreadsheet.getSheetByName('Challenge Results');
+  const managementMessagesSheet = spreadsheet.getSheetByName('Management Messages');
 
   const students = studentsSheet
     ? getSheetObjects_(studentsSheet)
@@ -2968,6 +5284,17 @@ function getDashboardData_(token) {
     ? getSheetObjects_(registrationsSheet)
     : [];
 
+  const paymentConfirmations = paymentConfirmationsSheet
+    ? getSheetObjects_(paymentConfirmationsSheet)
+    : [];
+
+  const alumniStudents = alumniSheet ? getSheetObjects_(alumniSheet) : [];
+  const assignmentRowsForCeo = assignmentsSheet ? getSheetObjects_(assignmentsSheet) : [];
+  const assignmentSubmissionRowsForCeo = assignmentSubmissionsSheet ? getSheetObjects_(assignmentSubmissionsSheet) : [];
+  const challengeRowsForCeo = challengesSheet ? getSheetObjects_(challengesSheet) : [];
+  const challengeResultRowsForCeo = challengeResultsSheet ? getSheetObjects_(challengeResultsSheet) : [];
+  const managementMessages = managementMessagesSheet ? getSheetObjects_(managementMessagesSheet) : [];
+
   const activeStudents = students.filter(function (student) {
     const status = String(
       getObjectValue_(
@@ -2979,6 +5306,13 @@ function getDashboardData_(token) {
       .toLowerCase();
 
     return status === '' || status === 'aktif';
+  });
+
+  const currentMonthEnglishForLeave = Utilities.formatDate(new Date(), 'Asia/Makassar', 'MMMM');
+  const leaveStudentsCurrent = students.filter(function (student) {
+    const status = String(getObjectValue_(student, ['Student Status', 'Status']) || '').trim().toLowerCase();
+    const monthValue = String(getObjectValue_(student, [currentMonthEnglishForLeave]) || '').trim();
+    return status === 'cuti' || status === 'leave' || isStudentLeaveValue_(monthValue);
   });
 
   const activeScheduleRows = schedules.filter(function (schedule) {
@@ -3020,7 +5354,7 @@ function getDashboardData_(token) {
     return {
       classId: item.classId,
       className: item.className,
-      program: item.program,
+      program: canonicalProgramV84_(item.program),
       tutor: item.tutor,
       schedule: item.days.join(' & ')
     };
@@ -3070,18 +5404,123 @@ function getDashboardData_(token) {
   const currentPeriod = Utilities.formatDate(now, timezone, 'yyyy-MM');
   const currentDay = Number(Utilities.formatDate(now, timezone, 'd'));
   const studentMap = {};
+  const rawStudentById = {};
+  const activeStudentNameMap = {};
+  const registrationDateById = {};
+  const registrationDateByStudentId = {};
+  const registrationDateByUniqueName = {};
+  const duplicatedRegistrationNames = {};
+
+  // Tanggal pendaftaran pada Student Registrations menjadi fallback untuk
+  // siswa baru apabila kolom Join Date pada Data Siswa belum terisi.
+  // Ini mencegah bulan sebelum siswa bergabung dibuat sebagai tunggakan.
+  registrations.forEach(function (registration) {
+    const registrationId = String(getObjectValue_(registration, ['Registration ID']) || '').trim();
+    const assignedStudentId = String(getObjectValue_(registration, ['Student ID']) || '').trim().toUpperCase();
+    const registrationName = normalizeDashboardStudentName_(getObjectValue_(registration, ['Full Name', 'Nama', 'Student Name']));
+    const registeredAt = normalizeStudentDate_(getObjectValue_(registration, ['Registered At', 'Registration Date', 'Tanggal Daftar', 'Created At']));
+    if (registrationId && registeredAt) registrationDateById[registrationId] = registeredAt;
+    if (assignedStudentId && registeredAt) registrationDateByStudentId[assignedStudentId] = registeredAt;
+    if (registrationName && registeredAt) {
+      if (Object.prototype.hasOwnProperty.call(registrationDateByUniqueName, registrationName)) {
+        duplicatedRegistrationNames[registrationName] = true;
+      } else {
+        registrationDateByUniqueName[registrationName] = registeredAt;
+      }
+    }
+  });
+
+  Object.keys(duplicatedRegistrationNames).forEach(function (nameKey) {
+    delete registrationDateByUniqueName[nameKey];
+  });
+
+  function getAppRegistrationDate_(student) {
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    if (registrationId && registrationDateById[registrationId]) return registrationDateById[registrationId];
+
+    const studentId = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (studentId && registrationDateByStudentId[studentId]) return registrationDateByStudentId[studentId];
+
+    const nameKey = normalizeDashboardStudentName_(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']));
+    return nameKey ? (registrationDateByUniqueName[nameKey] || null) : null;
+  }
+
+  function nextBillingPeriodAfter_(date) {
+    if (!date) return '';
+    const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    return Utilities.formatDate(nextMonth, timezone, 'yyyy-MM');
+  }
+
+  function getTuitionStartDate_(student) {
+    const explicitStart = normalizeStudentDate_(getObjectValue_(student, [
+      'Tuition Start Date', 'Billing Start Date', 'Tanggal Mulai Les', 'Mulai Les'
+    ]));
+    if (explicitStart) return explicitStart;
+
+    const joinDate = normalizeStudentDate_(getObjectValue_(student, [
+      'Join Date', 'Tanggal Bergabung', 'Registered At', 'Timestamp',
+      'Registration Date', 'Tanggal Daftar', 'Created At'
+    ]));
+    if (joinDate) return joinDate;
+
+    const registrationId = String(getObjectValue_(student, ['Registration ID']) || '').trim();
+    return registrationId ? (registrationDateById[registrationId] || null) : null;
+  }
+
+  function getTuitionStartPeriod_(student) {
+    const explicitPeriod = String(getObjectValue_(student, [
+      'Tuition Start Period', 'Billing Start Period', 'Periode Mulai Tagihan', 'Bulan Mulai Les'
+    ]) || '').trim();
+    if (/^\d{4}-\d{2}$/.test(explicitPeriod)) return explicitPeriod;
+
+    // Form pendaftaran membayar biaya les pertama untuk bulan mulai belajar,
+    // yaitu bulan setelah pendaftaran. Contoh: daftar Oktober → mulai November.
+    const appRegistrationDate = getAppRegistrationDate_(student);
+    if (appRegistrationDate) return nextBillingPeriodAfter_(appRegistrationDate);
+
+    const startDate = getTuitionStartDate_(student);
+    return startDate ? Utilities.formatDate(startDate, timezone, 'yyyy-MM') : '';
+  }
+
+  function normalizeDashboardStudentName_(value) {
+    return String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
   students.forEach(function (student) {
-    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim();
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
     if (!id) return;
+
+    const fullName = String(
+      getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || ''
+    ).trim();
+
     studentMap[id] = {
       studentId: id,
-      fullName: String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || ''),
+      fullName: fullName,
       program: String(getObjectValue_(student, ['Program']) || ''),
       classId: String(getObjectValue_(student, ['Class ID', 'Class Id']) || ''),
       className: String(getObjectValue_(student, ['Class', 'Nama Kelas', 'Kelas']) || ''),
       waStudent: String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']) || ''),
       waParent: String(getObjectValue_(student, ['WA Parent', 'WA Orang Tua']) || '')
     };
+    rawStudentById[id] = student;
+
+    const status = String(
+      getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif'
+    ).trim().toLowerCase();
+
+    const nameKey = normalizeDashboardStudentName_(fullName);
+    if ((status === '' || status === 'aktif' || status === 'active') && nameKey) {
+      if (!Object.prototype.hasOwnProperty.call(activeStudentNameMap, nameKey)) {
+        activeStudentNameMap[nameKey] = id;
+      } else {
+        // Nama ganda tidak boleh dipakai sebagai fallback agar tidak salah siswa.
+        activeStudentNameMap[nameKey] = '';
+      }
+    }
   });
 
   const absentCounts = {};
@@ -3105,17 +5544,129 @@ function getDashboardData_(token) {
   }).sort(function (a,b) { return b.absentCount - a.absentCount; });
 
   const paidThisPeriod = {};
+
+  function normalizeDashboardTuitionPeriod_(payment) {
+    const rawPeriod = String(
+      getObjectValue_(payment, ['Period', 'Bulan yang dibayar', 'Periode']) || ''
+    ).trim();
+
+    // Data lama mencatat pembayaran pertama pendaftar pada bulan verifikasi.
+    // Untuk dashboard, pembayaran tersebut dipasangkan ke bulan mulai les
+    // tanpa mengubah atau memindahkan data apa pun di spreadsheet.
+    const paymentNote = String(getObjectValue_(payment, ['Notes', 'Catatan']) || '').trim();
+    const paymentId = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (/pembayaran awal dari pendaftaran siswa baru/i.test(paymentNote) && rawStudentById[paymentId]) {
+      const firstBillingPeriod = getTuitionStartPeriod_(rawStudentById[paymentId]);
+      if (firstBillingPeriod) return firstBillingPeriod;
+    }
+
+    if (/^\d{4}-\d{2}$/.test(rawPeriod)) {
+      return rawPeriod;
+    }
+
+    const paymentDate = normalizeStudentDate_(
+      getObjectValue_(payment, ['Payment Date', 'Tanggal', 'Date', 'Verified Date'])
+    );
+
+    return paymentDate
+      ? Utilities.formatDate(paymentDate, timezone, 'yyyy-MM')
+      : '';
+  }
+
   payments.forEach(function (payment) {
-    const id = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim();
+    let id = String(
+      getObjectValue_(payment, ['Student ID', 'ID']) || ''
+    ).trim().toUpperCase();
+
     const status = String(getObjectValue_(payment, ['Status']) || '').trim().toLowerCase();
-    const category = String(getObjectValue_(payment, ['Payment Category', 'Kategori']) || '').trim().toLowerCase();
-    const period = String(getObjectValue_(payment, ['Period', 'Bulan yang dibayar', 'Periode']) || '').trim();
+    const category = normalizePaymentCategory_(
+      getObjectValue_(payment, ['Payment Category', 'Kategori'])
+    );
+    const period = normalizeDashboardTuitionPeriod_(payment);
     const paid = status === 'verified' || status === 'paid' || status === 'lunas';
-    const tuition = !category || category === 'tuition' || category.indexOf('les') >= 0 || category.indexOf('course') >= 0;
-    if (id && paid && tuition && period === currentPeriod) paidThisPeriod[id] = true;
+
+    if (!paid || category !== 'Tuition' || period !== currentPeriod) return;
+
+    // Utamakan Student ID. Jika data lama tidak punya ID yang cocok,
+    // gunakan nama persis hanya jika nama tersebut unik pada siswa aktif.
+    if (!id || !studentMap[id]) {
+      const paymentNameKey = normalizeDashboardStudentName_(
+        getObjectValue_(payment, ['Nama', 'Student Name', 'Full Name'])
+      );
+      const matchedId = activeStudentNameMap[paymentNameKey] || '';
+      if (matchedId) id = matchedId;
+    }
+
+    if (id && studentMap[id]) {
+      paidThisPeriod[id] = true;
+    }
   });
-  const tuitionReminderTargets = activeStudents.map(function (student) {
-    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim();
+
+  // Jika siswa sudah mengirim pembayaran Tuition untuk periode berjalan,
+  // tagihan tidak lagi ditampilkan di Tuition Watch selama menunggu verifikasi.
+  // Jika Admin menolak bukti, status tidak dihitung dan tagihan otomatis muncul kembali.
+  paymentConfirmations.forEach(function (confirmation) {
+    let id = String(
+      getObjectValue_(confirmation, ['Student ID', 'ID']) || ''
+    ).trim().toUpperCase();
+
+    const status = String(
+      getObjectValue_(confirmation, ['Status']) || ''
+    ).trim().toLowerCase();
+
+    const category = normalizePaymentCategory_(
+      getObjectValue_(confirmation, ['Payment Category', 'Kategori'])
+    );
+
+    const period = String(
+      getObjectValue_(confirmation, ['Period', 'Periode', 'Bulan yang dibayar']) || ''
+    ).trim();
+
+    const submittedOrAccepted =
+      status === 'menunggu verifikasi' ||
+      status === 'pending' ||
+      status === 'menunggu' ||
+      status === 'verified' ||
+      status === 'paid' ||
+      status === 'lunas';
+
+    if (!submittedOrAccepted || category !== 'Tuition' || period !== currentPeriod) return;
+
+    if (!id || !studentMap[id]) {
+      const confirmationNameKey = normalizeDashboardStudentName_(
+        getObjectValue_(confirmation, ['Student Name', 'Nama', 'Full Name'])
+      );
+      const matchedId = activeStudentNameMap[confirmationNameKey] || '';
+      if (matchedId) id = matchedId;
+    }
+
+    if (id && studentMap[id]) {
+      paidThisPeriod[id] = true;
+    }
+  });
+
+  // Fallback aman untuk data lama:
+  // jika Data Siswa sudah ditandai Lunas pada bulan berjalan,
+  // siswa tidak boleh lagi muncul di Tagihan Les Aktif.
+  const currentMonthEnglish = Utilities.formatDate(now, timezone, 'MMMM');
+  activeStudents.forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (!id || paidThisPeriod[id]) return;
+
+    const legacyMonthValue = String(
+      getObjectValue_(student, [currentMonthEnglish]) || ''
+    ).trim();
+
+    if (/lunas|paid|verified/i.test(legacyMonthValue) || isStudentLeaveValue_(legacyMonthValue)) {
+      // CUTI berarti tidak ada kewajiban tagihan pada periode tersebut.
+      paidThisPeriod[id] = true;
+    }
+  });
+  const tuitionReminderTargets = activeStudents.filter(function (student) {
+    const startPeriod = getTuitionStartPeriod_(student);
+    return !startPeriod || startPeriod <= currentPeriod;
+  }).map(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
     return studentMap[id];
   }).filter(function (student) {
     return student && !paidThisPeriod[student.studentId];
@@ -3130,6 +5681,155 @@ function getDashboardData_(token) {
       waParent:student.waParent
     };
   }).sort(function (a,b) { return a.fullName.localeCompare(b.fullName,'id'); });
+
+  // V85 — Outstanding Balance: membawa tunggakan satu periode sebelumnya ke Tuition Watch.
+  // Agar siswa baru tidak salah ditandai menunggak, periode sebelumnya hanya dianggap relevan
+  // jika ada bukti aktivitas/administrasi siswa pada periode tersebut (attendance, tuition record,
+  // confirmation, atau penanda bulan pada Data Siswa).
+  const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previousPeriod = Utilities.formatDate(previousMonthDate, timezone, 'yyyy-MM');
+  const previousMonthEnglish = Utilities.formatDate(previousMonthDate, timezone, 'MMMM');
+  const previousPeriodActive = {};
+  const previousPeriodSettled = {};
+
+  attendance.forEach(function (record) {
+    let id = String(getObjectValue_(record, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const date = normalizeStudentDate_(getObjectValue_(record, ['Tanggal', 'Date']));
+    if (!id || !studentMap[id] || !date) return;
+    if (Utilities.formatDate(date, timezone, 'yyyy-MM') === previousPeriod) previousPeriodActive[id] = true;
+  });
+
+  payments.forEach(function (payment) {
+    let id = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const category = normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori']));
+    const period = normalizeDashboardTuitionPeriod_(payment);
+    if (category !== 'Tuition' || period !== previousPeriod) return;
+
+    if (!id || !studentMap[id]) {
+      const paymentNameKey = normalizeDashboardStudentName_(getObjectValue_(payment, ['Nama', 'Student Name', 'Full Name']));
+      const matchedId = activeStudentNameMap[paymentNameKey] || '';
+      if (matchedId) id = matchedId;
+    }
+    if (!id || !studentMap[id]) return;
+
+    previousPeriodActive[id] = true;
+    const status = String(getObjectValue_(payment, ['Status']) || '').trim().toLowerCase();
+    if (status === 'verified' || status === 'paid' || status === 'lunas') previousPeriodSettled[id] = true;
+  });
+
+  paymentConfirmations.forEach(function (confirmation) {
+    let id = String(getObjectValue_(confirmation, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const category = normalizePaymentCategory_(getObjectValue_(confirmation, ['Payment Category', 'Kategori']));
+    const period = String(getObjectValue_(confirmation, ['Period', 'Periode', 'Bulan yang dibayar']) || '').trim();
+    if (category !== 'Tuition' || period !== previousPeriod) return;
+
+    if (!id || !studentMap[id]) {
+      const confirmationNameKey = normalizeDashboardStudentName_(getObjectValue_(confirmation, ['Student Name', 'Nama', 'Full Name']));
+      const matchedId = activeStudentNameMap[confirmationNameKey] || '';
+      if (matchedId) id = matchedId;
+    }
+    if (!id || !studentMap[id]) return;
+
+    previousPeriodActive[id] = true;
+    const status = String(getObjectValue_(confirmation, ['Status']) || '').trim().toLowerCase();
+    if (
+      status === 'menunggu verifikasi' ||
+      status === 'pending' ||
+      status === 'menunggu' ||
+      status === 'verified' ||
+      status === 'paid' ||
+      status === 'lunas'
+    ) {
+      previousPeriodSettled[id] = true;
+    }
+  });
+
+  activeStudents.forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (!id || !studentMap[id]) return;
+    const legacyValue = String(getObjectValue_(student, [previousMonthEnglish]) || '').trim();
+    if (legacyValue) previousPeriodActive[id] = true;
+    if (/lunas|paid|verified/i.test(legacyValue) || isStudentLeaveValue_(legacyValue)) previousPeriodSettled[id] = true;
+  });
+
+  // V63 — tampilkan seluruh tunggakan bulanan sejak Agustus 2026, bukan hanya
+  // satu bulan sebelumnya. Setiap periode menjadi baris tersendiri agar Admin
+  // dapat melihat contoh: Agustus, September, dan Oktober secara lengkap.
+  // Bulan sebelum siswa terdaftar tidak ditagihkan, dan Juli selalu libur.
+  const arrearsStartDate = new Date(2026, 7, 1); // Agustus 2026
+  const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const historicalPeriods = [];
+  for (let cursor = new Date(arrearsStartDate); cursor <= previousMonthStart; cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)) {
+    if (cursor.getMonth() === 6) continue; // Juli: libur, tidak ditagihkan.
+    historicalPeriods.push({
+      period: Utilities.formatDate(cursor, timezone, 'yyyy-MM'),
+      monthName: Utilities.formatDate(cursor, timezone, 'MMMM'),
+      start: new Date(cursor.getFullYear(), cursor.getMonth(), 1),
+      end: new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0, 23, 59, 59)
+    });
+  }
+
+  const settledHistoricalPeriods = {};
+  payments.forEach(function (payment) {
+    let id = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const category = normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori']));
+    const period = normalizeDashboardTuitionPeriod_(payment);
+    const status = String(getObjectValue_(payment, ['Status']) || '').trim().toLowerCase();
+    if (category !== 'Tuition' || ['verified', 'paid', 'lunas'].indexOf(status) === -1) return;
+    if (!id || !studentMap[id]) {
+      const nameKey = normalizeDashboardStudentName_(getObjectValue_(payment, ['Nama', 'Student Name', 'Full Name']));
+      id = activeStudentNameMap[nameKey] || '';
+    }
+    if (id && period) settledHistoricalPeriods[id + '|' + period] = true;
+  });
+
+  paymentConfirmations.forEach(function (confirmation) {
+    let id = String(getObjectValue_(confirmation, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const category = normalizePaymentCategory_(getObjectValue_(confirmation, ['Payment Category', 'Kategori']));
+    const period = String(getObjectValue_(confirmation, ['Period', 'Periode', 'Bulan yang dibayar']) || '').trim();
+    const status = String(getObjectValue_(confirmation, ['Status']) || '').trim().toLowerCase();
+    const submittedOrSettled = ['menunggu verifikasi', 'pending', 'menunggu', 'verified', 'paid', 'lunas'].indexOf(status) >= 0;
+    if (category !== 'Tuition' || !submittedOrSettled) return;
+    if (!id || !studentMap[id]) {
+      const nameKey = normalizeDashboardStudentName_(getObjectValue_(confirmation, ['Student Name', 'Nama', 'Full Name']));
+      id = activeStudentNameMap[nameKey] || '';
+    }
+    if (id && period) settledHistoricalPeriods[id + '|' + period] = true;
+  });
+
+  const tuitionOutstandingTargets = [];
+  activeStudents.forEach(function (rawStudent) {
+    const id = String(getObjectValue_(rawStudent, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const student = studentMap[id];
+    if (!id || !student) return;
+    const tuitionStartPeriod = getTuitionStartPeriod_(rawStudent);
+
+    historicalPeriods.forEach(function (periodInfo) {
+      // Jangan pernah membuat tagihan untuk bulan sebelum siswa mulai les.
+      // Perbandingan periode lebih aman daripada tanggal harian: siswa yang
+      // mulai pada November tidak akan ditagih Agustus, September, atau Oktober.
+      if (tuitionStartPeriod && periodInfo.period < tuitionStartPeriod) return;
+
+      const legacyValue = String(getObjectValue_(rawStudent, [periodInfo.monthName]) || '').trim();
+      const settledInStudentData = /lunas|paid|verified/i.test(legacyValue) || isStudentLeaveValue_(legacyValue) || /libur|holiday/i.test(legacyValue);
+      const settledInPaymentData = !!settledHistoricalPeriods[id + '|' + periodInfo.period];
+      if (settledInStudentData || settledInPaymentData) return;
+
+      tuitionOutstandingTargets.push({
+        studentId: student.studentId,
+        fullName: student.fullName,
+        program: student.program,
+        classId: student.classId,
+        period: periodInfo.period,
+        waStudent: student.waStudent,
+        waParent: student.waParent
+      });
+    });
+  });
+  tuitionOutstandingTargets.sort(function (a, b) {
+    if (a.period !== b.period) return a.period.localeCompare(b.period);
+    return a.fullName.localeCompare(b.fullName, 'id');
+  });
 
   const unpaidAfterDaySeven = currentDay > 7
     ? tuitionReminderTargets.slice()
@@ -3152,10 +5852,25 @@ function getDashboardData_(token) {
       period: key,
       label: monthLabels[d.getMonth()] + ' ' + d.getFullYear(),
       paidStudentIds: {},
+      leaveStudentIds: {},
       transactions: 0,
       revenue: 0
     };
   }
+
+  // CUTI bukan tunggakan. Untuk ringkasan bulanan, siswa yang memiliki penanda
+  // CUTI pada bulan tersebut dikeluarkan dari jumlah siswa yang wajib membayar.
+  const monthNamesEnglishForMonitoring = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  Object.keys(tuitionMonthMap).forEach(function (periodKey) {
+    const monthIndex = Number(periodKey.slice(5, 7)) - 1;
+    const monthHeader = monthNamesEnglishForMonitoring[monthIndex];
+    if (!monthHeader) return;
+    activeStudents.forEach(function (student) {
+      const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+      const value = String(getObjectValue_(student, [monthHeader]) || '').trim();
+      if (id && isStudentLeaveValue_(value)) tuitionMonthMap[periodKey].leaveStudentIds[id] = true;
+    });
+  });
 
   const bookPurchases = [];
   const idCardPurchases = [];
@@ -3194,14 +5909,18 @@ function getDashboardData_(token) {
 
   const tuitionMonthly = Object.keys(tuitionMonthMap).sort().map(function (key) {
     const item = tuitionMonthMap[key];
-    const paidStudents = Object.keys(item.paidStudentIds).length;
+    const leaveIds = item.leaveStudentIds || {};
+    const paidStudents = Object.keys(item.paidStudentIds).filter(function (id) { return !leaveIds[id]; }).length;
+    const leaveStudents = Object.keys(leaveIds).length;
+    const billableStudents = Math.max(0, activeStudents.length - leaveStudents);
     return {
       period: item.period,
       label: item.label,
       paidStudents: paidStudents,
-      totalStudents: activeStudents.length,
-      unpaidStudents: Math.max(0, activeStudents.length - paidStudents),
-      percentage: activeStudents.length ? Math.round((paidStudents / activeStudents.length) * 100) : 0,
+      leaveStudents: leaveStudents,
+      totalStudents: billableStudents,
+      unpaidStudents: Math.max(0, billableStudents - paidStudents),
+      percentage: billableStudents ? Math.round((paidStudents / billableStudents) * 100) : 0,
       transactions: item.transactions,
       revenue: item.revenue
     };
@@ -3284,6 +6003,134 @@ function getDashboardData_(token) {
   const revenueByMethod = Object.keys(revenueByMethodMap)
     .map(function (key) { return revenueByMethodMap[key]; })
     .sort(function (a, b) { return b.amount - a.amount; });
+
+  // CEO Class Intelligence: ringkasan per kelas dan tren tiga bulan.
+  const classInsights = activeClasses.map(function (classInfo) {
+    const classStudents = activeStudents.map(function (student) {
+      const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+      return studentMap[id];
+    }).filter(function (student) {
+      return student && String(student.classId || '').trim().toUpperCase() === classInfo.classId;
+    });
+    const classStudentIds = {};
+    classStudents.forEach(function (student) { classStudentIds[student.studentId] = true; });
+    const classAssignments = assignmentRowsForCeo.filter(function (item) {
+      return String(getObjectValue_(item, ['Class ID']) || '').trim().toUpperCase() === classInfo.classId;
+    });
+    const classChallenges = challengeRowsForCeo.filter(function (item) {
+      return String(getObjectValue_(item, ['Class ID']) || '').trim().toUpperCase() === classInfo.classId;
+    });
+
+    const trends = tuitionMonthly.map(function (month) {
+      const monthAttendance = attendance.filter(function (record) {
+        const id = String(getObjectValue_(record, ['Student ID', 'ID']) || '').trim().toUpperCase();
+        const date = normalizeStudentDate_(getObjectValue_(record, ['Tanggal', 'Date']));
+        return classStudentIds[id] && date && Utilities.formatDate(date, timezone, 'yyyy-MM') === month.period;
+      });
+      const monthPresent = monthAttendance.filter(function (record) {
+        return /hadir|present/i.test(String(getObjectValue_(record, ['Status']) || ''));
+      }).length;
+      const monthAssignments = classAssignments.filter(function (item) {
+        const date = normalizeStudentDate_(getObjectValue_(item, ['Assigned Date', 'Created At', 'Updated At']));
+        return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === month.period;
+      });
+      const monthChallenges = classChallenges.filter(function (item) {
+        const date = normalizeStudentDate_(getObjectValue_(item, ['Created At', 'Due Date']));
+        return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === month.period;
+      });
+      const assignmentIds = {};
+      const challengeIds = {};
+      monthAssignments.forEach(function (item) { assignmentIds[String(getObjectValue_(item, ['Assignment ID']) || '')] = true; });
+      monthChallenges.forEach(function (item) { challengeIds[String(getObjectValue_(item, ['Challenge ID']) || '')] = true; });
+      const assignmentResults = assignmentSubmissionRowsForCeo.filter(function (item) {
+        const id = String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase();
+        return classStudentIds[id] && assignmentIds[String(getObjectValue_(item, ['Assignment ID']) || '')];
+      });
+      const challengeResults = challengeResultRowsForCeo.filter(function (item) {
+        const id = String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase();
+        return classStudentIds[id] && challengeIds[String(getObjectValue_(item, ['Challenge ID']) || '')];
+      });
+      const scores = assignmentResults.concat(challengeResults).map(function (item) {
+        return Number(getObjectValue_(item, ['Score', 'Nilai']) || 0);
+      }).filter(function (score) { return score >= 0; });
+      const assignmentExpected = monthAssignments.length * classStudents.length;
+      const challengeExpected = monthChallenges.length * classStudents.length;
+      return {
+        period: month.period,
+        label: month.label,
+        attendance: monthAttendance.length ? Math.round(monthPresent / monthAttendance.length * 100) : 0,
+        assignments: assignmentExpected ? Math.min(100, Math.round(assignmentResults.length / assignmentExpected * 100)) : 0,
+        challenges: challengeExpected ? Math.min(100, Math.round(challengeResults.length / challengeExpected * 100)) : 0,
+        academic: scores.length ? Math.round(scores.reduce(function (sum, value) { return sum + value; }, 0) / scores.length) : 0
+      };
+    });
+    const currentTrend = trends.length ? trends[trends.length - 1] : { attendance: 0, assignments: 0, challenges: 0, academic: 0 };
+    return {
+      classId: classInfo.classId,
+      className: classInfo.className,
+      program: classInfo.program,
+      tutor: classInfo.tutor,
+      schedule: classInfo.schedule,
+      studentCount: classStudents.length,
+      attendance: currentTrend.attendance,
+      assignmentProgress: currentTrend.assignments,
+      challengeProgress: currentTrend.challenges,
+      academicProgress: currentTrend.academic,
+      trends: trends
+    };
+  });
+
+  const revenueByCategoryMap = {};
+  const revenueByMonthMap = {};
+  verifiedPaymentsLast3Months.forEach(function (payment) {
+    const category = normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori'])) || 'Lainnya';
+    const amount = parseAmount_(getObjectValue_(payment, ['Amount', 'Nominal', 'Jumlah']));
+    const date = normalizeStudentDate_(getObjectValue_(payment, ['Payment Date', 'Tanggal', 'Date', 'Verified Date']));
+    const period = date ? Utilities.formatDate(date, timezone, 'yyyy-MM') : '';
+    const label = category === 'Tuition' ? 'Les Bulanan' : category === 'Book Package' ? 'Paket Buku' : category === 'ID Card' ? 'ID Card' : category;
+    if (!revenueByCategoryMap[label]) revenueByCategoryMap[label] = { category: label, amount: 0, transactions: 0 };
+    revenueByCategoryMap[label].amount += amount;
+    revenueByCategoryMap[label].transactions += 1;
+    if (period) revenueByMonthMap[period] = (revenueByMonthMap[period] || 0) + amount;
+  });
+  const revenueByCategory = Object.keys(revenueByCategoryMap).map(function (key) { return revenueByCategoryMap[key]; }).sort(function (a, b) { return b.amount - a.amount; });
+  const revenueMonthly = tuitionMonthly.map(function (month) { return { period: month.period, label: month.label, amount: revenueByMonthMap[month.period] || 0 }; });
+
+  const verifiedPaidCurrentIds = {};
+  verifiedPayments.forEach(function (payment) {
+    if (normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori'])) !== 'Tuition' || normalizeDashboardTuitionPeriod_(payment) !== currentPeriod) return;
+    let id = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (!id || !studentMap[id]) id = activeStudentNameMap[normalizeDashboardStudentName_(getObjectValue_(payment, ['Nama', 'Student Name', 'Full Name']))] || '';
+    if (id && studentMap[id]) verifiedPaidCurrentIds[id] = true;
+  });
+  activeStudents.forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const legacyValue = String(getObjectValue_(student, [currentMonthEnglish]) || '').trim();
+    if (id && /lunas|paid|verified/i.test(legacyValue)) verifiedPaidCurrentIds[id] = true;
+  });
+  const leaveIdMap = {};
+  leaveStudentsCurrent.forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (id) leaveIdMap[id] = true;
+  });
+  const billableCurrentStudents = activeStudents.map(function (student) {
+    return studentMap[String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase()];
+  }).filter(function (student) { return student && !leaveIdMap[student.studentId]; });
+  const currentPaidStudents = billableCurrentStudents.filter(function (student) { return verifiedPaidCurrentIds[student.studentId]; }).sort(function (a, b) { return a.fullName.localeCompare(b.fullName, 'id'); });
+  const currentUnpaidStudents = billableCurrentStudents.filter(function (student) { return !verifiedPaidCurrentIds[student.studentId]; }).sort(function (a, b) { return a.fullName.localeCompare(b.fullName, 'id'); });
+
+  const ceoAdminMessages = managementMessages.filter(function (item) {
+    return String(getObjectValue_(item, ['Sender Role']) || '').toLowerCase() === 'ceo' && String(getObjectValue_(item, ['Recipient Role']) || '').toLowerCase() === 'admin';
+  }).map(function (item) {
+    const createdAt = normalizeStudentDate_(getObjectValue_(item, ['Created At']));
+    return {
+      messageId: String(getObjectValue_(item, ['Message ID']) || ''),
+      senderName: String(getObjectValue_(item, ['Sender Name']) || 'CEO'),
+      text: String(getObjectValue_(item, ['Message']) || ''),
+      createdAt: createdAt ? Utilities.formatDate(createdAt, timezone, 'yyyy-MM-dd HH:mm') : '',
+      status: String(getObjectValue_(item, ['Status']) || 'Sent')
+    };
+  }).sort(function (a, b) { return String(b.createdAt).localeCompare(String(a.createdAt)); }).slice(0, 20);
 
   // Aktivitas Admin yang dapat ditelusuri dari data operasional yang memang tersimpan.
   const adminActivities = [];
@@ -3381,6 +6228,8 @@ function getDashboardData_(token) {
     metrics: {
       totalStudents: students.length,
       activeStudents: activeStudents.length,
+      alumniStudents: alumniStudents.length,
+      leaveStudents: leaveStudentsCurrent.length,
       activeClasses: activeClasses.length,
       totalPayments: payments.length,
       verifiedPayments: verifiedPayments.length,
@@ -3402,6 +6251,7 @@ function getDashboardData_(token) {
       absentMoreThanFour: absentMoreThanFour,
       unpaidAfterDaySeven: unpaidAfterDaySeven,
       tuitionReminderTargets: tuitionReminderTargets,
+      tuitionOutstandingTargets: tuitionOutstandingTargets,
       paymentWatchActive: currentDay > 7,
       period: currentPeriod
     },
@@ -3420,17 +6270,221 @@ function getDashboardData_(token) {
       bookPurchases: bookPurchases,
       idCardPurchases: idCardPurchases,
       activeClasses: activeClasses,
+      classInsights: classInsights,
       revenueLast3Months: totalRevenue,
       revenueByMethod: revenueByMethod,
+      revenueByCategory: revenueByCategory,
+      revenueMonthly: revenueMonthly,
+      averageMonthlyRevenue: revenueMonthly.length ? Math.round(totalRevenue / revenueMonthly.length) : 0,
+      currentPaidStudents: currentPaidStudents,
+      currentUnpaidStudents: currentUnpaidStudents,
+      managementMessages: ceoAdminMessages,
       attendanceCurrentMonth: {
         present: presentCount,
         totalRecords: currentMonthAttendance.length,
         percentage: attendanceRate
       }
     } : null,
+    managementMessages: ceoAdminMessages,
     adminActivities: recentAdminActivities,
     generatedAt: new Date().toISOString()
   };
+}
+
+function sendCeoAdminMessage_(token, messageText) {
+  const session = getSession_(token);
+  if (String(session.role || '').trim().toLowerCase() !== 'ceo') throw new Error('Hanya CEO yang dapat mengirim pesan manajemen kepada Admin.');
+  const message = String(messageText || '').trim();
+  if (!message) throw new Error('Pesan kepada Admin belum diisi.');
+  if (message.length > 1000) throw new Error('Pesan maksimal 1.000 karakter.');
+  const database = getDatabase_();
+  let sheet = database.getSheetByName('Management Messages');
+  const headers = ['Message ID', 'Sender Role', 'Sender Name', 'Recipient Role', 'Message', 'Created At', 'Status'];
+  if (!sheet) {
+    sheet = database.insertSheet('Management Messages');
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+  } else {
+    ensureHeaders_(sheet, headers);
+  }
+  const now = new Date();
+  const values = {
+    'Message ID': 'MSG-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'),
+    'Sender Role': 'CEO',
+    'Sender Name': String(session.fullName || session.name || session.username || 'CEO'),
+    'Recipient Role': 'Admin',
+    'Message': message,
+    'Created At': now,
+    'Status': 'Sent'
+  };
+  const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+  sheet.appendRow(sheetHeaders.map(function (header) { return Object.prototype.hasOwnProperty.call(values, header) ? values[header] : ''; }));
+  return { success: true, message: 'Pesan berhasil dikirim kepada Admin.' };
+}
+
+function requireCeoSettingsSession_(token) {
+  const session = getSession_(token);
+  if (String(session.role || '').trim().toLowerCase() !== 'ceo') {
+    throw new Error('Pengaturan lembaga hanya dapat dikelola oleh CEO.');
+  }
+  return session;
+}
+
+function getSettingsMapV81_(database) {
+  const sheet = database.getSheetByName('Settings');
+  if (!sheet) throw new Error('Sheet Settings belum tersedia. Jalankan setupConnection() satu kali.');
+  const map = {};
+  getSheetObjects_(sheet).forEach(function (row) {
+    const key = String(getObjectValue_(row, ['Setting Key']) || '').trim();
+    if (key) map[key] = String(getObjectValue_(row, ['Setting Value']) || '');
+  });
+  return map;
+}
+
+function saveSettingV81_(sheet, key, value, description) {
+  const rows = getSheetObjects_(sheet);
+  const existing = rows.find(function (row) {
+    return String(getObjectValue_(row, ['Setting Key']) || '').trim() === key;
+  });
+  const values = {
+    'Setting Key': key,
+    'Setting Value': String(value == null ? '' : value),
+    'Description': String(description || ''),
+    'Last Updated': new Date()
+  };
+  if (existing) updateMappedRow_(sheet, existing._rowNumber, values);
+  else appendMappedRow_(sheet, values);
+}
+
+function defaultCeoSettingsV81_() {
+  return {
+    institutionName: 'Mr One Course',
+    leaderName: 'Novita Rohmawati, S.Pd., Gr.',
+    institutionWhatsApp: '',
+    city: 'Balikpapan',
+    address: '',
+    paymentBank: 'BCA',
+    paymentAccountNumber: '7815846478',
+    paymentAccountName: 'Novita Rohmawati',
+    tuitionReminderTemplate: 'Yth. Bapak/Ibu {ortu},\n\nKami informasikan biaya les {program} ananda *{nama}* bulan *{bulan}* sebesar *{jumlah}* belum kami terima.\n\nPembayaran dapat ditransfer melalui:\n{rekening}\n\nTerima kasih. 🙏',
+    paymentThankYouTemplate: 'Terima kasih Bapak/Ibu {ortu} 🙏\nPembayaran biaya les ananda *{nama}* bulan {bulan} sebesar {jumlah} sudah kami terima pada {tanggal}.',
+    monthlyReportTemplate: 'Yth. Bapak/Ibu {ortu},\nberikut laporan belajar ananda *{nama}* bulan *{bulan}*:\n\n📅 Kehadiran: {hadir} dari {total} pertemuan\n📝 Catatan:\n{catatan}\n\nTerima kasih atas kepercayaannya. 🙏\n— {lembaga}',
+    tutorHonorTemplate: 'Halo {tutor}, rekap honor {bulan} di {lembaga}: {sesi} sesi, total *{total}*. Terima kasih atas kerja kerasnya. 🙏'
+  };
+}
+
+function mapCeoSettingsV81_(map) {
+  const defaults = defaultCeoSettingsV81_();
+  return {
+    institutionName: map.INSTITUTION_NAME || defaults.institutionName,
+    leaderName: map.LEADER_NAME || defaults.leaderName,
+    institutionWhatsApp: map.INSTITUTION_WHATSAPP || defaults.institutionWhatsApp,
+    city: map.INSTITUTION_CITY || defaults.city,
+    address: map.INSTITUTION_ADDRESS || defaults.address,
+    paymentBank: defaults.paymentBank,
+    paymentAccountNumber: defaults.paymentAccountNumber,
+    paymentAccountName: defaults.paymentAccountName,
+    tuitionReminderTemplate: map.TEMPLATE_TUITION_REMINDER || defaults.tuitionReminderTemplate,
+    paymentThankYouTemplate: map.TEMPLATE_PAYMENT_THANK_YOU || defaults.paymentThankYouTemplate,
+    monthlyReportTemplate: map.TEMPLATE_MONTHLY_REPORT || defaults.monthlyReportTemplate,
+    tutorHonorTemplate: map.TEMPLATE_TUTOR_HONOR || defaults.tutorHonorTemplate,
+    hasOwnerPin: Boolean(map.OWNER_PIN_HASH)
+  };
+}
+
+function getCeoSettings_(token) {
+  requireCeoSettingsSession_(token);
+  const database = getDatabase_();
+  return {
+    success: true,
+    settings: mapCeoSettingsV81_(getSettingsMapV81_(database)),
+    templateCodes: ['{nama}', '{ortu}', '{program}', '{bulan}', '{jumlah}', '{tanggal}', '{rekening}', '{lembaga}', '{hadir}', '{total}', '{catatan}', '{tutor}', '{sesi}'],
+    apiVersion: API_VERSION
+  };
+}
+
+function saveCeoSettings_(token, input) {
+  requireCeoSettingsSession_(token);
+  input = input || {};
+  const clean = function (value, maxLength) {
+    return String(value == null ? '' : value).trim().substring(0, maxLength || 4000);
+  };
+  const settings = {
+    institutionName: clean(input.institutionName, 120),
+    leaderName: clean(input.leaderName, 120),
+    institutionWhatsApp: clean(input.institutionWhatsApp, 30),
+    city: clean(input.city, 80),
+    address: clean(input.address, 300),
+    paymentBank: 'BCA',
+    paymentAccountNumber: '7815846478',
+    paymentAccountName: 'Novita Rohmawati',
+    tuitionReminderTemplate: clean(input.tuitionReminderTemplate, 4000),
+    paymentThankYouTemplate: clean(input.paymentThankYouTemplate, 4000),
+    monthlyReportTemplate: clean(input.monthlyReportTemplate, 4000),
+    tutorHonorTemplate: clean(input.tutorHonorTemplate, 4000)
+  };
+  if (!settings.institutionName || !settings.paymentBank || !settings.paymentAccountNumber || !settings.paymentAccountName) {
+    throw new Error('Nama lembaga serta rekening pembayaran resmi wajib diisi.');
+  }
+  if (settings.institutionWhatsApp && !/^\+?[0-9][0-9\s-]{7,20}$/.test(settings.institutionWhatsApp)) {
+    throw new Error('Nomor WhatsApp lembaga belum valid.');
+  }
+  const database = getDatabase_();
+  const sheet = database.getSheetByName('Settings');
+  const fields = [
+    ['INSTITUTION_NAME', settings.institutionName, 'Nama lembaga'],
+    ['LEADER_NAME', settings.leaderName, 'Nama pimpinan atau admin'],
+    ['INSTITUTION_WHATSAPP', settings.institutionWhatsApp, 'Nomor WhatsApp lembaga'],
+    ['INSTITUTION_CITY', settings.city, 'Kota untuk dokumen resmi'],
+    ['INSTITUTION_ADDRESS', settings.address, 'Alamat lembaga'],
+    ['PAYMENT_BANK', settings.paymentBank, 'Bank pembayaran resmi'],
+    ['PAYMENT_ACCOUNT_NUMBER', settings.paymentAccountNumber, 'Nomor rekening pembayaran resmi'],
+    ['PAYMENT_ACCOUNT_NAME', settings.paymentAccountName, 'Nama pemilik rekening resmi'],
+    ['TEMPLATE_TUITION_REMINDER', settings.tuitionReminderTemplate, 'Template pengingat biaya les'],
+    ['TEMPLATE_PAYMENT_THANK_YOU', settings.paymentThankYouTemplate, 'Template pembayaran lunas'],
+    ['TEMPLATE_MONTHLY_REPORT', settings.monthlyReportTemplate, 'Template laporan bulanan'],
+    ['TEMPLATE_TUTOR_HONOR', settings.tutorHonorTemplate, 'Template info honor Tutor']
+  ];
+  fields.forEach(function (field) { saveSettingV81_(sheet, field[0], field[1], field[2]); });
+  const ownerPin = clean(input.ownerPin, 12);
+  if (ownerPin) {
+    if (!/^\d{4,8}$/.test(ownerPin)) throw new Error('PIN owner harus terdiri dari 4–8 angka.');
+    const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, ownerPin + '|MOC-OWNER-PIN');
+    saveSettingV81_(sheet, 'OWNER_PIN_HASH', Utilities.base64Encode(digest), 'Hash PIN owner');
+  }
+  return { success: true, message: 'Pengaturan CEO berhasil disimpan dan menjadi pengaturan resmi Mr One Course.', settings: mapCeoSettingsV81_(getSettingsMapV81_(database)) };
+}
+
+function getCeoOperationalBackup_(token) {
+  requireCeoSettingsSession_(token);
+  const database = getDatabase_();
+  const allowedSheets = ['Data Siswa', 'Data Pembayaran', 'Absensi', 'Master Jadwal', 'Student Registrations', 'Learning Journal', 'Student Notes', 'Assignments', 'Assignment Submissions', 'Challenges', 'Challenge Results', 'EXP Ledger', 'Badges', 'Student Badges', 'Management Messages', 'Settings'];
+  const backup = {
+    format: 'MOC_OPERATIONAL_BACKUP_V81',
+    createdAt: new Date().toISOString(),
+    spreadsheetName: database.getName(),
+    settings: mapCeoSettingsV81_(getSettingsMapV81_(database)),
+    sheets: {}
+  };
+  allowedSheets.forEach(function (name) {
+    const sheet = database.getSheetByName(name);
+    if (!sheet) return;
+    const values = sheet.getDataRange().getDisplayValues();
+    if (name === 'Settings') {
+      backup.sheets[name] = values.filter(function (row, index) { return index === 0 || String(row[0] || '') !== 'OWNER_PIN_HASH'; });
+    } else backup.sheets[name] = values;
+  });
+  return { success: true, backup: backup, message: 'Cadangan operasional berhasil dibuat. Data akun dan sesi login tidak disertakan.' };
+}
+
+function restoreCeoSettingsBackup_(token, backup) {
+  requireCeoSettingsSession_(token);
+  if (!backup || String(backup.format || '') !== 'MOC_OPERATIONAL_BACKUP_V81' || !backup.settings) {
+    throw new Error('Berkas cadangan tidak dikenali. Gunakan cadangan V81 dari Academic Suite.');
+  }
+  const restored = Object.assign({}, backup.settings, { ownerPin: '' });
+  const result = saveCeoSettings_(token, restored);
+  return { success: true, message: 'Profil, rekening, dan template pesan berhasil dipulihkan. Data akademik tidak ditimpa.', settings: result.settings };
 }
 
 function formatRupiahForLog_(value) {
@@ -3595,6 +6649,8 @@ function getStudents_(token, request) {
       };
     })
     .filter(function (student) {
+      // Baris slot Student ID kosong tidak ditampilkan sebagai siswa aktif.
+      if (!String(student.fullName || '').trim()) return false;
       if (!search) {
         return true;
       }
@@ -3644,6 +6700,243 @@ function getStudents_(token, request) {
   };
 }
 
+/**
+ * Data ringkas khusus menu Admin > Hubungi Siswa.
+ * Hanya membaca data yang dibutuhkan untuk menyusun konfirmasi WhatsApp.
+ */
+function getAdminContactStudents_(token) {
+  const session = getSession_(token);
+  if (session.role !== 'Admin') {
+    throw new Error('Fitur Hubungi Siswa hanya dapat digunakan oleh Admin.');
+  }
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const timezone = Session.getScriptTimeZone() || 'Asia/Makassar';
+  const now = new Date();
+  const year = Number(Utilities.formatDate(now, timezone, 'yyyy'));
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const activeStudents = getSheetObjects_(studentSheet).filter(function (student) {
+    const name = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    const status = String(getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif').trim().toLowerCase();
+    return name && (status === '' || status === 'aktif' || status === 'active');
+  });
+
+  const studentById = {};
+  const uniqueNameToId = {};
+  activeStudents.forEach(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const name = String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim();
+    if (!id) return;
+    studentById[id] = student;
+    const nameKey = name.toLowerCase().replace(/\s+/g, ' ');
+    if (!Object.prototype.hasOwnProperty.call(uniqueNameToId, nameKey)) uniqueNameToId[nameKey] = id;
+    else uniqueNameToId[nameKey] = '';
+  });
+
+  const settled = {};
+  function normalizePeriod(record) {
+    const raw = String(getObjectValue_(record, ['Period', 'Periode', 'Bulan yang dibayar']) || '').trim();
+    if (/^\d{4}-\d{2}$/.test(raw)) return raw;
+    const paymentDate = normalizeStudentDate_(getObjectValue_(record, ['Payment Date', 'Tanggal', 'Date', 'Verified Date']));
+    return paymentDate ? Utilities.formatDate(paymentDate, timezone, 'yyyy-MM') : '';
+  }
+  function resolveStudentId(record) {
+    let id = String(getObjectValue_(record, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    if (id && studentById[id]) return id;
+    const nameKey = String(getObjectValue_(record, ['Student Name', 'Full Name', 'Nama']) || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return uniqueNameToId[nameKey] || '';
+  }
+  function markSettled(record, allowPending) {
+    const status = String(getObjectValue_(record, ['Status']) || '').trim().toLowerCase();
+    const accepted = /^(verified|paid|lunas|approved)$/.test(status) || (allowPending && /^(menunggu verifikasi|pending|menunggu)$/.test(status));
+    if (!accepted) return;
+    const id = resolveStudentId(record);
+    if (!id) return;
+    const category = normalizePaymentCategory_(getObjectValue_(record, ['Payment Category', 'Kategori']));
+    const period = category === 'Tuition' ? normalizePeriod(record) : 'once';
+    settled[id + '|' + category + '|' + period] = true;
+  }
+
+  const paymentSheet = database.getSheetByName('Data Pembayaran');
+  if (paymentSheet) getSheetObjects_(paymentSheet).forEach(function (row) { markSettled(row, false); });
+  const confirmationSheet = database.getSheetByName('Payment Confirmations');
+  if (confirmationSheet) getSheetObjects_(confirmationSheet).forEach(function (row) { markSettled(row, true); });
+
+  const periods = [7, 8, 9, 10, 11].map(function (monthIndex) {
+    return year + '-' + String(monthIndex + 1).padStart(2, '0');
+  });
+
+  const students = activeStudents.map(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim().toUpperCase();
+    const tuitionPaidPeriods = periods.filter(function (period) {
+      const monthIndex = Number(period.slice(5, 7)) - 1;
+      const legacy = String(getObjectValue_(student, [monthNames[monthIndex]]) || '').trim();
+      return settled[id + '|Tuition|' + period] || /lunas|paid|verified/i.test(legacy) || isStudentLeaveValue_(legacy) || monthIndex === 6;
+    });
+    return {
+      studentId: id,
+      fullName: String(getObjectValue_(student, ['Full Name', 'Student Name', 'Nama']) || '').trim(),
+      className: String(getObjectValue_(student, ['Class', 'Nama Kelas', 'Kelas']) || '').trim(),
+      program: String(getObjectValue_(student, ['Program']) || '').trim(),
+      waStudent: String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WhatsApp', 'WA Account']) || '').trim(),
+      waParent: String(getObjectValue_(student, ['WA Parent', 'WA Orang Tua']) || '').trim(),
+      photoLink: String(getObjectValue_(student, ['Photo Link', 'Photo link', 'Foto', 'Foto Siswa', 'Profile Photo']) || '').trim(),
+      tuitionPaidPeriods: tuitionPaidPeriods,
+      workbookSettled: Boolean(settled[id + '|Book Package|once']),
+      idCardSettled: Boolean(settled[id + '|ID Card|once'])
+    };
+  }).filter(function (student) { return student.studentId; }).sort(function (a, b) {
+    return a.fullName.localeCompare(b.fullName, 'id');
+  });
+
+  return {
+    success: true,
+    currentPeriod: Utilities.formatDate(now, timezone, 'yyyy-MM'),
+    periods: periods,
+    students: students
+  };
+}
+
+
+
+function requireLegacyStudentGuideAdmin_(token) {
+  const session = getSession_(token);
+  const role = String(session.role || '').trim().toLowerCase();
+  if (role !== 'admin' && role !== 'ceo') {
+    throw new Error('Anda tidak memiliki akses untuk mengirim panduan aktivasi siswa.');
+  }
+  return session;
+}
+
+function getLegacyStudentActivationGuideWhatsApp_(token, studentId) {
+  requireLegacyStudentGuideAdmin_(token);
+
+  const id = String(studentId || '').trim().toUpperCase();
+  if (!id) throw new Error('Student ID wajib diisi.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  const student = getSheetObjects_(studentSheet).find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+  if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+  const studentStatus = String(
+    getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif'
+  ).trim().toLowerCase();
+
+  if (studentStatus !== '' && studentStatus !== 'aktif' && studentStatus !== 'active') {
+    throw new Error('Siswa berstatus Non Aktif sehingga panduan aktivasi akun tidak dapat dikirim.');
+  }
+
+  const usersSheet = database.getSheetByName('Users');
+  const accountExists = usersSheet ? getSheetObjects_(usersSheet).some(function (user) {
+    const username = String(getObjectValue_(user, ['Username']) || '').trim().toUpperCase();
+    const relatedId = String(getObjectValue_(user, ['Related ID']) || '').trim().toUpperCase();
+    const status = String(getObjectValue_(user, ['Status']) || 'Aktif').trim().toLowerCase();
+    return (username === id || relatedId === id) && status !== 'tidak aktif' && status !== 'non aktif' && status !== 'inactive';
+  }) : false;
+
+  if (accountExists) {
+    throw new Error('Akun siswa ini sudah aktif. Tidak perlu mengirim panduan aktivasi lagi.');
+  }
+
+  const sentAt = String(getObjectValue_(student, ['Activation Guide Sent At']) || '').trim();
+  if (sentAt) {
+    throw new Error('Panduan aktivasi akun sudah pernah dikirim kepada siswa ini.');
+  }
+
+  const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+  const classId = String(getObjectValue_(student, ['Class ID', 'Class Id', 'Kode Kelas']) || '').trim();
+  const waStudent = String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WA Account', 'WhatsApp']) || '').trim();
+  const waParent = String(getObjectValue_(student, ['WA Parent', 'WA Orang Tua']) || '').trim();
+
+  if (!waStudent && !waParent) {
+    throw new Error('Nomor WhatsApp siswa maupun orang tua belum tersedia di Data Siswa.');
+  }
+
+  const groupLink = getRegistrationClassWhatsApp_(classId);
+  const appUrl = 'https://moc-academic-suite.vercel.app/';
+
+  const message =
+    'Halo ' + (fullName || 'Siswa Mr One Course') + ' 👋\\n\\n' +
+    'Berikut akses awal *Mr One Course Academic Suite* untuk akun belajar Anda.\\n\\n' +
+    '*1. Buka Aplikasi*\\n' + appUrl + '\\n\\n' +
+    '*2. Tambahkan ke Home Screen*\\n' +
+    '• Android/Chrome: buka link → tekan menu ⋮ → pilih *Add to Home screen / Tambahkan ke layar utama*.\\n' +
+    '• iPhone/Safari: buka link → tekan tombol Share → pilih *Add to Home Screen*.\\n\\n' +
+    '*3. Sign In Akun Belajar*\\n' +
+    'Username: *' + id + '*\\n' +
+    'Password: gunakan password awal yang diberikan Manajemen Mr One Course.\\n\\n' +
+    '*4. Ganti Password (Opsional)*\\n' +
+    'Password awal boleh tetap digunakan. Jika ingin password pribadi, buka *Profil → Keamanan Akun → Ganti Password*.\\n\\n' +
+    '*5. Menu utama siswa*\\n' +
+    '• Home — ringkasan kelas dan progress\\n' +
+    '• Akademik — pembelajaran, tugas, dan tantangan\\n' +
+    '• Check-in — absensi saat hadir di kelas\\n' +
+    '• My Badge — EXP, rank, dan badge\\n' +
+    '• Profil — data siswa, pembayaran, laporan perkembangan, dan keamanan akun\\n\\n' +
+    (groupLink ? '*6. Grup WhatsApp Kelas*\\n' + groupLink + '\\n\\n' : '') +
+    'Simpan Student ID dan password Anda dengan baik.\\n\\n' +
+    'Terima kasih. Selamat belajar bersama Mr One Course! 🌟';
+
+  return {
+    success: true,
+    studentId: id,
+    fullName: fullName,
+    waStudent: waStudent,
+    waParent: waParent,
+    groupLink: groupLink,
+    combinedMessage: message
+  };
+}
+
+function markLegacyStudentActivationGuideSent_(token, studentId) {
+  requireLegacyStudentGuideAdmin_(token);
+
+  const id = String(studentId || '').trim().toUpperCase();
+  if (!id) throw new Error('Student ID wajib diisi.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  ensureHeaders_(studentSheet, ['Activation Guide Sent At']);
+
+  const students = getSheetObjects_(studentSheet);
+  const student = students.find(function (item) {
+    return String(getObjectValue_(item, ['Student ID', 'ID']) || '').trim().toUpperCase() === id;
+  });
+  if (!student) throw new Error('Data siswa tidak ditemukan.');
+
+  const existing = String(getObjectValue_(student, ['Activation Guide Sent At']) || '').trim();
+  if (existing) {
+    return { success: true, alreadySent: true, sentAt: existing };
+  }
+
+  const headers = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header || '').trim(); });
+
+  const column = headers.indexOf('Activation Guide Sent At') + 1;
+  const now = new Date();
+
+  if (column > 0) {
+    studentSheet.getRange(student._rowNumber, column).setValue(now);
+  }
+
+  return {
+    success: true,
+    alreadySent: false,
+    sentAt: now.toISOString()
+  };
+}
 
 function getAdminStudentDetail_(token, studentId) {
   const session = getSession_(token);
@@ -3690,7 +6983,7 @@ function getAdminStudentDetail_(token, studentId) {
     return rowClassId === classId && (!date || Utilities.formatDate(date, timezone, 'yyyy-MM') === currentPeriod);
   }).map(function (row) {
     const date = normalizeStudentDate_(getObjectValue_(row, ['Date', 'Tanggal']));
-    return { date:date ? Utilities.formatDate(date,timezone,'yyyy-MM-dd') : '', meetingNumber:Number(getObjectValue_(row,['Meeting Number','Pertemuan Ke'])||0), title:String(getObjectValue_(row,['Material / Topic','Material','Topic'])||''), activities:String(getObjectValue_(row,['Activities','Aktivitas'])||''), notes:String(getObjectValue_(row,['Tutor Notes','Catatan Tutor'])||'') };
+    return { date:date ? Utilities.formatDate(date,timezone,'yyyy-MM-dd') : '', meetingNumber:Number(getObjectValue_(row,['Meeting Number','Pertemuan Ke'])||0), title:String(getObjectValue_(row,['Material / Topic','Material','Topic'])||''), objective:String(getObjectValue_(row,['Learning Objective','Tujuan Pembelajaran'])||''), activities:String(getObjectValue_(row,['Activities','Aktivitas'])||''), notes:String(getObjectValue_(row,['Tutor Notes','Catatan Tutor'])||'') };
   });
   const plans = planRows.filter(function (row) {
     return String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === classId && String(getObjectValue_(row, ['Month','Bulan']) || '').trim() === currentPeriod;
@@ -3732,6 +7025,32 @@ function getAdminStudentDetail_(token, studentId) {
   const lastPaymentRow = payments.length ? payments[payments.length-1] : null;
   const lastPaymentDate = lastPaymentRow ? normalizeStudentDate_(getObjectValue_(lastPaymentRow,['Payment Date','Tanggal Pembayaran','Date'])) : null;
 
+  const leaveMonthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const leaveHistory = [];
+  const currentYearNumber = Number(Utilities.formatDate(new Date(), timezone, 'yyyy'));
+  leaveMonthNames.forEach(function(monthName, monthIndex) {
+    const raw = String(getObjectValue_(student, [monthName]) || '').trim();
+    if (!isStudentLeaveValue_(raw)) return;
+    leaveHistory.push({
+      period: currentYearNumber + '-' + String(monthIndex + 1).padStart(2, '0'),
+      month: monthName,
+      note: extractStudentLeaveNote_(raw),
+      raw: raw
+    });
+  });
+  const currentMonthEnglishForLeave = Utilities.formatDate(new Date(), timezone, 'MMMM');
+  const currentLeaveValue = String(getObjectValue_(student, [currentMonthEnglishForLeave]) || '').trim();
+  const currentMonthOnLeave = isStudentLeaveValue_(currentLeaveValue);
+  const operationalStatus = String(getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif').trim();
+  const stoppedStudent = /^(berhenti les|berhenti|stopped)$/i.test(operationalStatus);
+  const rawStopDate = getObjectValue_(student, ['Stop Date']);
+  const normalizedStopDate = normalizeStudentDate_(rawStopDate);
+  const stopInfo = stoppedStudent ? {
+    date: normalizedStopDate ? Utilities.formatDate(normalizedStopDate, timezone, 'dd MMM yyyy') : String(rawStopDate || ''),
+    note: String(getObjectValue_(student, ['Stop Note']) || ''),
+    confirmedBy: String(getObjectValue_(student, ['Stop Confirmed By']) || '')
+  } : null;
+
   let rewards = { lifetimeExp:0, rank:'Newcomer', unlockedBadges:0, badges:[] };
   try {
     const summary = getStudentGamificationSummaryV22_(id,classId,currentPeriod);
@@ -3756,11 +7075,15 @@ function getAdminStudentDetail_(token, studentId) {
       waStudent:String(getObjectValue_(student,['WA Student','WA Account'])||''),
       waParent:String(getObjectValue_(student,['WA Parent'])||''),
       accountStatus:String(getObjectValue_(student,['Account Status'])||''),
+      activationGuideSentAt:String(getObjectValue_(student,['Activation Guide Sent At'])||''),
       status:String(getObjectValue_(student,['Student Status','Status'])||'Aktif')
     },
     monthlyReport:{period:currentPeriod,attendancePercentage:attendancePercentage,averageScore:averageScore,completedAssignments:completedAssignments,tutorComment:tutorComment},
     learningActivities:learningActivities,
-    administration:{present:present,absent:absent,tuitionStatus:tuitionPaid?'Lunas':'Belum Lunas',lastPayment:lastPaymentDate?Utilities.formatDate(lastPaymentDate,timezone,'dd MMM yyyy'):'Belum ada'},
+    administration:{present:present,absent:absent,tuitionStatus:stoppedStudent?'Berhenti Les':(tuitionPaid?'Lunas':(currentMonthOnLeave?'Cuti':'Belum Lunas')),lastPayment:lastPaymentDate?Utilities.formatDate(lastPaymentDate,timezone,'dd MMM yyyy'):'Belum ada'},
+    leaveHistory: leaveHistory,
+    currentLeave: currentMonthOnLeave ? { period: currentPeriod, note: extractStudentLeaveNote_(currentLeaveValue), raw: currentLeaveValue } : null,
+    stopInfo: stopInfo,
     rewards:rewards
   };
 }
@@ -4046,6 +7369,7 @@ function getTutorDashboard_(token) {
         date: date ? Utilities.formatDate(date, timezone, 'yyyy-MM-dd') : '',
         meetingNumber: Number(getObjectValue_(journal, ['Meeting Number', 'Pertemuan Ke']) || 0),
         title: String(getObjectValue_(journal, ['Material / Topic', 'Material', 'Topic']) || ''),
+        objective: String(getObjectValue_(journal, ['Learning Objective', 'Tujuan Pembelajaran']) || ''),
         activities: String(getObjectValue_(journal, ['Activities', 'Aktivitas']) || ''),
         notes: String(getObjectValue_(journal, ['Tutor Notes', 'Catatan Tutor']) || '')
       };
@@ -4277,9 +7601,10 @@ function saveTutorJournal_(token, journal) {
   const dateText = String(journal.date || '').trim();
   const meetingNumber = Number(journal.meetingNumber || 0);
   const material = String(journal.title || '').trim();
+  const learningObjective = String(journal.objective || '').trim();
   const activities = String(journal.activities || '').trim();
-  if (!classId || !dateText || meetingNumber < 1 || meetingNumber > 8 || !material || !activities) {
-    throw new Error('Kelas, tanggal, pertemuan 1–8, materi, dan aktivitas wajib diisi.');
+  if (!classId || !dateText || meetingNumber < 1 || meetingNumber > 8 || !material || !learningObjective || !activities) {
+    throw new Error('Kelas, tanggal, pertemuan 1–8, materi, tujuan pembelajaran, dan aktivitas wajib diisi.');
   }
 
   const tutorDashboard = getTutorDashboard_(token);
@@ -4288,18 +7613,22 @@ function saveTutorJournal_(token, journal) {
 
   const database = getDatabase_();
   let sheet = database.getSheetByName('Learning Journal');
-  const headers = ['Journal ID', 'Date', 'Class ID', 'Class Name', 'Meeting Number', 'Tutor', 'Material / Topic', 'Activities', 'Tutor Notes', 'Updated At'];
+  const headers = ['Journal ID', 'Date', 'Class ID', 'Class Name', 'Meeting Number', 'Tutor', 'Material / Topic', 'Learning Objective', 'Activities', 'Tutor Notes', 'Updated At'];
   if (!sheet) {
     sheet = database.insertSheet('Learning Journal');
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
+  } else {
+    ensureHeaders_(sheet, headers);
   }
 
   const rows = getSheetObjects_(sheet);
   const existingIndex = rows.findIndex(function (item) {
+    const existingDate = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal']));
+    const existingDateText = existingDate ? Utilities.formatDate(existingDate, 'Asia/Makassar', 'yyyy-MM-dd') : '';
     return String(getObjectValue_(item, ['Class ID']) || '').trim() === classId &&
       Number(getObjectValue_(item, ['Meeting Number', 'Pertemuan Ke']) || 0) === meetingNumber &&
-      String(getObjectValue_(item, ['Date', 'Tanggal']) || '').slice(0, 10) === dateText.slice(0, 10);
+      existingDateText === dateText.slice(0, 10);
   });
   const existing = existingIndex >= 0 ? rows[existingIndex] : null;
   const now = new Date();
@@ -4307,7 +7636,7 @@ function saveTutorJournal_(token, journal) {
     'Journal ID': existing ? String(getObjectValue_(existing, ['Journal ID']) || '') : 'JRN-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'),
     'Date': new Date(dateText + 'T00:00:00+08:00'), 'Class ID': classId, 'Class Name': tutorClass.className,
     'Meeting Number': meetingNumber, 'Tutor': tutorDashboard.tutor.name, 'Material / Topic': material,
-    'Activities': activities, 'Tutor Notes': String(journal.notes || '').trim(), 'Updated At': now
+    'Learning Objective': learningObjective, 'Activities': activities, 'Tutor Notes': String(journal.notes || '').trim(), 'Updated At': now
   };
 
   if (existingIndex >= 0) {
@@ -4316,7 +7645,10 @@ function saveTutorJournal_(token, journal) {
       return Object.prototype.hasOwnProperty.call(values, header) ? values[header] : getObjectValue_(existing, [header]);
     })]);
   } else {
-    sheet.appendRow(headers.map(function (header) { return values[header]; }));
+    const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+    sheet.appendRow(sheetHeaders.map(function (header) {
+      return Object.prototype.hasOwnProperty.call(values, header) ? values[header] : '';
+    }));
   }
   const planSheet = database.getSheetByName('Monthly Learning Plan');
   if (planSheet) {
@@ -4414,8 +7746,8 @@ function saveTutorJournal_(token, journal) {
   return {
     success: true,
     message: savedStudentCount
-      ? 'Learning Journal dan capaian ' + savedStudentCount + ' siswa berhasil disimpan.'
-      : 'Learning Journal berhasil disimpan.',
+      ? 'Jurnal mengajar dan catatan ' + savedStudentCount + ' siswa berhasil disimpan.'
+      : 'Jurnal mengajar berhasil disimpan.',
     savedStudentCount: savedStudentCount
   };
 }
@@ -4439,7 +7771,7 @@ function saveTutorStudentNote_(token, note) {
 
   const database = getDatabase_();
   let sheet = database.getSheetByName('Student Notes');
-  const headers = ['Note ID', 'Date', 'Student ID', 'Student Name', 'Class ID', 'Class Name', 'Tutor', 'Participation', 'Strengths', 'Areas for Improvement', 'Tutor Comment', 'Achievement', 'EXP Awarded', 'Updated At'];
+  const headers = ['Note ID', 'Date', 'Student ID', 'Student Name', 'Class ID', 'Class Name', 'Tutor', 'Participation', 'Strengths', 'Areas for Improvement', 'Tutor Comment', 'Achievement', 'EXP Awarded', 'EXP Category', 'Updated At'];
   if (!sheet) {
     sheet = database.insertSheet('Student Notes');
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -4476,6 +7808,7 @@ function saveTutorStudentNote_(token, note) {
     'Tutor Comment': comment,
     'Achievement': String(note.achievement || '').trim(),
     'EXP Awarded': expAwarded,
+    'EXP Category': String(note.expCategory || 'Participation').trim(),
     'Updated At': now
   };
 
@@ -4492,9 +7825,25 @@ function saveTutorStudentNote_(token, note) {
     sheet.appendRow(rowValues);
   }
 
+  const requestedExpCategory = String(note.expCategory || 'Participation').trim();
+  const allowedExpCategories = ['Participation', 'Quiz', 'Project', 'Achievement'];
+  const expCategory = allowedExpCategories.indexOf(requestedExpCategory) >= 0 ? requestedExpCategory : 'Participation';
+  const gamificationAward = setStudentExpForSourceV79_({
+    studentId: studentId,
+    sourceType: expCategory,
+    sourceId: String(values['Note ID']),
+    activityName: String(note.achievement || note.participation || 'Partisipasi kelas'),
+    exp: expAwarded,
+    skillCategory: expCategory,
+    timestamp: new Date(dateText + 'T00:00:00+08:00'),
+    awardMethod: 'Tutor Award',
+    notes: comment
+  });
+
   return {
     success: true,
     updatedExisting: existingIndex >= 0,
+    gamification: gamificationAward && gamificationAward.awarded ? gamificationAward : null,
     message: existingIndex >= 0
       ? 'Catatan siswa pada tanggal yang sama berhasil diperbarui.'
       : 'Catatan individual siswa berhasil disimpan.'
@@ -4511,27 +7860,61 @@ function createTutorAssignment_(token, assignment) {
   const assignedDate = String(assignment.assignedDate || '').trim();
   const dueDate = String(assignment.dueDate || '').trim();
   const expReward = Math.max(0, Math.min(200, Number(assignment.expReward || 0)));
-  const gradingMode = String(assignment.gradingMode || 'automatic').toLowerCase() === 'automatic' ? 'Automatic' : 'Tutor Review';
+  const gradingMode = 'Automatic';
   const answerKey = String(assignment.answerKey || '').trim();
+  const allowedTaskTypes = ['multiple-choice', 'multiple-select', 'true-false', 'fill-blank', 'matching', 'ordering', 'sentence-builder', 'categorization', 'short-answer', 'error-correction', 'reading', 'listening'];
+  const requestedTaskType = String(assignment.taskType || 'multiple-choice').trim().toLowerCase();
+  const taskType = allowedTaskTypes.indexOf(requestedTaskType) >= 0 ? requestedTaskType : 'multiple-choice';
+  const stimulus = String(assignment.stimulus || '').trim();
   const questions = (Array.isArray(assignment.questions) ? assignment.questions : []).map(function (item, index) {
-    return {
+    const type = ['reading', 'listening'].indexOf(taskType) >= 0 ? 'multiple-choice' : String(item.type || taskType || 'multiple-choice').trim().toLowerCase();
+    const question = {
       id: String(item.id || 'q-' + (index + 1)),
+      type: type,
       text: String(item.text || '').trim(),
-      options: (Array.isArray(item.options) ? item.options : []).slice(0, 4).map(function (option) { return String(option || '').trim(); }),
-      correctOption: Number(item.correctOption || 0),
       points: Math.max(1, Math.min(100, Number(item.points || 1)))
     };
-  }).filter(function (item) { return item.text || item.options.some(function (option) { return option; }); });
+    if (['multiple-choice', 'multiple-select', 'true-false'].indexOf(type) >= 0) {
+      question.options = (Array.isArray(item.options) ? item.options : []).slice(0, type === 'true-false' ? 2 : 6).map(function (option) { return String(option || '').trim(); });
+      if (type === 'multiple-select') question.correctOptions = (Array.isArray(item.correctOptions) ? item.correctOptions : []).map(Number).filter(function (value) { return value >= 0 && value < question.options.length; });
+      else question.correctOption = Math.max(0, Number(item.correctOption || 0));
+    } else if (['fill-blank', 'short-answer', 'error-correction'].indexOf(type) >= 0) {
+      question.acceptedAnswers = String(item.acceptedAnswers || '').trim();
+      if (type === 'fill-blank') {
+        question.wordBank = (Array.isArray(item.wordBank) ? item.wordBank : String(item.wordBank || '').split(','))
+          .map(function (value) { return String(value || '').trim(); }).filter(Boolean);
+      }
+    } else if (type === 'matching') {
+      question.pairs = (Array.isArray(item.pairs) ? item.pairs : []).map(function (pair, pairIndex) { return { id: 'p-' + (pairIndex + 1), left: String(pair.left || '').trim(), right: String(pair.right || '').trim() }; });
+    } else if (['ordering', 'sentence-builder'].indexOf(type) >= 0) {
+      question.items = (Array.isArray(item.items) ? item.items : []).map(function (value) { return String(value || '').trim(); }).filter(Boolean);
+    } else if (type === 'categorization') {
+      question.categories = (Array.isArray(item.categories) ? item.categories : []).map(function (category) {
+        return { name: String(category.name || '').trim(), items: String(category.items || '').split(',').map(function (value) { return value.trim(); }).filter(Boolean) };
+      });
+    }
+    return question;
+  }).filter(function (item) { return item.text || (Array.isArray(item.options) && item.options.some(function (option) { return option; })); });
   const totalPoints = questions.reduce(function (sum, item) { return sum + item.points; }, 0);
   if (!classId || !title || !instructions || !assignedDate || !dueDate) throw new Error('Kelas, judul, instruksi, tanggal, dan tenggat wajib diisi.');
-  if (gradingMode === 'Automatic' && !questions.length && !answerKey) throw new Error('Tambahkan soal dan kunci jawaban untuk penilaian otomatis.');
-  if (questions.some(function (item) { return !item.text || item.options.length !== 4 || item.options.some(function (option) { return !option; }) || item.correctOption < 0 || item.correctOption > 3; })) throw new Error('Setiap soal harus memiliki pertanyaan, empat pilihan, kunci jawaban, dan bobot poin.');
+  if (!questions.length) throw new Error('Tambahkan minimal satu soal beserta kunci jawabannya.');
+  if (['reading', 'listening'].indexOf(taskType) >= 0 && !stimulus) throw new Error(taskType === 'reading' ? 'Teks bacaan wajib diisi.' : 'Naskah audio wajib diisi.');
+  if (questions.some(function (item) {
+    if (!item.text) return true;
+    if (['multiple-choice', 'true-false'].indexOf(item.type) >= 0) return !item.options || item.options.some(function (option) { return !option; }) || item.correctOption < 0 || item.correctOption >= item.options.length;
+    if (item.type === 'multiple-select') return !item.options || item.options.some(function (option) { return !option; }) || !item.correctOptions || !item.correctOptions.length;
+    if (['fill-blank', 'short-answer', 'error-correction'].indexOf(item.type) >= 0) return !item.acceptedAnswers;
+    if (item.type === 'matching') return !item.pairs || item.pairs.length < 2 || item.pairs.some(function (pair) { return !pair.left || !pair.right; });
+    if (['ordering', 'sentence-builder'].indexOf(item.type) >= 0) return !item.items || item.items.length < 2 || item.items.some(function (value) { return !value; });
+    if (item.type === 'categorization') return !item.categories || item.categories.length < 2 || item.categories.some(function (category) { return !category.name || !category.items.length; });
+    return true;
+  })) throw new Error('Lengkapi seluruh soal dan kunci jawaban sesuai bentuk tugas yang dipilih.');
   const tutorDashboard = getTutorDashboard_(token);
   const tutorClass = tutorDashboard.classes.find(function (item) { return item.classId === classId; });
   if (!tutorClass) throw new Error('Tutor tidak memiliki akses ke kelas tersebut.');
   const database = getDatabase_();
   let sheet = database.getSheetByName('Assignments');
-  const headers = ['Assignment ID', 'Plan ID', 'Month', 'Meeting Number', 'Target Competency', 'Class ID', 'Class Name', 'Program', 'Title', 'Instructions', 'Questions JSON', 'Total Points', 'Assigned Date', 'Due Date', 'Max Score', 'EXP Reward', 'Grading Mode', 'Answer Key', 'Status', 'Tutor', 'Updated At'];
+  const headers = ['Assignment ID', 'Plan ID', 'Month', 'Meeting Number', 'Target Competency', 'Class ID', 'Class Name', 'Program', 'Task Type', 'Title', 'Instructions', 'Stimulus', 'Questions JSON', 'Total Points', 'Assigned Date', 'Due Date', 'Max Score', 'EXP Reward', 'Grading Mode', 'Answer Key', 'Status', 'Tutor', 'Updated At'];
   if (!sheet) { sheet = database.insertSheet('Assignments'); sheet.getRange(1, 1, 1, headers.length).setValues([headers]); sheet.setFrozenRows(1); }
   else ensureStudentPortalColumns_(sheet, headers);
   const now = new Date();
@@ -4539,7 +7922,7 @@ function createTutorAssignment_(token, assignment) {
   const existingRows = getSheetObjects_(sheet);
   const existingIndex = planId ? existingRows.findIndex(function (item) { return String(getObjectValue_(item, ['Plan ID']) || '').trim() === planId; }) : -1;
   const existing = existingIndex >= 0 ? existingRows[existingIndex] : null;
-  const rowValues = { 'Assignment ID': existing ? String(getObjectValue_(existing, ['Assignment ID']) || '') : 'ASG-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'), 'Plan ID': planId, 'Month': String(assignment.month || ''), 'Meeting Number': Number(assignment.meetingNumber || 0), 'Target Competency': String(assignment.targetCompetency || ''), 'Class ID': classId, 'Class Name': tutorClass.className, 'Program': tutorClass.program, 'Title': title, 'Instructions': instructions, 'Questions JSON': questions.length ? JSON.stringify(questions) : '', 'Total Points': totalPoints, 'Assigned Date': new Date(assignedDate + 'T00:00:00+08:00'), 'Due Date': new Date(dueDate + 'T23:59:59+08:00'), 'Max Score': 100, 'EXP Reward': expReward, 'Grading Mode': gradingMode, 'Answer Key': answerKey, 'Status': 'Aktif', 'Tutor': tutorDashboard.tutor.name, 'Updated At': now };
+  const rowValues = { 'Assignment ID': existing ? String(getObjectValue_(existing, ['Assignment ID']) || '') : 'ASG-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'), 'Plan ID': planId, 'Month': String(assignment.month || ''), 'Meeting Number': Number(assignment.meetingNumber || 0), 'Target Competency': String(assignment.targetCompetency || ''), 'Class ID': classId, 'Class Name': tutorClass.className, 'Program': tutorClass.program, 'Task Type': taskType, 'Title': title, 'Instructions': instructions, 'Stimulus': stimulus, 'Questions JSON': questions.length ? JSON.stringify(questions) : '', 'Total Points': totalPoints, 'Assigned Date': new Date(assignedDate + 'T00:00:00+08:00'), 'Due Date': new Date(dueDate + 'T23:59:59+08:00'), 'Max Score': 100, 'EXP Reward': expReward, 'Grading Mode': gradingMode, 'Answer Key': answerKey, 'Status': 'Aktif', 'Tutor': tutorDashboard.tutor.name, 'Updated At': now };
   const sheetHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   if (existingIndex >= 0) {
     sheet.getRange(existingIndex + 2, 1, 1, sheetHeaders.length).setValues([sheetHeaders.map(function (header) { return Object.prototype.hasOwnProperty.call(rowValues, header) ? rowValues[header] : getObjectValue_(existing, [header]); })]);
@@ -4638,9 +8021,31 @@ function autoGradeStructuredAssignment_(response, questions, maxExp) {
   const totalPoints = rows.reduce(function (sum, item) { return sum + Math.max(1, Number(item.points || 1)); }, 0);
   let earnedPoints = 0;
   let correct = 0;
+  function normalizedArray_(values) { return (Array.isArray(values) ? values : []).map(normalizeAutoGradeText_); }
+  function sameArray_(left, right) { return left.length === right.length && left.every(function (value, index) { return value === right[index]; }); }
   rows.forEach(function (item, index) {
-    const selected = Number(Object.prototype.hasOwnProperty.call(answers, item.id) ? answers[item.id] : answers[index]);
-    if (selected === Number(item.correctOption)) {
+    const answer = Object.prototype.hasOwnProperty.call(answers, item.id) ? answers[item.id] : answers[index];
+    const type = String(item.type || 'multiple-choice').toLowerCase();
+    let isCorrect = false;
+    if (type === 'multiple-choice' || type === 'true-false') {
+      isCorrect = Number(answer) === Number(item.correctOption);
+    } else if (type === 'multiple-select') {
+      const selected = (Array.isArray(answer) ? answer : []).map(Number).sort(function (a, b) { return a - b; });
+      const expected = (Array.isArray(item.correctOptions) ? item.correctOptions : []).map(Number).sort(function (a, b) { return a - b; });
+      isCorrect = sameArray_(selected, expected);
+    } else if (type === 'fill-blank' || type === 'short-answer' || type === 'error-correction') {
+      const accepted = String(item.acceptedAnswers || '').split('|').map(normalizeAutoGradeText_).filter(Boolean);
+      isCorrect = accepted.indexOf(normalizeAutoGradeText_(answer)) >= 0;
+    } else if (type === 'matching') {
+      const responseMap = answer && typeof answer === 'object' ? answer : {};
+      isCorrect = (item.pairs || []).every(function (pair, pairIndex) { return normalizeAutoGradeText_(responseMap[pair.id || ('p-' + (pairIndex + 1))]) === normalizeAutoGradeText_(pair.right); });
+    } else if (type === 'ordering' || type === 'sentence-builder') {
+      isCorrect = sameArray_(normalizedArray_(answer), normalizedArray_(item.items));
+    } else if (type === 'categorization') {
+      const categoryAnswer = answer && typeof answer === 'object' ? answer : {};
+      isCorrect = (item.categories || []).every(function (category) { return (category.items || []).every(function (value) { return normalizeAutoGradeText_(categoryAnswer[value]) === normalizeAutoGradeText_(category.name); }); });
+    }
+    if (isCorrect) {
       correct += 1;
       earnedPoints += Math.max(1, Number(item.points || 1));
     }
@@ -4776,14 +8181,15 @@ function submitStudentAssignment_(token, submission) {
   const studentId = String(session.relatedId || session.userId || '').trim();
   const assignmentId = String(submission.assignmentId || '').trim();
   const response = String(submission.response || '').trim();
-  if (!assignmentId || !response) throw new Error('Jawaban atau tautan tugas wajib diisi.');
+  if (!assignmentId || !response) throw new Error('Jawaban tugas wajib diisi.');
   const database = getDatabase_();
   const student = getSheetObjects_(database.getSheetByName('Data Siswa')).find(function (item) { return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId; });
   const assignmentSheet = database.getSheetByName('Assignments');
   if (!student || !assignmentSheet) throw new Error('Data siswa atau assignment tidak ditemukan.');
   const assignment = getSheetObjects_(assignmentSheet).find(function (item) { return String(getObjectValue_(item, ['Assignment ID']) || '').trim() === assignmentId; });
-  const classId = String(getObjectValue_(student, ['Class ID']) || '').trim();
-  if (!assignment || String(getObjectValue_(assignment, ['Class ID']) || '').trim() !== classId) throw new Error('Assignment tidak tersedia untuk kelas Anda.');
+  const classId = String(getObjectValue_(student, ['Class ID', 'Class Id', 'Kode Kelas']) || '').trim();
+  const assignmentStatus = assignment ? String(getObjectValue_(assignment, ['Status']) || 'Aktif').trim().toLowerCase() : '';
+  if (!assignment || !studentClassMatchesV86_(getObjectValue_(assignment, ['Class ID', 'Class Id']), classId) || assignmentStatus === 'nonaktif') throw new Error('Assignment tidak tersedia untuk kelas Anda.');
   let sheet = database.getSheetByName('Assignment Submissions');
   const headers = ['Submission ID', 'Assignment ID', 'Class ID', 'Student ID', 'Student Name', 'Response', 'Submitted At', 'Status', 'Score', 'Feedback', 'EXP Awarded', 'Reviewed At'];
   if (!sheet) { sheet = database.insertSheet('Assignment Submissions'); sheet.getRange(1, 1, 1, headers.length).setValues([headers]); sheet.setFrozenRows(1); }
@@ -4796,7 +8202,7 @@ function submitStudentAssignment_(token, submission) {
   const grade = automatic ? (assignmentQuestions.length ? autoGradeStructuredAssignment_(response, assignmentQuestions, getObjectValue_(assignment, ['EXP Reward'])) : autoGradeStudentResponse_(response, getObjectValue_(assignment, ['Answer Key']), getObjectValue_(assignment, ['EXP Reward']))) : null;
   const values = [index >= 0 ? String(getObjectValue_(rows[index], ['Submission ID']) || '') : 'SUB-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'), assignmentId, classId, studentId, String(getObjectValue_(student, ['Full Name', 'Nama']) || ''), response, now, automatic ? 'Reviewed' : 'Submitted', automatic ? grade.score : '', automatic ? grade.feedback : '', automatic ? grade.expAwarded : 0, automatic ? now : ''];
   if (index >= 0) sheet.getRange(index + 2, 1, 1, headers.length).setValues([values]); else sheet.appendRow(values);
-  const assignmentGamification = automatic && grade.expAwarded > 0 ? awardStudentExpV22_({
+  const assignmentGamification = automatic ? setStudentExpForSourceV79_({
     studentId: studentId,
     sourceType: 'Assignment',
     sourceId: assignmentId,
@@ -4805,7 +8211,7 @@ function submitStudentAssignment_(token, submission) {
     skillCategory: 'Assignment',
     timestamp: now
   }) : null;
-  return { success: true, message: automatic ? 'Assignment langsung diperiksa. Nilai Anda: ' + grade.score + '/100.' : 'Assignment berhasil dikumpulkan dan menunggu penilaian tutor.', score: automatic ? grade.score : null, expAwarded: automatic ? grade.expAwarded : 0, gamification: assignmentGamification && assignmentGamification.awarded ? { expAwarded: assignmentGamification.expAwarded, message: 'Assignment completed' } : null, status: automatic ? 'Reviewed' : 'Submitted' };
+  return { success: true, message: automatic ? 'Assignment langsung diperiksa. Nilai Anda: ' + grade.score + '/100.' : 'Assignment berhasil dikumpulkan dan menunggu penilaian tutor.', score: automatic ? grade.score : null, expAwarded: automatic ? grade.expAwarded : 0, gamification: assignmentGamification && assignmentGamification.awarded ? assignmentGamification : null, status: automatic ? 'Reviewed' : 'Submitted' };
 }
 
 function reviewTutorAssignment_(token, review) {
@@ -4825,17 +8231,15 @@ function reviewTutorAssignment_(token, review) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
   const updates = { 'Status': 'Reviewed', 'Score': score, 'Feedback': String(review.feedback || '').trim(), 'EXP Awarded': exp, 'Reviewed At': new Date() };
   sheet.getRange(index + 2, 1, 1, headers.length).setValues([headers.map(function (header) { return Object.prototype.hasOwnProperty.call(updates, header) ? updates[header] : getObjectValue_(rows[index], [header]); })]);
-  if (exp > 0) {
-    awardStudentExpV22_({
-      studentId: String(getObjectValue_(rows[index], ['Student ID']) || ''),
-      sourceType: 'Assignment',
-      sourceId: String(getObjectValue_(rows[index], ['Assignment ID']) || ''),
-      activityName: 'Assignment',
-      exp: exp,
-      skillCategory: 'Assignment',
-      timestamp: new Date()
-    });
-  }
+  setStudentExpForSourceV79_({
+    studentId: String(getObjectValue_(rows[index], ['Student ID']) || ''),
+    sourceType: 'Assignment',
+    sourceId: String(getObjectValue_(rows[index], ['Assignment ID']) || ''),
+    activityName: 'Assignment',
+    exp: exp,
+    skillCategory: 'Assignment',
+    timestamp: new Date()
+  });
   return { success: true, message: 'Assignment berhasil dinilai.' };
 }
 
@@ -4875,10 +8279,11 @@ function submitStudentChallenge_(token, submission) {
   if (String(session.role || '').trim().toLowerCase() !== 'siswa') throw new Error('Hanya siswa yang dapat mengirim challenge.');
   submission = submission || {}; const studentId = String(session.relatedId || session.userId || '').trim(); const challengeId = String(submission.challengeId || '').trim(); const response = String(submission.response || '').trim();
   if (!challengeId || !response) throw new Error('Jawaban atau tautan challenge wajib diisi.');
-  const database = getDatabase_(); const student = getSheetObjects_(database.getSheetByName('Data Siswa')).find(function (item) { return String(getObjectValue_(item, ['Student ID']) || '') === studentId; }); const challengeSheet = database.getSheetByName('Challenges');
+  const database = getDatabase_(); const student = getSheetObjects_(database.getSheetByName('Data Siswa')).find(function (item) { return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId; }); const challengeSheet = database.getSheetByName('Challenges');
   if (!student || !challengeSheet) throw new Error('Challenge tidak ditemukan.');
-  const challenge = getSheetObjects_(challengeSheet).find(function (item) { return String(getObjectValue_(item, ['Challenge ID']) || '') === challengeId; }); const classId = String(getObjectValue_(student, ['Class ID']) || '');
-  if (!challenge || String(getObjectValue_(challenge, ['Class ID']) || '') !== classId) throw new Error('Challenge tidak tersedia untuk kelas Anda.');
+  const challenge = getSheetObjects_(challengeSheet).find(function (item) { return String(getObjectValue_(item, ['Challenge ID']) || '').trim() === challengeId; }); const classId = String(getObjectValue_(student, ['Class ID', 'Class Id', 'Kode Kelas']) || '').trim();
+  const challengeStatus = challenge ? String(getObjectValue_(challenge, ['Status']) || 'Aktif').trim().toLowerCase() : '';
+  if (!challenge || !studentClassMatchesV86_(getObjectValue_(challenge, ['Class ID', 'Class Id']), classId) || challengeStatus === 'nonaktif') throw new Error('Challenge tidak tersedia untuk kelas Anda.');
   let sheet = database.getSheetByName('Challenge Results'); const headers = ['Result ID', 'Challenge ID', 'Class ID', 'Student ID', 'Student Name', 'Response', 'Submitted At', 'Status', 'Score', 'Feedback', 'EXP Awarded', 'Reviewed At'];
   if (!sheet) { sheet = database.insertSheet('Challenge Results'); sheet.getRange(1, 1, 1, headers.length).setValues([headers]); sheet.setFrozenRows(1); }
   const rows = getSheetObjects_(sheet); const index = rows.findIndex(function (item) { return String(getObjectValue_(item, ['Challenge ID']) || '') === challengeId && String(getObjectValue_(item, ['Student ID']) || '') === studentId; }); const now = new Date();
@@ -4891,7 +8296,7 @@ function submitStudentChallenge_(token, submission) {
     : null;
   const values = [index >= 0 ? String(getObjectValue_(rows[index], ['Result ID']) || '') : 'RES-' + Utilities.formatDate(now, 'Asia/Makassar', 'yyyyMMddHHmmss'), challengeId, classId, studentId, String(getObjectValue_(student, ['Full Name', 'Nama']) || ''), response, now, automatic ? 'Reviewed' : 'Submitted', automatic ? grade.score : '', automatic ? grade.feedback : '', automatic ? grade.expAwarded : 0, automatic ? now : ''];
   if (index >= 0) sheet.getRange(index + 2, 1, 1, headers.length).setValues([values]); else sheet.appendRow(values);
-  const challengeGamification = automatic && grade.expAwarded > 0 ? awardStudentExpV22_({
+  const challengeGamification = automatic ? setStudentExpForSourceV79_({
     studentId: studentId,
     sourceType: 'Challenge',
     sourceId: challengeId,
@@ -4900,7 +8305,7 @@ function submitStudentChallenge_(token, submission) {
     skillCategory: responseType === 'speech' ? 'Speaking' : 'Challenge',
     timestamp: now
   }) : null;
-  return { success: true, message: automatic ? 'Challenge langsung diperiksa. Nilai Anda: ' + grade.score + '/100.' : 'Challenge berhasil dikirim dan menunggu penilaian tutor.', score: automatic ? grade.score : null, expAwarded: automatic ? grade.expAwarded : 0, gamification: challengeGamification && challengeGamification.awarded ? { expAwarded: challengeGamification.expAwarded, message: responseType === 'speech' ? 'Speaking challenge completed' : 'Challenge completed' } : null, status: automatic ? 'Reviewed' : 'Submitted' };
+  return { success: true, message: automatic ? 'Challenge langsung diperiksa. Nilai Anda: ' + grade.score + '/100.' : 'Challenge berhasil dikirim dan menunggu penilaian tutor.', score: automatic ? grade.score : null, expAwarded: automatic ? grade.expAwarded : 0, gamification: challengeGamification && challengeGamification.awarded ? challengeGamification : null, status: automatic ? 'Reviewed' : 'Submitted' };
 }
 
 function reviewTutorChallenge_(token, review) {
@@ -4912,17 +8317,15 @@ function reviewTutorChallenge_(token, review) {
   const allowed = getTutorDashboard_(token).classes.some(function (item) { return item.classId === String(getObjectValue_(rows[index], ['Class ID']) || ''); }); if (!allowed) throw new Error('Tutor tidak memiliki akses ke hasil ini.');
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0]; const updates = { 'Status': 'Reviewed', 'Score': Math.max(0, Math.min(100, Number(review.score || 0))), 'Feedback': String(review.feedback || '').trim(), 'EXP Awarded': Math.max(0, Math.min(250, Number(review.expAwarded || 0))), 'Reviewed At': new Date() };
   sheet.getRange(index + 2, 1, 1, headers.length).setValues([headers.map(function (header) { return Object.prototype.hasOwnProperty.call(updates, header) ? updates[header] : getObjectValue_(rows[index], [header]); })]);
-  if (updates['EXP Awarded'] > 0) {
-    awardStudentExpV22_({
-      studentId: String(getObjectValue_(rows[index], ['Student ID']) || ''),
-      sourceType: 'Challenge',
-      sourceId: String(getObjectValue_(rows[index], ['Challenge ID']) || ''),
-      activityName: 'Challenge',
-      exp: updates['EXP Awarded'],
-      skillCategory: 'Challenge',
-      timestamp: updates['Reviewed At']
-    });
-  }
+  setStudentExpForSourceV79_({
+    studentId: String(getObjectValue_(rows[index], ['Student ID']) || ''),
+    sourceType: 'Challenge',
+    sourceId: String(getObjectValue_(rows[index], ['Challenge ID']) || ''),
+    activityName: 'Challenge',
+    exp: updates['EXP Awarded'],
+    skillCategory: 'Challenge',
+    timestamp: updates['Reviewed At']
+  });
   return { success: true, message: 'Challenge berhasil dinilai dan EXP disimpan.' };
 }
 
@@ -5196,7 +8599,12 @@ function saveTutorClassAttendance_(token, attendance) {
   const dateText = String(attendance.date || '').trim();
   const meetingNumber = Math.max(1, Math.min(8, Number(attendance.meetingNumber || 0)));
   const records = Array.isArray(attendance.records) ? attendance.records : [];
+  const material = String(attendance.material || '').trim();
+  const learningObjective = String(attendance.objective || '').trim();
+  const activities = String(attendance.activities || '').trim();
+  const classNotes = String(attendance.classNotes || '').trim();
   if (!classId || !/^\d{4}-\d{2}-\d{2}$/.test(dateText) || !records.length) throw new Error('Kelas, tanggal, pertemuan, dan status siswa wajib dilengkapi.');
+  if (!material || !learningObjective || !activities) throw new Error('Materi, tujuan pembelajaran, dan kegiatan pembelajaran wajib diisi.');
 
   const dashboard = getTutorDashboard_(token);
   const tutorClass = dashboard.classes.find(function (item) { return item.classId === classId; });
@@ -5217,7 +8625,7 @@ function saveTutorClassAttendance_(token, attendance) {
 
   const database = getDatabase_();
   let sheet = database.getSheetByName('Absensi');
-  const requiredHeaders = ['Timestamp', 'Tanggal', 'Kelas', 'Student ID', 'Nama', 'Status', 'Tutor', 'Attendance ID', 'Class ID', 'Session ID', 'Pertemuan Ke', 'Catatan', 'Updated At', 'Latitude', 'Longitude', 'Accuracy (m)', 'Distance (m)', 'Check-in Method'];
+  const requiredHeaders = ['Timestamp', 'Tanggal', 'Kelas', 'Student ID', 'Nama', 'Status', 'Tutor', 'Materi', 'Catatan Kelas', 'Attendance ID', 'Class ID', 'Session ID', 'Pertemuan Ke', 'Catatan', 'Updated At', 'Latitude', 'Longitude', 'Accuracy (m)', 'Distance (m)', 'Check-in Method'];
   if (!sheet) {
     sheet = database.insertSheet('Absensi');
     sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
@@ -5250,6 +8658,8 @@ function saveTutorClassAttendance_(token, attendance) {
         'Nama': student.fullName,
         'Status': record.status,
         'Tutor': dashboard.tutor.name,
+        'Materi': material,
+        'Catatan Kelas': classNotes,
         'Attendance ID': existing ? String(getObjectValue_(existing, ['Attendance ID']) || '') : 'ATT-' + Utilities.formatDate(now, timezone, 'yyyyMMddHHmmss') + '-' + record.studentId,
         'Class ID': classId,
         'Session ID': sessionId,
@@ -5269,6 +8679,21 @@ function saveTutorClassAttendance_(token, attendance) {
   } finally {
     lock.releaseLock();
   }
+
+  // Satu tombol menyimpan absensi sekaligus jurnal kelas. Tutor, materi,
+  // tujuan, aktivitas, dan catatan tersimpan pada Learning Journal agar
+  // langsung tersedia pada laporan akademik tanpa input ulang.
+  const journalResult = saveTutorJournal_(token, {
+    classId: classId,
+    date: dateText,
+    meetingNumber: meetingNumber,
+    title: material,
+    objective: learningObjective,
+    activities: activities,
+    notes: classNotes,
+    studentEntries: []
+  });
+
   const followUpAlertsCreated = createAttendanceFollowUpsAfterSave_(
     sheet,
     classId,
@@ -5286,13 +8711,12 @@ function saveTutorClassAttendance_(token, attendance) {
     const status = String(record.status || '').trim().toLowerCase();
     const present = status === 'hadir' || status === 'present';
     const late = status === 'terlambat' || status === 'late';
-    if (!present && !late) return;
-    awardStudentExpV22_({
+    setStudentExpForSourceV79_({
       studentId: record.studentId,
       sourceType: 'Attendance',
       sourceId: 'ATT-' + attendanceDayKey,
-      activityName: late ? 'Late Attendance' : 'Present Attendance',
-      exp: getGamificationConfigValueV22_(late ? 'EXP-ATTENDANCE-LATE' : 'EXP-ATTENDANCE-PRESENT', late ? 5 : 10),
+      activityName: late ? 'Late Attendance' : present ? 'Present Attendance' : 'Absent Attendance',
+      exp: present || late ? getGamificationConfigValueV22_(late ? 'EXP-ATTENDANCE-LATE' : 'EXP-ATTENDANCE-PRESENT', late ? 5 : 10) : 0,
       skillCategory: 'Attendance',
       timestamp: rewardAttendanceDate || new Date(),
       notes: 'Tutor attendance save'
@@ -5301,10 +8725,28 @@ function saveTutorClassAttendance_(token, attendance) {
 
   return {
     success: true,
-    message: 'Data kehadiran kelas berhasil disimpan.',
+    message: 'Kehadiran, tutor, materi, dan catatan kelas berhasil disimpan.',
     totalStudents: cleanRecords.length,
+    journalSaved: !!(journalResult && journalResult.success),
     followUpAlertsCreated: followUpAlertsCreated
   };
+}
+
+function getOrCreateStudentAttendanceSheet_(spreadsheet) {
+  const headers = [
+    'Timestamp', 'Tanggal', 'Kelas', 'Student ID', 'Nama', 'Status', 'Tutor',
+    'Attendance ID', 'Class ID', 'Session ID', 'Pertemuan Ke', 'Catatan', 'Updated At',
+    'Latitude', 'Longitude', 'Accuracy (m)', 'Distance (m)', 'Check-in Method'
+  ];
+
+  let sheet = spreadsheet.getSheetByName('Absensi');
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet('Absensi');
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+
+  ensureHeaders_(sheet, headers);
+  return sheet;
 }
 
 function submitStudentAttendance_(token, latitude, longitude, accuracy) {
@@ -5329,28 +8771,40 @@ function submitStudentAttendance_(token, latitude, longitude, accuracy) {
   }
 
   const spreadsheet = getDatabase_();
+  const overviewYear = Number(Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyy'));
+  syncPaymentConsistencyForYearV69_(spreadsheet, overviewYear, studentId);
+
   const studentSheet = spreadsheet.getSheetByName('Data Siswa');
   const scheduleSheet = spreadsheet.getSheetByName('Master Jadwal');
-  const attendanceSheet = spreadsheet.getSheetByName('Absensi');
-  if (!studentSheet || !scheduleSheet || !attendanceSheet) throw new Error('Data absensi belum lengkap.');
+  if (!studentSheet || !scheduleSheet) throw new Error('Data siswa atau jadwal kelas belum lengkap.');
+  const attendanceSheet = getOrCreateStudentAttendanceSheet_(spreadsheet);
 
   const student = getSheetObjects_(studentSheet).find(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
   });
   if (!student) throw new Error('Data siswa tidak ditemukan.');
 
-  const classId = String(getObjectValue_(student, ['Class ID', 'Class Id']) || '').trim();
+  const classId = String(getObjectValue_(student, ['Class ID', 'Class Id', 'Kode Kelas', 'Class']) || '').trim();
   const now = new Date();
   const timezone = 'Asia/Makassar';
   const dayCodes = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   const todayIndex = dayCodes[Utilities.formatDate(now, timezone, 'EEE')];
   const todayText = Utilities.formatDate(now, timezone, 'yyyy-MM-dd');
 
-  const validSchedules = getSheetObjects_(scheduleSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() === classId &&
+  let validSchedules = getSheetObjects_(scheduleSheet).filter(function (item) {
+    return Boolean(classId) &&
+      String(getObjectValue_(item, ['Class ID', 'Class Id', 'Kode Kelas']) || '').trim().toUpperCase() === classId.toUpperCase() &&
       String(getObjectValue_(item, ['Status']) || 'Aktif').trim().toLowerCase() === 'aktif' &&
-      normalizeStudentDay_(getObjectValue_(item, ['Hari'])) === todayIndex;
+      normalizeStudentDay_(getObjectValue_(item, ['Hari', 'Day'])) === todayIndex;
   });
+
+  // Siswa lama dapat memakai kolom Schedule/Jadwal sebagai fallback bila Class ID
+  // belum cocok dengan Master Jadwal. Ini hanya dipakai untuk proses Check-in.
+  if (!validSchedules.length) {
+    validSchedules = buildStudentScheduleFallback_(student, classId).filter(function (item) {
+      return normalizeStudentDay_(getObjectValue_(item, ['Hari', 'Day'])) === todayIndex;
+    });
+  }
 
   const activeSchedule = validSchedules.find(function (item) {
     const start = formatStudentTime_(getObjectValue_(item, ['Mulai']));
@@ -5365,8 +8819,14 @@ function submitStudentAttendance_(token, latitude, longitude, accuracy) {
     throw new Error('Absensi belum dibuka atau sudah ditutup. Absensi tersedia 30 menit sebelum hingga 30 menit setelah kelas dimulai.');
   }
 
-  const className = String(getObjectValue_(activeSchedule, ['Nama kelas', 'Nama Kelas', 'Class']) || classId);
-  const tutor = String(getObjectValue_(activeSchedule, ['Tutor']) || '');
+  const className = String(
+    getObjectValue_(activeSchedule, ['Nama kelas', 'Nama Kelas', 'Class Name', 'Class']) ||
+    getObjectValue_(student, ['Class Name', 'Class', 'Nama Kelas']) ||
+    classId ||
+    getObjectValue_(student, ['Program']) ||
+    'Kelas'
+  );
+  const tutor = String(getObjectValue_(activeSchedule, ['Tutor', 'Teacher']) || '');
   const sessionId = classId + '-' + todayText.replace(/-/g, '');
   const existingRows = getSheetObjects_(attendanceSheet);
   const duplicate = existingRows.find(function (item) {
@@ -5440,6 +8900,54 @@ function calculateDistanceMeters_(lat1, lng1, lat2, lng2) {
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/* V86 — Student Sync
+ * The student portal is a read model of the same class, academic, attendance,
+ * assessment and gamification records used by Tutor, Admin and CEO. These
+ * helpers normalize identifiers and collapse duplicate history rows without
+ * changing any source sheet or existing student feature.
+ */
+function studentSyncKeyV86_(value) {
+  return String(value == null ? '' : value).trim().toUpperCase();
+}
+
+function studentSyncedRowsV86_(rows, idHeaders, fallbackKeyBuilder, dateHeaders) {
+  const selected = {};
+  (rows || []).forEach(function (item, index) {
+    let key = studentSyncKeyV86_(getObjectValue_(item, idHeaders || []));
+    if (!key && typeof fallbackKeyBuilder === 'function') {
+      key = studentSyncKeyV86_(fallbackKeyBuilder(item));
+    }
+    if (!key) key = '__ROW__' + index;
+
+    let timestamp = 0;
+    (dateHeaders || []).some(function (header) {
+      const value = getObjectValue_(item, [header]);
+      const date = normalizeStudentDate_(value);
+      if (date) {
+        timestamp = date.getTime();
+        return true;
+      }
+      return false;
+    });
+
+    if (!selected[key] || timestamp >= selected[key].timestamp) {
+      selected[key] = { item: item, timestamp: timestamp, index: index };
+    }
+  });
+
+  return Object.keys(selected).map(function (key) {
+    return selected[key];
+  }).sort(function (a, b) {
+    return a.index - b.index;
+  }).map(function (entry) {
+    return entry.item;
+  });
+}
+
+function studentClassMatchesV86_(value, classId) {
+  return studentSyncKeyV86_(value) === studentSyncKeyV86_(classId);
+}
+
 function getStudentOverview_(token) {
   const session = getSession_(token);
   const role = String(session.role || '').trim().toLowerCase();
@@ -5462,11 +8970,10 @@ function getStudentOverview_(token) {
   const spreadsheet = getDatabase_();
   const studentSheet = spreadsheet.getSheetByName('Data Siswa');
   const scheduleSheet = spreadsheet.getSheetByName('Master Jadwal');
-  const attendanceSheet = spreadsheet.getSheetByName('Absensi');
 
   if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
   if (!scheduleSheet) throw new Error('Sheet Master Jadwal tidak ditemukan.');
-  if (!attendanceSheet) throw new Error('Sheet Absensi tidak ditemukan.');
+  const attendanceSheet = getOrCreateStudentAttendanceSheet_(spreadsheet);
 
   const student = getSheetObjects_(studentSheet).find(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
@@ -5489,7 +8996,7 @@ function getStudentOverview_(token) {
         getObjectValue_(item, ['Status']) || 'Aktif'
       ).trim().toLowerCase();
 
-      return itemClassId.toUpperCase() === classId.toUpperCase() &&
+      return studentClassMatchesV86_(itemClassId, classId) &&
         (status === 'aktif' || status === 'active');
     });
 
@@ -5500,12 +9007,24 @@ function getStudentOverview_(token) {
   }
 
   const classInfo = schedules[0] || {};
-  const allAttendance = getSheetObjects_(attendanceSheet)
+  const officialProgram = canonicalProgramV84_(
+    getObjectValue_(classInfo, ['Program']) || getObjectValue_(student, ['Program'])
+  );
+  const allAttendance = studentSyncedRowsV86_(getSheetObjects_(attendanceSheet)
     .filter(function (item) {
       return String(
         getObjectValue_(item, ['Student ID']) || ''
       ).trim() === studentId;
-    });
+    }), [], function (item) {
+      const sessionKey = studentSyncKeyV86_(getObjectValue_(item, ['Session ID']));
+      if (sessionKey) return ['SESSION', sessionKey, studentId].join('|');
+      return [
+        getObjectValue_(item, ['Tanggal', 'Date']),
+        getObjectValue_(item, ['Class ID', 'Class Id', 'Kelas']),
+        getObjectValue_(item, ['Pertemuan Ke', 'Meeting Number']),
+        studentId
+      ].join('|');
+    }, ['Updated At', 'Timestamp', 'Tanggal', 'Date']);
 
   const timezone = 'Asia/Makassar';
   const now = new Date();
@@ -5540,6 +9059,10 @@ function getStudentOverview_(token) {
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
+  const monthNamesEnglishProgress = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
 
   const tuitionPaymentRows = (paymentCenter.history || []).filter(function (item) {
     return item.category === 'Tuition';
@@ -5569,6 +9092,18 @@ function getStudentOverview_(token) {
       };
     }
 
+    const legacyMonthValue = String(getObjectValue_(student, [monthNamesEnglishProgress[index]]) || '').trim();
+    if (isStudentLeaveValue_(legacyMonthValue)) {
+      return {
+        month: monthName,
+        monthNumber: monthNumber,
+        period: period,
+        status: 'Cuti',
+        label: 'CUTI',
+        note: extractStudentLeaveNote_(legacyMonthValue)
+      };
+    }
+
     const paidRow = tuitionPaymentRows.find(function (item) {
       return String(item.period || '').trim() === period &&
         /^(lunas|paid)$/i.test(String(item.status || '').trim());
@@ -5585,11 +9120,14 @@ function getStudentOverview_(token) {
       paymentMethod: paidRow ? String(paidRow.paymentMethod || '') : ''
     };
   });
+  ensureStudentGamificationBackfillV79_(studentId);
   const experienceSummary = buildExperienceSummary_(student, allAttendance);
   const learningReadSheet = spreadsheet.getSheetByName('Learning Activity Reads');
-  const learningReadRows = learningReadSheet ? getSheetObjects_(learningReadSheet).filter(function (item) {
+  const learningReadRows = learningReadSheet ? studentSyncedRowsV86_(getSheetObjects_(learningReadSheet).filter(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
-  }) : [];
+  }), [], function (item) {
+    return [studentId, getObjectValue_(item, ['Month']), getObjectValue_(item, ['Meeting Number'])].join('|');
+  }, ['Completed At']) : [];
   const monthlyLearningReads = learningReadRows.filter(function (item) {
     return String(getObjectValue_(item, ['Month']) || '').trim() === currentMonthKey;
   });
@@ -5602,22 +9140,28 @@ function getStudentOverview_(token) {
   syncBadgeProgressForStudentV22_(studentId, currentMonthKey);
   const gamificationSummary = getStudentGamificationSummaryV22_(studentId, classId, currentMonthKey);
   const journalSheet = spreadsheet.getSheetByName('Learning Journal');
-  const classJournals = journalSheet ? getSheetObjects_(journalSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() === classId;
-  }) : [];
+  const classJournals = journalSheet ? studentSyncedRowsV86_(getSheetObjects_(journalSheet).filter(function (item) {
+    return studentClassMatchesV86_(getObjectValue_(item, ['Class ID', 'Class Id']), classId);
+  }), [], function (item) {
+    return [classId, getObjectValue_(item, ['Date', 'Tanggal']), getObjectValue_(item, ['Meeting Number', 'Pertemuan Ke'])].join('|');
+  }, ['Updated At', 'Date', 'Tanggal']) : [];
   const monthlyJournals = classJournals.filter(function (item) {
     const date = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal']));
     return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === currentMonthKey;
   });
   const learningPlanSheet = spreadsheet.getSheetByName('Monthly Learning Plan');
-  const monthlyLearningPlans = learningPlanSheet ? getSheetObjects_(learningPlanSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() === classId &&
+  const monthlyLearningPlans = learningPlanSheet ? studentSyncedRowsV86_(getSheetObjects_(learningPlanSheet).filter(function (item) {
+    return studentClassMatchesV86_(getObjectValue_(item, ['Class ID', 'Class Id']), classId) &&
       String(getObjectValue_(item, ['Month', 'Bulan']) || '').trim() === currentMonthKey;
-  }) : [];
+  }), [], function (item) {
+    return [classId, currentMonthKey, getObjectValue_(item, ['Meeting Number', 'Pertemuan Ke'])].join('|');
+  }, ['Updated At', 'Planned Date', 'Tanggal Rencana']) : [];
   const notesSheet = spreadsheet.getSheetByName('Student Notes');
-  const studentNotes = notesSheet ? getSheetObjects_(notesSheet).filter(function (item) {
+  const studentNotes = notesSheet ? studentSyncedRowsV86_(getSheetObjects_(notesSheet).filter(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
-  }) : [];
+  }), ['Note ID'], function (item) {
+    return [studentId, getObjectValue_(item, ['Date', 'Tanggal']), getObjectValue_(item, ['Tutor Comment']), getObjectValue_(item, ['Score'])].join('|');
+  }, ['Updated At', 'Date', 'Tanggal']) : [];
   const monthlyNotes = studentNotes.filter(function (item) {
     const date = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal']));
     return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === currentMonthKey;
@@ -5628,25 +9172,40 @@ function getStudentOverview_(token) {
   experienceSummary.breakdown.participation += tutorExp;
   experienceSummary.totalExp += tutorExp;
   const assignmentsSheet = spreadsheet.getSheetByName('Assignments');
-  const classAssignments = assignmentsSheet ? getSheetObjects_(assignmentsSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() === classId &&
+  const classAssignments = assignmentsSheet ? studentSyncedRowsV86_(getSheetObjects_(assignmentsSheet).filter(function (item) {
+    return studentClassMatchesV86_(getObjectValue_(item, ['Class ID', 'Class Id']), classId) &&
       String(getObjectValue_(item, ['Status']) || 'Aktif').trim().toLowerCase() !== 'nonaktif';
-  }) : [];
+  }), ['Assignment ID'], null, ['Updated At', 'Created At', 'Assigned Date']) : [];
   const submissionSheet = spreadsheet.getSheetByName('Assignment Submissions');
-  const studentSubmissions = submissionSheet ? getSheetObjects_(submissionSheet).filter(function (item) { return String(getObjectValue_(item, ['Student ID']) || '') === studentId; }) : [];
+  const studentSubmissions = submissionSheet ? studentSyncedRowsV86_(getSheetObjects_(submissionSheet).filter(function (item) {
+    return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
+  }), ['Assignment ID'], null, ['Reviewed At', 'Submitted At']) : [];
   const challengesSheet = spreadsheet.getSheetByName('Challenges');
-  const classChallenges = challengesSheet ? getSheetObjects_(challengesSheet).filter(function (item) { return String(getObjectValue_(item, ['Class ID']) || '') === classId && String(getObjectValue_(item, ['Status']) || 'Aktif').toLowerCase() !== 'nonaktif'; }) : [];
+  const classChallenges = challengesSheet ? studentSyncedRowsV86_(getSheetObjects_(challengesSheet).filter(function (item) {
+    return studentClassMatchesV86_(getObjectValue_(item, ['Class ID', 'Class Id']), classId) &&
+      String(getObjectValue_(item, ['Status']) || 'Aktif').trim().toLowerCase() !== 'nonaktif';
+  }), ['Challenge ID'], null, ['Updated At', 'Created At', 'Due Date']) : [];
   const challengeResultsSheet = spreadsheet.getSheetByName('Challenge Results');
-  const studentChallengeResults = challengeResultsSheet ? getSheetObjects_(challengeResultsSheet).filter(function (item) { return String(getObjectValue_(item, ['Student ID']) || '') === studentId; }) : [];
+  const studentChallengeResults = challengeResultsSheet ? studentSyncedRowsV86_(getSheetObjects_(challengeResultsSheet).filter(function (item) {
+    return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
+  }), ['Challenge ID'], null, ['Reviewed At', 'Submitted At']) : [];
   const assignmentReviewExp = studentSubmissions.filter(function (item) { return String(getObjectValue_(item, ['Status']) || '').toLowerCase() === 'reviewed'; }).reduce(function (sum, item) { return sum + Number(getObjectValue_(item, ['EXP Awarded']) || 0); }, 0);
   const challengeReviewExp = studentChallengeResults.filter(function (item) { return String(getObjectValue_(item, ['Status']) || '').toLowerCase() === 'reviewed'; }).reduce(function (sum, item) { return sum + Number(getObjectValue_(item, ['EXP Awarded']) || 0); }, 0);
   experienceSummary.breakdown.assignment += assignmentReviewExp;
   experienceSummary.breakdown.challenge += challengeReviewExp;
   experienceSummary.totalExp += assignmentReviewExp + challengeReviewExp;
+  // V79: seluruh angka EXP siswa dibaca dari satu sumber, yaitu EXP Ledger.
+  // Perhitungan lama di atas tetap dibiarkan untuk kompatibilitas data, lalu
+  // ditimpa di sini agar tidak ada EXP absensi/tugas/challenge yang terhitung dua kali.
+  const ledgerExperience = getStudentLedgerExperienceV79_(studentId);
+  experienceSummary.totalExp = ledgerExperience.totalExp;
+  experienceSummary.breakdown = ledgerExperience.breakdown;
   const assessmentsSheet = spreadsheet.getSheetByName('Assessment Scores');
-  const studentAssessments = assessmentsSheet ? getSheetObjects_(assessmentsSheet).filter(function (item) {
+  const studentAssessments = assessmentsSheet ? studentSyncedRowsV86_(getSheetObjects_(assessmentsSheet).filter(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
-  }) : [];
+  }), ['Assessment ID'], function (item) {
+    return [studentId, getObjectValue_(item, ['Date', 'Tanggal']), getObjectValue_(item, ['Assessment Type'])].join('|');
+  }, ['Updated At', 'Date', 'Tanggal']) : [];
   const monthlyAssessments = studentAssessments.filter(function (item) {
     const date = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal']));
     return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === currentMonthKey;
@@ -5673,13 +9232,13 @@ function getStudentOverview_(token) {
   }
   if (nextClassSummary) {
     nextClassSummary.className = nextClassSummary.className || String(getObjectValue_(classInfo, ['Nama kelas', 'Nama Kelas', 'Class Name', 'Class']) || classId);
-    nextClassSummary.program = nextClassSummary.program || String(getObjectValue_(student, ['Program']) || '');
+    nextClassSummary.program = canonicalProgramV84_(nextClassSummary.program || officialProgram);
     nextClassSummary.tutor = nextClassSummary.tutor || String(getObjectValue_(classInfo, ['Tutor', 'Teacher']) || '');
   }
-  const activeAssignmentIds = classAssignments.map(function (item) { return String(getObjectValue_(item, ['Assignment ID']) || ''); });
+  const activeAssignmentIds = classAssignments.map(function (item) { return studentSyncKeyV86_(getObjectValue_(item, ['Assignment ID'])); });
   const completedAssignmentIds = {};
   studentSubmissions.forEach(function (item) {
-    const assignmentId = String(getObjectValue_(item, ['Assignment ID']) || '');
+    const assignmentId = studentSyncKeyV86_(getObjectValue_(item, ['Assignment ID']));
     const status = String(getObjectValue_(item, ['Status']) || '').toLowerCase();
     if (activeAssignmentIds.indexOf(assignmentId) >= 0 && (status === 'submitted' || status === 'reviewed' || status === 'dikumpulkan' || status === 'dinilai')) completedAssignmentIds[assignmentId] = true;
   });
@@ -5698,15 +9257,27 @@ function getStudentOverview_(token) {
   return {
     success: true,
     generatedAt: now.toISOString(),
+    synchronization: {
+      version: 'V86',
+      source: 'Data Siswa + Master Jadwal',
+      studentId: studentId,
+      classId: classId,
+      program: officialProgram,
+      synchronizedAt: now.toISOString()
+    },
     academicYear: getAcademicYearLabel_(now),
     currentMonth: currentMonthName,
     profile: {
       studentId: studentId,
-      fullName: String(getObjectValue_(student, ['Full Name', 'Nama']) || ''),
-      school: String(getObjectValue_(student, ['School']) || ''),
-      grade: String(getObjectValue_(student, ['Grade']) || ''),
-      photoLink: String(getObjectValue_(student, ['Photo Link']) || ''),
-      joinDate: String(getObjectValue_(student, ['Join Date']) || ''),
+      fullName: String(getObjectValue_(student, ['Full Name', 'Nama', 'Nama Lengkap']) || ''),
+      dob: String(getObjectValue_(student, ['DOB', 'Date of Birth', 'Tanggal Lahir']) || ''),
+      school: String(getObjectValue_(student, ['School', 'Sekolah', 'Asal Sekolah']) || ''),
+      grade: String(getObjectValue_(student, ['Grade', 'Kelas', 'Tingkat']) || ''),
+      address: String(getObjectValue_(student, ['Address', 'Alamat']) || ''),
+      waStudent: String(getObjectValue_(student, ['WA Student', 'WA Siswa', 'WA Account', 'WhatsApp', 'Nomor WA']) || ''),
+      waParent: String(getObjectValue_(student, ['WA Parent', 'WA Orang Tua', 'Nomor WA Orang Tua']) || ''),
+      photoLink: String(getObjectValue_(student, ['Photo Link', 'Foto', 'Foto Siswa', 'Profile Photo']) || ''),
+      joinDate: String(getObjectValue_(student, ['Join Date', 'Tanggal Bergabung']) || ''),
       studentStatus: String(
         getObjectValue_(student, ['Student Status', 'Status']) || 'Aktif'
       ),
@@ -5753,8 +9324,8 @@ function getStudentOverview_(token) {
       });
       const assignmentId = linkedAssignment ? String(getObjectValue_(linkedAssignment, ['Assignment ID']) || '') : '';
       const challengeId = linkedChallenge ? String(getObjectValue_(linkedChallenge, ['Challenge ID']) || '') : '';
-      const assignmentSubmission = assignmentId ? studentSubmissions.find(function (item) { return String(getObjectValue_(item, ['Assignment ID']) || '') === assignmentId; }) : null;
-      const challengeResult = challengeId ? studentChallengeResults.find(function (item) { return String(getObjectValue_(item, ['Challenge ID']) || '') === challengeId; }) : null;
+      const assignmentSubmission = assignmentId ? studentSubmissions.find(function (item) { return studentSyncKeyV86_(getObjectValue_(item, ['Assignment ID'])) === studentSyncKeyV86_(assignmentId); }) : null;
+      const challengeResult = challengeId ? studentChallengeResults.find(function (item) { return studentSyncKeyV86_(getObjectValue_(item, ['Challenge ID'])) === studentSyncKeyV86_(challengeId); }) : null;
       const date = normalizeStudentDate_(getObjectValue_(source, journalItem ? ['Date', 'Tanggal'] : ['Planned Date', 'Tanggal Rencana']));
       const dateText = date ? Utilities.formatDate(date, timezone, 'yyyy-MM-dd') : '';
       const individualNote = monthlyNotes.find(function (note) {
@@ -5767,7 +9338,7 @@ function getStudentOverview_(token) {
         meetingNumber: meetingNumber,
         date: dateText,
         title: String(getObjectValue_(source, ['Material / Topic']) || ''),
-        objective: String(getObjectValue_(plan || source, ['Learning Objective', 'Tujuan Pembelajaran']) || ''),
+        objective: String(getObjectValue_(source, ['Learning Objective', 'Tujuan Pembelajaran']) || getObjectValue_(plan || {}, ['Learning Objective', 'Tujuan Pembelajaran']) || ''),
         targetCompetency: String(getObjectValue_(plan || source, ['Target Competency', 'Target Capaian']) || ''),
         activities: String(getObjectValue_(source, journalItem ? ['Activities', 'Aktivitas'] : ['Planned Activities', 'Rencana Aktivitas']) || ''),
         status: journalItem ? 'Terlaksana' : (plan ? 'Direncanakan' : 'Belum Diisi'),
@@ -5854,8 +9425,8 @@ function getStudentOverview_(token) {
         const planId = plan ? String(getObjectValue_(plan, ['Plan ID']) || '') : '';
         const linkedAssignment = classAssignments.find(function (entry) { return planId && String(getObjectValue_(entry, ['Plan ID']) || '') === planId; });
         const linkedChallenge = classChallenges.find(function (entry) { return planId && String(getObjectValue_(entry, ['Plan ID']) || '') === planId; });
-        const assignmentSubmission = linkedAssignment ? studentSubmissions.find(function (entry) { return String(getObjectValue_(entry, ['Assignment ID']) || '') === String(getObjectValue_(linkedAssignment, ['Assignment ID']) || ''); }) : null;
-        const challengeResult = linkedChallenge ? studentChallengeResults.find(function (entry) { return String(getObjectValue_(entry, ['Challenge ID']) || '') === String(getObjectValue_(linkedChallenge, ['Challenge ID']) || ''); }) : null;
+        const assignmentSubmission = linkedAssignment ? studentSubmissions.find(function (entry) { return studentSyncKeyV86_(getObjectValue_(entry, ['Assignment ID'])) === studentSyncKeyV86_(getObjectValue_(linkedAssignment, ['Assignment ID'])); }) : null;
+        const challengeResult = linkedChallenge ? studentChallengeResults.find(function (entry) { return studentSyncKeyV86_(getObjectValue_(entry, ['Challenge ID'])) === studentSyncKeyV86_(getObjectValue_(linkedChallenge, ['Challenge ID'])); }) : null;
         const individualNote = monthlyNotes.find(function (note) {
           const noteDate = normalizeStudentDate_(getObjectValue_(note, ['Date', 'Tanggal']));
           const noteDateText = noteDate ? Utilities.formatDate(noteDate, timezone, 'yyyy-MM-dd') : '';
@@ -5880,7 +9451,7 @@ function getStudentOverview_(token) {
         return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === currentMonthKey;
       }).map(function (item) {
         const assignmentId = String(getObjectValue_(item, ['Assignment ID']) || '');
-        const assignment = classAssignments.find(function (entry) { return String(getObjectValue_(entry, ['Assignment ID']) || '') === assignmentId; });
+        const assignment = classAssignments.find(function (entry) { return studentSyncKeyV86_(getObjectValue_(entry, ['Assignment ID'])) === studentSyncKeyV86_(assignmentId); });
         return { meetingNumber: assignment ? Number(getObjectValue_(assignment, ['Meeting Number']) || 0) : 0, targetCompetency: assignment ? String(getObjectValue_(assignment, ['Target Competency']) || '') : '', title: assignment ? String(getObjectValue_(assignment, ['Title']) || '') : 'Assignment', score: getObjectValue_(item, ['Score']), status: String(getObjectValue_(item, ['Status']) || ''), feedback: String(getObjectValue_(item, ['Feedback']) || '') };
       }),
       challenges: studentChallengeResults.filter(function (item) {
@@ -5888,13 +9459,13 @@ function getStudentOverview_(token) {
         return date && Utilities.formatDate(date, timezone, 'yyyy-MM') === currentMonthKey;
       }).map(function (item) {
         const challengeId = String(getObjectValue_(item, ['Challenge ID']) || '');
-        const challenge = classChallenges.find(function (entry) { return String(getObjectValue_(entry, ['Challenge ID']) || '') === challengeId; });
+        const challenge = classChallenges.find(function (entry) { return studentSyncKeyV86_(getObjectValue_(entry, ['Challenge ID'])) === studentSyncKeyV86_(challengeId); });
         return { meetingNumber: challenge ? Number(getObjectValue_(challenge, ['Meeting Number']) || 0) : 0, targetCompetency: challenge ? String(getObjectValue_(challenge, ['Target Competency']) || '') : '', title: challenge ? String(getObjectValue_(challenge, ['Title']) || '') : 'Challenge', score: getObjectValue_(item, ['Score']), status: String(getObjectValue_(item, ['Status']) || ''), feedback: String(getObjectValue_(item, ['Feedback']) || '') };
       })
     },
     program: {
       classId: classId,
-      program: String(getObjectValue_(student, ['Program']) || ''),
+      program: officialProgram,
       className: String(
         getObjectValue_(classInfo, ['Nama kelas', 'Nama Kelas', 'Class Name', 'Class']) || classId
       ),
@@ -5916,19 +9487,36 @@ function getStudentOverview_(token) {
       const assignedDate = normalizeStudentDate_(getObjectValue_(item, ['Assigned Date']));
       const dueDate = normalizeStudentDate_(getObjectValue_(item, ['Due Date']));
       const assignmentId = String(getObjectValue_(item, ['Assignment ID']) || '');
-      const submission = studentSubmissions.find(function (result) { return String(getObjectValue_(result, ['Assignment ID']) || '') === assignmentId; });
+      const submission = studentSubmissions.find(function (result) { return studentSyncKeyV86_(getObjectValue_(result, ['Assignment ID'])) === studentSyncKeyV86_(assignmentId); });
       let questions = [];
       try { questions = JSON.parse(String(getObjectValue_(item, ['Questions JSON']) || '[]')); } catch (error) { questions = []; }
+      const taskType = String(getObjectValue_(item, ['Task Type']) || 'multiple-choice').toLowerCase();
+      const studentQuestions = questions.map(function (question, questionIndex) {
+        const type = String(question.type || 'multiple-choice').toLowerCase();
+        const safe = { id: question.id, type: type, text: question.text, points: question.points };
+        if (type === 'multiple-choice' || type === 'multiple-select' || type === 'true-false') safe.options = question.options;
+        if (type === 'fill-blank') safe.wordBank = Array.isArray(question.wordBank) ? question.wordBank : [];
+        if (type === 'matching') {
+          safe.leftItems = (question.pairs || []).map(function (pair, pairIndex) { return { id: pair.id || ('p-' + (pairIndex + 1)), label: pair.left }; });
+          safe.rightOptions = (question.pairs || []).map(function (pair) { return pair.right; }).reverse();
+        }
+        if (type === 'ordering' || type === 'sentence-builder') safe.displayItems = (question.items || []).slice().reverse();
+        if (type === 'categorization') {
+          safe.categoryNames = (question.categories || []).map(function (category) { return category.name; });
+          safe.displayItems = (question.categories || []).reduce(function (items, category) { return items.concat(category.items || []); }, []).reverse();
+        }
+        return safe;
+      });
       return {
         assignmentId: assignmentId, title: String(getObjectValue_(item, ['Title']) || ''), instructions: String(getObjectValue_(item, ['Instructions']) || ''),
         assignedDate: assignedDate ? Utilities.formatDate(assignedDate, timezone, 'yyyy-MM-dd') : '', dueDate: dueDate ? Utilities.formatDate(dueDate, timezone, 'yyyy-MM-dd') : '',
-        maxScore: Number(getObjectValue_(item, ['Max Score']) || 100), totalPoints: Number(getObjectValue_(item, ['Total Points']) || 0), questions: questions.map(function (question) { return { id: question.id, text: question.text, options: question.options, points: question.points }; }), expReward: Number(getObjectValue_(item, ['EXP Reward']) || 0), status: String(getObjectValue_(item, ['Status']) || 'Aktif'),
+        taskType: taskType, stimulus: String(getObjectValue_(item, ['Stimulus']) || ''), maxScore: Number(getObjectValue_(item, ['Max Score']) || 100), totalPoints: Number(getObjectValue_(item, ['Total Points']) || 0), questions: studentQuestions, expReward: Number(getObjectValue_(item, ['EXP Reward']) || 0), status: String(getObjectValue_(item, ['Status']) || 'Aktif'),
         submission: submission ? { response: String(getObjectValue_(submission, ['Response']) || ''), status: String(getObjectValue_(submission, ['Status']) || ''), score: getObjectValue_(submission, ['Score']), feedback: String(getObjectValue_(submission, ['Feedback']) || ''), expAwarded: Number(getObjectValue_(submission, ['EXP Awarded']) || 0) } : null
       };
     }).sort(function (a, b) { return b.assignedDate.localeCompare(a.assignedDate); }),
     challenges: classChallenges.map(function (item) {
       const challengeId = String(getObjectValue_(item, ['Challenge ID']) || ''); const dueDate = normalizeStudentDate_(getObjectValue_(item, ['Due Date']));
-      const result = studentChallengeResults.find(function (row) { return String(getObjectValue_(row, ['Challenge ID']) || '') === challengeId; });
+      const result = studentChallengeResults.find(function (row) { return studentSyncKeyV86_(getObjectValue_(row, ['Challenge ID'])) === studentSyncKeyV86_(challengeId); });
       const responseType = String(getObjectValue_(item, ['Response Type']) || 'text').toLowerCase();
       return {
         challengeId: challengeId,
@@ -5963,9 +9551,11 @@ function getStudentOverview_(token) {
               (
                 /lunas|paid/i.test(String(currentTuitionItem.status || ''))
                   ? 'Pembayaran les bulan ini sudah tercatat di Data Pembayaran.'
-                  : /menunggu verifikasi/i.test(String(currentTuitionItem.status || ''))
-                    ? 'Pembayaran sudah dikirim dan sedang menunggu verifikasi Admin.'
-                    : 'Tagihan les bulan ini masih aktif.'
+                  : /cuti/i.test(String(currentTuitionItem.status || ''))
+                    ? 'Cuti bulan ini — tidak ada tagihan les.'
+                    : /menunggu verifikasi/i.test(String(currentTuitionItem.status || ''))
+                      ? 'Pembayaran sudah dikirim dan sedang menunggu verifikasi Admin.'
+                      : 'Tagihan les bulan ini masih aktif.'
               )
             ),
         confirmationId: paymentConfirmation ? String(getObjectValue_(paymentConfirmation, ['Confirmation ID']) || '') : '',
@@ -6046,17 +9636,14 @@ function submitPaymentConfirmation_(token, payment) {
   const paymentDate = String(payment.paymentDate || '').trim();
   const amount = Number(payment.amount || 0);
   const proof = payment.proof || {};
-  const isCashPayment = /^Tunai\s*-/i.test(method);
   if (!studentId || !invoiceNumber || !period || !method || !senderName || !paymentDate || amount <= 0) throw new Error('Lengkapi seluruh data pembayaran.');
+  if (method !== 'BCA') throw new Error('Pembayaran siswa hanya dapat dikonfirmasi melalui rekening resmi BCA 7815846478 a.n. Novita Rohmawati.');
   const mimeType = String(proof.mimeType || '').toLowerCase();
   const base64 = String(proof.base64 || '').replace(/^data:[^;]+;base64,/, '');
-  let bytes = [];
-  if (!isCashPayment) {
-    if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].indexOf(mimeType) === -1) throw new Error('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
-    if (!base64) throw new Error('Pilih file bukti pembayaran.');
-    bytes = Utilities.base64Decode(base64);
-    if (bytes.length > 4 * 1024 * 1024) throw new Error('Ukuran bukti pembayaran maksimal 4 MB.');
-  }
+  if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].indexOf(mimeType) === -1) throw new Error('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
+  if (!base64) throw new Error('Pilih file bukti pembayaran.');
+  const bytes = Utilities.base64Decode(base64);
+  if (bytes.length > 4 * 1024 * 1024) throw new Error('Ukuran bukti pembayaran maksimal 4 MB.');
   const spreadsheet = getDatabase_();
   const sheet = getPaymentConfirmationSheet_(spreadsheet);
   const confirmationRows = getSheetObjects_(sheet);
@@ -6086,18 +9673,13 @@ function submitPaymentConfirmation_(token, payment) {
     ? String(getObjectValue_(existing, ['Confirmation ID']) || '')
     : 'PAY-' + Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyyMMddHHmmss') + '-' + studentId;
 
-  const safeName = isCashPayment ? '' : String(proof.fileName || 'bukti-pembayaran').replace(/[^a-zA-Z0-9._-]/g, '-');
-  let proofFileId = '';
-
-  if (!isCashPayment) {
-    const oldProofId = existing ? String(getObjectValue_(existing, ['Proof File ID']) || '').trim() : '';
-    if (oldProofId) {
-      try { DriveApp.getFileById(oldProofId).setTrashed(true); } catch (error) { /* ignore old file cleanup */ }
-    }
-
-    const blob = Utilities.newBlob(bytes, mimeType, confirmationId + '-' + safeName);
-    proofFileId = getPaymentProofFolder_().createFile(blob).getId();
+  const safeName = String(proof.fileName || 'bukti-transfer-bca').replace(/[^a-zA-Z0-9._-]/g, '-');
+  const oldProofId = existing ? String(getObjectValue_(existing, ['Proof File ID']) || '').trim() : '';
+  if (oldProofId) {
+    try { DriveApp.getFileById(oldProofId).setTrashed(true); } catch (error) { /* ignore old file cleanup */ }
   }
+  const blob = Utilities.newBlob(bytes, mimeType, confirmationId + '-' + safeName);
+  const proofFileId = getPaymentProofFolder_().createFile(blob).getId();
 
   const values = {
     'Confirmation ID': confirmationId,
@@ -6114,7 +9696,7 @@ function submitPaymentConfirmation_(token, payment) {
     'Payment Date': paymentDate,
     'Proof File ID': proofFileId,
     'Proof File Name': safeName,
-    'Proof MIME Type': isCashPayment ? '' : mimeType,
+    'Proof MIME Type': mimeType,
     'Status': 'Menunggu Verifikasi',
     'Admin Note': '',
     'Verified At': '',
@@ -6249,6 +9831,205 @@ function updateMappedRow_(sheet, rowNumber, values) {
   Object.keys(values).forEach(function (key) { const column = headers.indexOf(key) + 1; if (column > 0) sheet.getRange(rowNumber, column).setValue(values[key]); });
 }
 
+
+function syncPaymentConsistencyForYearV69_(spreadsheet, year, onlyStudentId) {
+  spreadsheet = spreadsheet || getDatabase_();
+  const timezone = 'Asia/Makassar';
+  const targetYear = Number(year || Utilities.formatDate(new Date(), timezone, 'yyyy'));
+  const filterStudentId = String(onlyStudentId || '').trim();
+
+  const studentSheet = spreadsheet.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+
+  let paymentSheet = spreadsheet.getSheetByName('Data Pembayaran');
+  if (!paymentSheet) {
+    paymentSheet = spreadsheet.insertSheet('Data Pembayaran');
+  }
+
+  ensureHeaders_(paymentSheet, [
+    'Payment ID', 'Student ID', 'Nama', 'Payment Category', 'Item Label',
+    'Period', 'Payment Method', 'Payment Date', 'Amount', 'Status',
+    'Fulfillment Status', 'Verified Date', 'Verified By', 'Invoice Number',
+    'Receipt Link', 'Notes'
+  ]);
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  ensureHeaders_(studentSheet, ['Student ID'].concat(monthNames));
+
+  const studentHeaders = studentSheet
+    .getRange(1, 1, 1, studentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header).trim(); });
+
+  const paymentHeaders = paymentSheet
+    .getRange(1, 1, 1, paymentSheet.getLastColumn())
+    .getDisplayValues()[0]
+    .map(function (header) { return String(header).trim(); });
+
+  const studentIdColumn = studentHeaders.indexOf('Student ID') + 1;
+  const periodColumn = paymentHeaders.indexOf('Period') + 1;
+
+  const students = getSheetObjects_(studentSheet).filter(function (student) {
+    const id = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim();
+    return id && (!filterStudentId || id === filterStudentId);
+  });
+
+  let payments = getSheetObjects_(paymentSheet);
+
+  const paidMap = {};
+  let normalizedLegacyPeriods = 0;
+
+  // First normalize old Tuition rows that have no Period but DO have a usable payment date.
+  payments.forEach(function (payment, index) {
+    const studentId = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim();
+    if (!studentId || (filterStudentId && studentId !== filterStudentId)) return;
+
+    const status = String(getObjectValue_(payment, ['Status']) || '').trim().toLowerCase();
+    const paid = status === 'lunas' || status === 'paid' || status === 'verified';
+    if (!paid) return;
+
+    const category = normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori']));
+    if (category !== 'Tuition') return;
+
+    let period = String(getObjectValue_(payment, ['Period', 'Periode', 'Bulan yang dibayar']) || '').trim();
+
+    if (!period) {
+      const paymentDate = normalizeStudentDate_(
+        getObjectValue_(payment, ['Payment Date', 'Tanggal', 'Date', 'Verified Date'])
+      );
+
+      if (paymentDate) {
+        const derivedPeriod = Utilities.formatDate(paymentDate, timezone, 'yyyy-MM');
+        if (Number(derivedPeriod.slice(0, 4)) === targetYear && periodColumn > 0) {
+          paymentSheet.getRange(index + 2, periodColumn).setValue(derivedPeriod);
+          period = derivedPeriod;
+          normalizedLegacyPeriods += 1;
+        }
+      }
+    }
+
+    if (/^\d{4}-\d{2}$/.test(period) && Number(period.slice(0, 4)) === targetYear) {
+      paidMap[studentId + '|' + period] = true;
+    }
+  });
+
+  // Reload after normalizing Period cells.
+  if (normalizedLegacyPeriods) {
+    payments = getSheetObjects_(paymentSheet);
+    Object.keys(paidMap).forEach(function (key) { delete paidMap[key]; });
+
+    payments.forEach(function (payment) {
+      const studentId = String(getObjectValue_(payment, ['Student ID', 'ID']) || '').trim();
+      if (!studentId || (filterStudentId && studentId !== filterStudentId)) return;
+
+      const status = String(getObjectValue_(payment, ['Status']) || '').trim().toLowerCase();
+      if (status !== 'lunas' && status !== 'paid' && status !== 'verified') return;
+
+      const category = normalizePaymentCategory_(getObjectValue_(payment, ['Payment Category', 'Kategori']));
+      const period = String(getObjectValue_(payment, ['Period', 'Periode', 'Bulan yang dibayar']) || '').trim();
+
+      if (category === 'Tuition' && /^\d{4}-\d{2}$/.test(period) && Number(period.slice(0, 4)) === targetYear) {
+        paidMap[studentId + '|' + period] = true;
+      }
+    });
+  }
+
+  const studentMonthUpdates = [];
+  const missingPaymentRows = [];
+
+  students.forEach(function (student) {
+    const studentId = String(getObjectValue_(student, ['Student ID', 'ID']) || '').trim();
+    const fullName = String(getObjectValue_(student, ['Full Name', 'Nama', 'Student Name']) || '').trim();
+    if (!studentId) return;
+
+    monthNames.forEach(function (monthName, index) {
+      const monthNumber = index + 1;
+
+      // July is always a holiday / no tuition billing.
+      if (monthNumber === 7) return;
+
+      const period = targetYear + '-' + String(monthNumber).padStart(2, '0');
+      const key = studentId + '|' + period;
+      const legacyValue = String(getObjectValue_(student, [monthName]) || '').trim();
+      const legacyPaid = /lunas|paid|verified/i.test(legacyValue);
+      const legacyLeave = isStudentLeaveValue_(legacyValue);
+      const paymentPaid = !!paidMap[key];
+
+      // Data Pembayaran says paid -> ensure Data Siswa month also says Lunas.
+      // Jangan menimpa penanda CUTI beserta keterangannya secara otomatis.
+      if (paymentPaid && !legacyPaid && !legacyLeave) {
+        const monthColumn = studentHeaders.indexOf(monthName) + 1;
+        if (monthColumn > 0) {
+          studentMonthUpdates.push({
+            row: student._rowNumber,
+            column: monthColumn,
+            value: 'Lunas'
+          });
+        }
+      }
+
+      // Data Siswa says Lunas but no matching payment record ->
+      // create one explicit synchronized record so the app never counts it unpaid.
+      if (legacyPaid && !paymentPaid) {
+        const syncId = 'SYNC-' + period.replace('-', '') + '-' + studentId;
+
+        const alreadyExists = payments.some(function (payment) {
+          return String(getObjectValue_(payment, ['Payment ID']) || '').trim() === syncId;
+        });
+
+        if (!alreadyExists) {
+          missingPaymentRows.push({
+            'Payment ID': syncId,
+            'Student ID': studentId,
+            'Nama': fullName,
+            'Payment Category': 'Tuition',
+            'Item Label': 'Les Bulanan',
+            'Period': period,
+            'Payment Method': 'Legacy / Data Siswa',
+            'Payment Date': '',
+            'Amount': 150000,
+            'Status': 'Lunas',
+            'Fulfillment Status': '',
+            'Verified Date': '',
+            'Verified By': 'System Sync',
+            'Invoice Number': syncId,
+            'Receipt Link': '',
+            'Notes': 'Sinkron otomatis dari status Lunas pada Data Siswa. Tanggal dan metode pembayaran asli tidak tersedia pada data lama.'
+          });
+          paidMap[key] = true;
+        }
+      }
+    });
+  });
+
+  studentMonthUpdates.forEach(function (update) {
+    studentSheet.getRange(update.row, update.column).setValue(update.value);
+  });
+
+  missingPaymentRows.forEach(function (row) {
+    appendMappedRow_(paymentSheet, row);
+  });
+
+  return {
+    success: true,
+    year: targetYear,
+    studentFilter: filterStudentId || 'ALL',
+    normalizedLegacyPeriods: normalizedLegacyPeriods,
+    dataSiswaMonthsMarkedPaid: studentMonthUpdates.length,
+    paymentRowsBackfilled: missingPaymentRows.length
+  };
+}
+
+function syncAllPaymentConsistencyV69() {
+  const spreadsheet = getDatabase_();
+  const year = Number(Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyy'));
+  return syncPaymentConsistencyForYearV69_(spreadsheet, year, '');
+}
+
 function markStudentMonthPaid_(spreadsheet, studentId, period) {
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const parts = String(period || '').split('-');
@@ -6283,7 +10064,7 @@ function buildStudentPaymentCenter_(spreadsheet, studentId, currentPeriod, legac
     const paid = payments.filter(function (item) {
       const itemCategory = normalizePaymentCategory_(getObjectValue_(item, ['Payment Category', 'Kategori']));
       const itemPeriod = String(getObjectValue_(item, ['Period', 'Periode']) || '').trim();
-      return itemCategory === category && (!period || itemPeriod === period || (category === 'Tuition' && !itemPeriod));
+      return itemCategory === category && (!period || itemPeriod === period);
     }).sort(function (a, b) { return new Date(getObjectValue_(b, ['Payment Date', 'Tanggal']) || 0) - new Date(getObjectValue_(a, ['Payment Date', 'Tanggal']) || 0); })[0];
     if (paid) return { source: 'payment', row: paid };
     const confirmation = confirmations.filter(function (item) {
@@ -6295,14 +10076,17 @@ function buildStudentPaymentCenter_(spreadsheet, studentId, currentPeriod, legac
     const found = latestByCategory(category, period);
     const row = found ? found.row : {};
     let status = found ? String(getObjectValue_(row, ['Status']) || '') : (category === 'Tuition' ? 'Belum Lunas' : 'Belum Dibeli');
+    const legacyLeave = category === 'Tuition' && isStudentLeaveValue_(legacyTuitionValue);
     if (category === 'Tuition' && /-07$/.test(String(period || ''))) status = 'Libur';
     if (category === 'Tuition' && /lunas/i.test(String(legacyTuitionValue || ''))) status = 'Lunas';
+    if (legacyLeave && !/lunas|paid|verified/i.test(status)) status = 'Cuti';
+    const leaveNote = legacyLeave ? extractStudentLeaveNote_(legacyTuitionValue) : '';
     return {
       category: category, label: label, icon: icon, amount: amount, period: period || 'Sekali Bayar', status: status || (category === 'Tuition' ? 'Belum Lunas' : 'Belum Dibeli'),
       paymentId: String(getObjectValue_(row, ['Payment ID', 'Confirmation ID']) || ''), invoiceNumber: String(getObjectValue_(row, ['Invoice Number']) || ''),
       paymentDate: getObjectValue_(row, ['Payment Date']), paymentMethod: String(getObjectValue_(row, ['Payment Method']) || ''),
       fulfillmentStatus: category === 'Tuition' ? '' : String(getObjectValue_(row, ['Fulfillment Status']) || (/lunas/i.test(status) ? 'Sedang Disiapkan' : '')),
-      note: String(getObjectValue_(row, ['Notes', 'Admin Note']) || '')
+      note: legacyLeave ? (leaveNote ? 'Cuti: ' + leaveNote : 'Cuti bulan ini — tidak ditagihkan.') : String(getObjectValue_(row, ['Notes', 'Admin Note']) || '')
     };
   }
   const nowDate = new Date();
@@ -6383,16 +10167,91 @@ function buildStudentPaymentCenter_(spreadsheet, studentId, currentPeriod, legac
   };
 }
 
+function adminBulkMarkTuitionPaid_(token, payment) {
+  const session = requirePaymentAdmin_(token);
+  payment = payment || {};
+  const students = Array.isArray(payment.students) ? payment.students : [];
+  const paymentDate = String(payment.paymentDate || '').trim();
+  const paymentMethod = String(payment.paymentMethod || 'Tunai').trim();
+  const amount = Number(payment.amount || 150000);
+  if (!students.length) throw new Error('Pilih minimal satu siswa.');
+  if (!paymentDate || amount <= 0) throw new Error('Tanggal dan nominal pembayaran tidak valid.');
+  if (students.length > 100) throw new Error('Maksimal 100 siswa dalam satu proses.');
+
+  const database = getDatabase_();
+  const studentSheet = database.getSheetByName('Data Siswa');
+  const paymentSheet = database.getSheetByName('Data Pembayaran');
+  if (!studentSheet || !paymentSheet) throw new Error('Sheet siswa atau pembayaran tidak ditemukan.');
+  ensureHeaders_(paymentSheet, ['Payment ID', 'Student ID', 'Nama', 'Payment Category', 'Item Label', 'Period', 'Payment Method', 'Payment Date', 'Amount', 'Status', 'Fulfillment Status', 'Verified Date', 'Verified By', 'Invoice Number', 'Proof File ID', 'Proof File Name', 'Proof MIME Type', 'Notes']);
+
+  const studentRows = getSheetObjects_(studentSheet);
+  const studentNames = {};
+  studentRows.forEach(function (row) {
+    const id = String(getObjectValue_(row, ['Student ID']) || '').trim().toUpperCase();
+    if (id) studentNames[id] = String(getObjectValue_(row, ['Full Name', 'Nama']) || '').trim();
+  });
+  const existingRows = getSheetObjects_(paymentSheet);
+  const timezone = 'Asia/Makassar';
+  const now = new Date();
+  let created = 0;
+  let updated = 0;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    students.forEach(function (entry, index) {
+      const studentId = String(entry.studentId || '').trim().toUpperCase();
+      const period = String(entry.period || '').trim();
+      if (!studentId || !/^\d{4}-\d{2}$/.test(period) || !studentNames[studentId]) return;
+      const existingIndex = existingRows.findIndex(function (item) {
+        return String(getObjectValue_(item, ['Student ID']) || '').trim().toUpperCase() === studentId &&
+          normalizePaymentCategory_(getObjectValue_(item, ['Payment Category', 'Kategori'])) === 'Tuition' &&
+          String(getObjectValue_(item, ['Period', 'Periode']) || '').trim() === period;
+      });
+      const existing = existingIndex >= 0 ? existingRows[existingIndex] : null;
+      const paymentId = existing ? String(getObjectValue_(existing, ['Payment ID']) || '') : 'BULK-' + Utilities.formatDate(now, timezone, 'yyyyMMddHHmmss') + '-' + (index + 1) + '-' + studentId;
+      const values = {
+        'Payment ID': paymentId,
+        'Student ID': studentId,
+        'Nama': studentNames[studentId],
+        'Payment Category': 'Tuition',
+        'Item Label': 'Les Bulanan',
+        'Period': period,
+        'Payment Method': paymentMethod,
+        'Payment Date': paymentDate,
+        'Amount': amount,
+        'Status': 'Lunas',
+        'Verified Date': now,
+        'Verified By': session.fullName || session.username || 'Admin',
+        'Invoice Number': existing ? String(getObjectValue_(existing, ['Invoice Number']) || paymentId) : paymentId,
+        'Notes': 'Pembayaran massal dicatat Admin'
+      };
+      if (existingIndex >= 0) { updateMappedRow_(paymentSheet, existingIndex + 2, values); updated++; }
+      else { appendMappedRow_(paymentSheet, values); created++; }
+      markStudentMonthPaid_(database, studentId, period);
+    });
+  } finally {
+    lock.releaseLock();
+  }
+  return { success: true, created: created, updated: updated, message: (created + updated) + ' pembayaran siswa berhasil ditandai Lunas.' };
+}
+
 function addHistoricalPayment_(token, payment) {
   const session = requirePaymentAdmin_(token); payment = payment || {};
   const studentId = String(payment.studentId || '').trim(); const category = normalizePaymentCategory_(payment.paymentCategory);
   const amount = Number(payment.amount || 0); const paymentDate = String(payment.paymentDate || '').trim();
   if (!studentId || !paymentDate || amount <= 0) throw new Error('Lengkapi Student ID, tanggal, dan nominal pembayaran.');
+  const proof = payment.proof || {};
+  const proofMimeType = String(proof.mimeType || '').toLowerCase();
+  const proofBase64 = String(proof.base64 || '').replace(/^data:[^;]+;base64,/, '');
+  if (['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].indexOf(proofMimeType) === -1) throw new Error('Bukti pembayaran harus berupa JPG, PNG, WEBP, atau PDF.');
+  if (!proofBase64) throw new Error('Upload bukti pembayaran terlebih dahulu.');
+  const proofBytes = Utilities.base64Decode(proofBase64);
+  if (proofBytes.length > 4 * 1024 * 1024) throw new Error('Ukuran bukti pembayaran maksimal 4 MB.');
   const spreadsheet = getDatabase_(); const studentSheet = spreadsheet.getSheetByName('Data Siswa');
   const student = getSheetObjects_(studentSheet).find(function (item) { return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId; });
   if (!student) throw new Error('Student ID tidak ditemukan.');
   const sheet = spreadsheet.getSheetByName('Data Pembayaran');
-  ensureHeaders_(sheet, ['Payment ID', 'Student ID', 'Nama', 'Payment Category', 'Item Label', 'Period', 'Payment Method', 'Payment Date', 'Amount', 'Status', 'Fulfillment Status', 'Verified Date', 'Verified By', 'Invoice Number', 'Notes']);
+  ensureHeaders_(sheet, ['Payment ID', 'Student ID', 'Nama', 'Payment Category', 'Item Label', 'Period', 'Payment Method', 'Payment Date', 'Amount', 'Status', 'Fulfillment Status', 'Verified Date', 'Verified By', 'Invoice Number', 'Proof File ID', 'Proof File Name', 'Proof MIME Type', 'Notes']);
 
   const period = String(payment.period || '').trim();
   const rows = getSheetObjects_(sheet);
@@ -6406,6 +10265,10 @@ function addHistoricalPayment_(token, payment) {
   const paymentId = existing
     ? String(getObjectValue_(existing, ['Payment ID']) || '')
     : 'HIST-' + Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyyMMddHHmmss') + '-' + studentId;
+
+  const safeProofName = String(proof.fileName || 'bukti-pembayaran').replace(/[^a-zA-Z0-9._-]/g, '-');
+  const proofBlob = Utilities.newBlob(proofBytes, proofMimeType, paymentId + '-' + safeProofName);
+  const proofFileId = getPaymentProofFolder_().createFile(proofBlob).getId();
 
   const values = {
     'Payment ID': paymentId,
@@ -6422,6 +10285,9 @@ function addHistoricalPayment_(token, payment) {
     'Verified Date': new Date(),
     'Verified By': session.fullName || session.username || 'Admin',
     'Invoice Number': existing ? String(getObjectValue_(existing, ['Invoice Number']) || paymentId) : paymentId,
+    'Proof File ID': proofFileId,
+    'Proof File Name': safeProofName,
+    'Proof MIME Type': proofMimeType,
     'Notes': String(payment.note || 'Pembayaran lama dicatat Admin')
   };
 
@@ -6651,6 +10517,52 @@ function getGamificationConfigValueV22_(configId, fallback) {
   return isNaN(value) ? Number(fallback || 0) : Math.max(0, value);
 }
 
+function getGamificationRankV79_(totalExp) {
+  const exp = Math.max(0, Number(totalExp || 0));
+  const ranks = [
+    [0, 'Newcomer'], [500, 'Bronze Starter'], [1000, 'Silver Explorer'],
+    [2000, 'Gold Achiever'], [3500, 'Platinum Learner'], [5500, 'Diamond Champion'],
+    [8000, 'English Hero'], [11000, 'MOC Champion'], [15000, 'MOC Legend']
+  ];
+  let current = ranks[0];
+  ranks.forEach(function (rank) { if (exp >= rank[0]) current = rank; });
+  return { min: current[0], name: current[1] };
+}
+
+function getStudentLedgerExperienceV79_(studentId) {
+  const database = getDatabase_();
+  const sheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.ledger);
+  const breakdown = {
+    attendance: 0, learning: 0, assignment: 0, challenge: 0,
+    quizTest: 0, participation: 0, project: 0, achievement: 0
+  };
+  if (!sheet) return { totalExp: 0, lifetimeExp: 0, rank: 'Newcomer', breakdown: breakdown };
+
+  let totalExp = 0;
+  getSheetObjects_(sheet).forEach(function (item) {
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== String(studentId || '').trim()) return;
+    if (String(getObjectValue_(item, ['Status']) || 'Active').trim().toLowerCase() === 'void') return;
+    const exp = Math.max(0, Number(getObjectValue_(item, ['EXP Earned']) || 0));
+    const source = String(getObjectValue_(item, ['Source Type']) || '').trim().toLowerCase();
+    totalExp += exp;
+    if (source === 'attendance') breakdown.attendance += exp;
+    else if (source === 'learning') breakdown.learning += exp;
+    else if (source === 'assignment') breakdown.assignment += exp;
+    else if (source === 'challenge') breakdown.challenge += exp;
+    else if (source === 'quiz') breakdown.quizTest += exp;
+    else if (source === 'participation') breakdown.participation += exp;
+    else if (source === 'project') breakdown.project += exp;
+    else if (source === 'achievement' || source === 'badge') breakdown.achievement += exp;
+  });
+
+  return {
+    totalExp: totalExp,
+    lifetimeExp: totalExp,
+    rank: getGamificationRankV79_(totalExp).name,
+    breakdown: breakdown
+  };
+}
+
 function getStudentGamificationIdentityV22_(studentId) {
   const database = getDatabase_();
   const studentSheet = database.getSheetByName('Data Siswa');
@@ -6697,6 +10609,7 @@ function awardStudentExpV22_(options) {
   const database = getDatabase_();
   const sheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.ledger);
   const rows = getSheetObjects_(sheet);
+  const beforeExperience = getStudentLedgerExperienceV79_(studentId);
   const duplicate = rows.some(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
       String(getObjectValue_(item, ['Source Type']) || '').trim() === sourceType &&
@@ -6731,15 +10644,91 @@ function awardStudentExpV22_(options) {
     'Notes': String(options.notes || '')
   });
 
+  let badgeResult = { newlyUnlocked: [], expAwarded: 0 };
   if (!options.deferSync) {
     rebuildMonthlyGamificationV22_(month, studentId);
-    syncBadgeProgressForStudentV22_(studentId, month);
+    badgeResult = syncBadgeProgressForStudentV22_(studentId, month) || badgeResult;
   }
+
+  const afterExperience = getStudentLedgerExperienceV79_(studentId);
+  const previousRank = getGamificationRankV79_(beforeExperience.totalExp);
+  const currentRank = getGamificationRankV79_(afterExperience.totalExp);
+  const firstBadge = badgeResult.newlyUnlocked && badgeResult.newlyUnlocked.length
+    ? badgeResult.newlyUnlocked[0]
+    : null;
 
   return {
     awarded: true,
-    expAwarded: exp,
+    expAwarded: exp + Number(badgeResult.expAwarded || 0),
     duplicate: false,
+    month: month,
+    badgeUnlocked: Boolean(firstBadge),
+    badgeName: firstBadge ? firstBadge.name : '',
+    badgesUnlocked: badgeResult.newlyUnlocked || [],
+    rankUp: previousRank.name !== currentRank.name,
+    rankName: currentRank.name,
+    lifetimeExp: afterExperience.totalExp
+  };
+}
+
+function setStudentExpForSourceV79_(options) {
+  options = options || {};
+  setupGamificationSheetsOnlyV22_();
+  const studentId = String(options.studentId || '').trim();
+  const sourceType = String(options.sourceType || '').trim();
+  const sourceId = String(options.sourceId || '').trim();
+  const exp = Math.max(0, Number(options.exp || 0));
+  if (!studentId || !sourceType || !sourceId) return { awarded: false, expAwarded: 0 };
+
+  const database = getDatabase_();
+  const sheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.ledger);
+  const rows = getSheetObjects_(sheet);
+  const existing = rows.find(function (item) {
+    return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
+      String(getObjectValue_(item, ['Source Type']) || '').trim() === sourceType &&
+      String(getObjectValue_(item, ['Source ID']) || '').trim() === sourceId;
+  });
+  if (!existing) {
+    if (exp <= 0) return { awarded: false, expAwarded: 0 };
+    return awardStudentExpV22_(options);
+  }
+
+  const beforeExperience = getStudentLedgerExperienceV79_(studentId);
+  const oldExp = String(getObjectValue_(existing, ['Status']) || 'Active').trim().toLowerCase() === 'void'
+    ? 0 : Math.max(0, Number(getObjectValue_(existing, ['EXP Earned']) || 0));
+  const timestamp = options.timestamp instanceof Date ? options.timestamp : normalizeStudentDate_(getObjectValue_(existing, ['Timestamp'])) || new Date();
+  const month = String(options.month || getObjectValue_(existing, ['Month']) || Utilities.formatDate(timestamp, MOC_GAMIFICATION_V22_.timezone, 'yyyy-MM')).trim();
+  updateMappedRow_(sheet, existing._rowNumber, {
+    'Timestamp': timestamp,
+    'Month': month,
+    'Activity Name': String(options.activityName || getObjectValue_(existing, ['Activity Name']) || sourceType),
+    'EXP Earned': exp,
+    'Skill Category': String(options.skillCategory || getObjectValue_(existing, ['Skill Category']) || sourceType),
+    'Meeting Number': options.meetingNumber || getObjectValue_(existing, ['Meeting Number']) || '',
+    'Award Method': String(options.awardMethod || getObjectValue_(existing, ['Award Method']) || 'Automatic'),
+    'Status': exp > 0 ? 'Active' : 'Void',
+    'Notes': String(options.notes || getObjectValue_(existing, ['Notes']) || '')
+  });
+
+  let badgeResult = { newlyUnlocked: [], expAwarded: 0 };
+  if (!options.deferSync) {
+    rebuildMonthlyGamificationV22_(month, studentId);
+    badgeResult = syncBadgeProgressForStudentV22_(studentId, month) || badgeResult;
+  }
+  const afterExperience = getStudentLedgerExperienceV79_(studentId);
+  const previousRank = getGamificationRankV79_(beforeExperience.totalExp);
+  const currentRank = getGamificationRankV79_(afterExperience.totalExp);
+  const firstBadge = badgeResult.newlyUnlocked && badgeResult.newlyUnlocked.length ? badgeResult.newlyUnlocked[0] : null;
+  return {
+    awarded: exp > 0,
+    adjusted: true,
+    expAwarded: Math.max(0, exp - oldExp) + Number(badgeResult.expAwarded || 0),
+    badgeUnlocked: Boolean(firstBadge),
+    badgeName: firstBadge ? firstBadge.name : '',
+    badgesUnlocked: badgeResult.newlyUnlocked || [],
+    rankUp: previousRank.name !== currentRank.name && currentRank.min > previousRank.min,
+    rankName: currentRank.name,
+    lifetimeExp: afterExperience.totalExp,
     month: month
   };
 }
@@ -6829,7 +10818,7 @@ function rebuildMonthlyGamificationV22_(monthFilter, studentIdFilter) {
       'Challenge EXP': g.source.Challenge || 0,
       'Quiz EXP': g.source.Quiz || 0,
       'Project EXP': g.source.Project || 0,
-      'Achievement EXP': g.source.Achievement || 0,
+      'Achievement EXP': (g.source.Achievement || 0) + (g.source.Badge || 0),
       'Speaking EXP': g.skill.Speaking || 0,
       'Grammar EXP': g.skill.Grammar || 0,
       'Listening EXP': g.skill.Listening || 0,
@@ -6847,6 +10836,26 @@ function rebuildMonthlyGamificationV22_(monthFilter, studentIdFilter) {
 
     if (existingIndex >= 0) monthlySheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([row]);
     else monthlySheet.appendRow(row);
+  });
+
+  existing.forEach(function (item, index) {
+    const itemMonth = String(getObjectValue_(item, ['Month']) || '').trim();
+    const itemStudentId = String(getObjectValue_(item, ['Student ID']) || '').trim();
+    if ((monthFilter && itemMonth !== monthFilter) || (studentIdFilter && itemStudentId !== studentIdFilter)) return;
+    if (groups[itemMonth + '|' + itemStudentId]) return;
+    const zeroFields = {
+      'Monthly EXP': 0, 'Attendance EXP': 0, 'Learning EXP': 0,
+      'Assignment EXP': 0, 'Challenge EXP': 0, 'Quiz EXP': 0,
+      'Project EXP': 0, 'Achievement EXP': 0, 'Speaking EXP': 0,
+      'Grammar EXP': 0, 'Listening EXP': 0, 'Reading EXP': 0,
+      'Writing EXP': 0, 'Last Updated': now
+    };
+    const row = headers.map(function (header) {
+      return Object.prototype.hasOwnProperty.call(zeroFields, header)
+        ? zeroFields[header]
+        : getObjectValue_(item, [header]);
+    });
+    monthlySheet.getRange(index + 2, 1, 1, headers.length).setValues([row]);
   });
 
   updateMonthlyClassRanksV22_(monthFilter);
@@ -6900,26 +10909,72 @@ function getStudentGamificationSummaryV22_(studentId, classId, month) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
   });
 
-  const leaderboard = rows
-    .slice()
+  const rowByStudent = {};
+  rows.forEach(function (item) {
+    rowByStudent[String(getObjectValue_(item, ['Student ID']) || '').trim()] = item;
+  });
+  const studentSheet = database.getSheetByName('Data Siswa');
+  const classMembers = studentSheet && classId ? getSheetObjects_(studentSheet).filter(function (item) {
+    const status = String(getObjectValue_(item, ['Student Status', 'Status']) || 'Aktif').trim().toLowerCase();
+    return String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() === classId &&
+      ['berhenti', 'berhenti les', 'stopped', 'nonaktif'].indexOf(status) < 0;
+  }).map(function (item) {
+    const id = String(getObjectValue_(item, ['Student ID']) || '').trim();
+    const monthlyRow = rowByStudent[id];
+    return {
+      studentId: id,
+      studentName: String(getObjectValue_(item, ['Full Name', 'Nama']) || 'Student'),
+      monthlyExp: monthlyRow ? Number(getObjectValue_(monthlyRow, ['Monthly EXP']) || 0) : 0
+    };
+  }) : [];
+  const rankedMembers = (classMembers.length ? classMembers : rows.map(function (item) {
+    return {
+      studentId: String(getObjectValue_(item, ['Student ID']) || ''),
+      studentName: String(getObjectValue_(item, ['Student Name']) || 'Student'),
+      monthlyExp: Number(getObjectValue_(item, ['Monthly EXP']) || 0)
+    };
+  }))
     .sort(function (a, b) {
-      return Number(getObjectValue_(b, ['Monthly EXP']) || 0) - Number(getObjectValue_(a, ['Monthly EXP']) || 0);
-    })
+      return b.monthlyExp - a.monthlyExp || a.studentId.localeCompare(b.studentId);
+    });
+  const computedClassRank = rankedMembers.findIndex(function (item) { return item.studentId === studentId; }) + 1;
+  const leaderboard = rankedMembers
     .slice(0, 10)
     .map(function (item, index) {
       return {
-        rank: Number(getObjectValue_(item, ['Monthly Class Rank']) || index + 1),
-        studentId: String(getObjectValue_(item, ['Student ID']) || ''),
-        displayName: abbreviateStudentNameV22_(String(getObjectValue_(item, ['Student Name']) || 'Student')),
-        monthlyExp: Number(getObjectValue_(item, ['Monthly EXP']) || 0)
+        rank: index + 1,
+        studentId: item.studentId,
+        displayName: abbreviateStudentNameV22_(item.studentName),
+        monthlyExp: item.monthlyExp
       };
     });
 
+  const lifetime = getStudentLedgerExperienceV79_(studentId);
+  const badgeSheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.badges);
+  const badges = badgeSheet ? getSheetObjects_(badgeSheet).filter(function (item) {
+    return String(getObjectValue_(item, ['Month']) || '').trim() === month &&
+      String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId;
+  }).map(function (item) {
+    return {
+      badgeId: String(getObjectValue_(item, ['Badge ID']) || ''),
+      name: String(getObjectValue_(item, ['Badge Name']) || ''),
+      missionType: String(getObjectValue_(item, ['Mission Type']) || ''),
+      current: Number(getObjectValue_(item, ['Current Progress']) || 0),
+      target: Number(getObjectValue_(item, ['Target']) || 1),
+      progressPercent: Number(getObjectValue_(item, ['Progress Percent']) || 0),
+      expReward: Number(getObjectValue_(item, ['EXP Reward']) || 0),
+      unlocked: String(getObjectValue_(item, ['Unlocked']) || '').trim().toLowerCase() === 'ya',
+      claimed: String(getObjectValue_(item, ['Claimed']) || '').trim().toLowerCase() === 'ya'
+    };
+  }) : [];
+
   return {
     month: month,
+    lifetimeExp: lifetime.totalExp,
+    rank: lifetime.rank,
     monthlyExp: current ? Number(getObjectValue_(current, ['Monthly EXP']) || 0) : 0,
-    classRank: current ? Number(getObjectValue_(current, ['Monthly Class Rank']) || 0) || null : null,
-    classSize: rows.length,
+    classRank: computedClassRank > 0 ? computedClassRank : null,
+    classSize: rankedMembers.length,
     breakdown: current ? {
       attendance: Number(getObjectValue_(current, ['Attendance EXP']) || 0),
       learning: Number(getObjectValue_(current, ['Learning EXP']) || 0),
@@ -6934,7 +10989,8 @@ function getStudentGamificationSummaryV22_(studentId, classId, month) {
       reading: Number(getObjectValue_(current, ['Reading EXP']) || 0),
       writing: Number(getObjectValue_(current, ['Writing EXP']) || 0)
     } : {},
-    leaderboard: leaderboard
+    leaderboard: leaderboard,
+    badges: badges
   };
 }
 
@@ -6955,6 +11011,9 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
   const submissionSheet = database.getSheetByName('Assignment Submissions');
   const challengeSheet = database.getSheetByName('Challenges');
   const resultSheet = database.getSheetByName('Challenge Results');
+  const learningPlanSheet = database.getSheetByName('Monthly Learning Plan');
+  const learningJournalSheet = database.getSheetByName('Learning Journal');
+  const ledgerSheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.ledger);
   const badgeSheet = database.getSheetByName(MOC_GAMIFICATION_V22_.sheets.badges);
   if (!studentSheet || !badgeSheet) return;
 
@@ -6981,10 +11040,31 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
   });
   const presentCount = Object.keys(uniquePresentDates).length;
 
-  const readCount = readSheet ? getSheetObjects_(readSheet).filter(function (item) {
+  const readRows = readSheet ? getSheetObjects_(readSheet).filter(function (item) {
     return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
       String(getObjectValue_(item, ['Month']) || '').trim() === month;
-  }).length : 0;
+  }) : [];
+  const readMeetings = {};
+  readRows.forEach(function (item) {
+    const meeting = Number(getObjectValue_(item, ['Meeting Number', 'Pertemuan Ke']) || 0);
+    if (meeting > 0) readMeetings[meeting] = true;
+  });
+  const readCount = Object.keys(readMeetings).length;
+
+  const availableLearningMeetings = {};
+  const learningSources = []
+    .concat(learningPlanSheet ? getSheetObjects_(learningPlanSheet) : [])
+    .concat(learningJournalSheet ? getSheetObjects_(learningJournalSheet) : []);
+  learningSources.forEach(function (item) {
+    if (String(getObjectValue_(item, ['Class ID', 'Class Id']) || '').trim() !== classId) return;
+    const explicitMonth = String(getObjectValue_(item, ['Month', 'Bulan']) || '').trim();
+    const date = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal', 'Planned Date', 'Tanggal Rencana']));
+    const derivedMonth = date ? Utilities.formatDate(date, timezone, 'yyyy-MM') : '';
+    if (explicitMonth !== month && derivedMonth !== month) return;
+    const meeting = Number(getObjectValue_(item, ['Meeting Number', 'Pertemuan Ke']) || 0);
+    if (meeting > 0) availableLearningMeetings[meeting] = true;
+  });
+  const learningTarget = Object.keys(availableLearningMeetings).length;
 
   const assignments = assignmentSheet ? getSheetObjects_(assignmentSheet).filter(function (item) {
     const assigned = normalizeStudentDate_(getObjectValue_(item, ['Assigned Date', 'Date']));
@@ -6992,10 +11072,17 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
       (!assigned || Utilities.formatDate(assigned, timezone, 'yyyy-MM') === month);
   }) : [];
   const assignmentIds = assignments.map(function (item) { return String(getObjectValue_(item, ['Assignment ID']) || ''); }).filter(Boolean);
-  const assignmentDone = submissionSheet ? getSheetObjects_(submissionSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
-      assignmentIds.indexOf(String(getObjectValue_(item, ['Assignment ID']) || '')) >= 0;
-  }).length : 0;
+  const assignmentDoneIds = {};
+  if (submissionSheet) getSheetObjects_(submissionSheet).forEach(function (item) {
+    const status = String(getObjectValue_(item, ['Status']) || '').trim().toLowerCase();
+    const assignmentId = String(getObjectValue_(item, ['Assignment ID']) || '');
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
+      assignmentIds.indexOf(assignmentId) >= 0 &&
+      ['submitted', 'reviewed', 'completed', 'selesai', 'dikumpulkan', 'dinilai'].indexOf(status) >= 0) {
+      assignmentDoneIds[assignmentId] = true;
+    }
+  });
+  const assignmentDone = Object.keys(assignmentDoneIds).length;
 
   const challenges = challengeSheet ? getSheetObjects_(challengeSheet).filter(function (item) {
     const due = normalizeStudentDate_(getObjectValue_(item, ['Due Date', 'Date']));
@@ -7003,28 +11090,56 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
       (!due || Utilities.formatDate(due, timezone, 'yyyy-MM') === month);
   }) : [];
   const challengeIds = challenges.map(function (item) { return String(getObjectValue_(item, ['Challenge ID']) || ''); }).filter(Boolean);
-  const challengeDone = resultSheet ? getSheetObjects_(resultSheet).filter(function (item) {
-    return String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
-      challengeIds.indexOf(String(getObjectValue_(item, ['Challenge ID']) || '')) >= 0;
-  }).length : 0;
+  const challengeDoneIds = {};
+  if (resultSheet) getSheetObjects_(resultSheet).forEach(function (item) {
+    const status = String(getObjectValue_(item, ['Status']) || '').trim().toLowerCase();
+    const challengeId = String(getObjectValue_(item, ['Challenge ID']) || '');
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
+      challengeIds.indexOf(challengeId) >= 0 &&
+      ['submitted', 'reviewed', 'completed', 'selesai', 'dikumpulkan', 'dinilai'].indexOf(status) >= 0) {
+      challengeDoneIds[challengeId] = true;
+    }
+  });
+  const challengeDone = Object.keys(challengeDoneIds).length;
+
+  let quizCompleted = 0;
+  let projectCompleted = 0;
+  if (ledgerSheet) getSheetObjects_(ledgerSheet).forEach(function (item) {
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== studentId ||
+      String(getObjectValue_(item, ['Month']) || '').trim() !== month ||
+      String(getObjectValue_(item, ['Status']) || 'Active').trim().toLowerCase() === 'void') return;
+    const source = String(getObjectValue_(item, ['Source Type']) || '').trim().toLowerCase();
+    if (source === 'quiz') quizCompleted = 1;
+    if (source === 'project') projectCompleted = 1;
+  });
+
+  const learningComplete = learningTarget > 0 && readCount >= learningTarget;
+  const taskComplete = assignments.length > 0 && assignmentDone >= assignments.length;
+  const challengeComplete = challenges.length > 0 && challengeDone >= challenges.length;
+  const perfectAttendance = presentCount >= 8;
 
   const definitions = [
-    ['BADGE-LOYAL', 'Pembelajar Setia', 'Attendance', Math.min(presentCount, 4), 4, getGamificationConfigValueV22_('BADGE-LOYAL', 50)],
-    ['BADGE-PERFECT', 'Kehadiran Sempurna', 'Attendance', Math.min(presentCount, 8), 8, getGamificationConfigValueV22_('BADGE-PERFECT', 150)],
-    ['BADGE-LEARNING', 'Learning Explorer', 'Learning', Math.min(readCount, 8), 8, getGamificationConfigValueV22_('BADGE-LEARNING', 200)],
-    ['BADGE-TASK', 'Task Master', 'Assignment', assignmentDone, Math.max(assignments.length, 1), getGamificationConfigValueV22_('BADGE-TASK', 100)],
-    ['BADGE-CHALLENGE', 'Program Champion', 'Challenge', challengeDone, Math.max(challenges.length, 1), getGamificationConfigValueV22_('BADGE-CHALLENGE', 150)]
+    ['BADGE-LOYAL', 'Pembelajar Setia', 'Attendance', Math.min(presentCount, 4), 4, getGamificationConfigValueV22_('BADGE-LOYAL', 50), presentCount >= 4],
+    ['BADGE-PERFECT', 'Kehadiran Sempurna', 'Attendance', Math.min(presentCount, 8), 8, getGamificationConfigValueV22_('BADGE-PERFECT', 150), perfectAttendance],
+    ['BADGE-LEARNING', 'Learning Explorer', 'Learning', Math.min(readCount, Math.max(learningTarget, 1)), Math.max(learningTarget, 1), getGamificationConfigValueV22_('BADGE-LEARNING', 200), learningComplete],
+    ['BADGE-TASK', 'Task Master', 'Assignment', assignmentDone, Math.max(assignments.length, 1), getGamificationConfigValueV22_('BADGE-TASK', 100), taskComplete],
+    ['BADGE-CHALLENGE', 'Program Champion', 'Challenge', challengeDone, Math.max(challenges.length, 1), getGamificationConfigValueV22_('BADGE-CHALLENGE', 150), challengeComplete],
+    ['BADGE-QUIZ', 'Quiz Master', 'Quiz', quizCompleted, 1, getGamificationConfigValueV22_('BADGE-QUIZ', 150), quizCompleted > 0],
+    ['BADGE-PROJECT', 'Project Star', 'Project', projectCompleted, 1, getGamificationConfigValueV22_('BADGE-PROJECT', 200), projectCompleted > 0],
+    ['BADGE-ALLROUND', 'MOC All-Rounder', 'Achievement', Number(perfectAttendance) + Number(learningComplete) + Number(taskComplete) + Number(challengeComplete), 4, getGamificationConfigValueV22_('BADGE-ALLROUND', 250), perfectAttendance && learningComplete && taskComplete && challengeComplete]
   ];
 
   const existing = getSheetObjects_(badgeSheet);
   const headers = badgeSheet.getRange(1, 1, 1, badgeSheet.getLastColumn()).getDisplayValues()[0];
   const now = new Date();
+  const newlyUnlocked = [];
+  let badgeExpAwarded = 0;
 
   definitions.forEach(function (definition) {
     const badgeId = definition[0];
     const current = Number(definition[3] || 0);
     const target = Math.max(1, Number(definition[4] || 1));
-    const unlocked = current >= target;
+    const unlocked = Boolean(definition[6]);
     const existingIndex = existing.findIndex(function (item) {
       return String(getObjectValue_(item, ['Month']) || '').trim() === month &&
         String(getObjectValue_(item, ['Student ID']) || '').trim() === studentId &&
@@ -7032,6 +11147,8 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
     });
     const previousUnlocked = existingIndex >= 0 &&
       String(getObjectValue_(existing[existingIndex], ['Unlocked']) || '').trim().toLowerCase() === 'ya';
+    const previousClaimed = existingIndex >= 0 &&
+      String(getObjectValue_(existing[existingIndex], ['Claimed']) || '').trim().toLowerCase() === 'ya';
 
     const values = {
       'Month': month,
@@ -7045,8 +11162,8 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
       'EXP Reward': Number(definition[5] || 0),
       'Unlocked': unlocked ? 'Ya' : 'Tidak',
       'Unlocked At': unlocked ? (previousUnlocked ? getObjectValue_(existing[existingIndex], ['Unlocked At']) : now) : '',
-      'Claimed': existingIndex >= 0 ? String(getObjectValue_(existing[existingIndex], ['Claimed']) || 'Tidak') : 'Tidak',
-      'Claimed At': existingIndex >= 0 ? getObjectValue_(existing[existingIndex], ['Claimed At']) : '',
+      'Claimed': unlocked ? 'Ya' : (existingIndex >= 0 ? String(getObjectValue_(existing[existingIndex], ['Claimed']) || 'Tidak') : 'Tidak'),
+      'Claimed At': unlocked ? (existingIndex >= 0 && getObjectValue_(existing[existingIndex], ['Claimed At']) ? getObjectValue_(existing[existingIndex], ['Claimed At']) : now) : '',
       'Last Updated': now
     };
 
@@ -7057,7 +11174,28 @@ function syncBadgeProgressForStudentV22_(studentId, month) {
     });
     if (existingIndex >= 0) badgeSheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([row]);
     else badgeSheet.appendRow(row);
+
+    if (unlocked && (!previousUnlocked || !previousClaimed)) {
+      const bonus = awardStudentExpV22_({
+        studentId: studentId,
+        sourceType: 'Badge',
+        sourceId: badgeId + '-' + month,
+        activityName: definition[1],
+        exp: Number(definition[5] || 0),
+        skillCategory: 'Achievement',
+        timestamp: now,
+        month: month,
+        awardMethod: 'Badge Unlock',
+        notes: 'Bonus badge bulanan',
+        deferSync: true
+      });
+      if (bonus.awarded) badgeExpAwarded += Number(bonus.expAwarded || 0);
+      newlyUnlocked.push({ badgeId: badgeId, name: definition[1], expReward: Number(definition[5] || 0) });
+    }
   });
+
+  if (newlyUnlocked.length) rebuildMonthlyGamificationV22_(month, studentId);
+  return { newlyUnlocked: newlyUnlocked, expAwarded: badgeExpAwarded };
 }
 
 function syncAllBadgeProgressV22_() {
@@ -7178,6 +11316,101 @@ function backfillGamificationCurrentMonthV22_() {
   }
 
   rebuildMonthlyGamificationV22_(month);
+}
+
+function ensureStudentGamificationBackfillV79_(studentId) {
+  const id = String(studentId || '').trim();
+  if (!id) return;
+  setupGamificationSheetsOnlyV22_();
+  const properties = PropertiesService.getScriptProperties();
+  const marker = 'MOC_V79_GAMIFICATION_BACKFILL_' + id;
+  if (properties.getProperty(marker) === 'DONE') return;
+
+  const database = getDatabase_();
+  const timezone = MOC_GAMIFICATION_V22_.timezone;
+  const touchedMonths = {};
+  function rememberMonth(date, explicitMonth) {
+    const month = String(explicitMonth || (date ? Utilities.formatDate(date, timezone, 'yyyy-MM') : '')).trim();
+    if (month) touchedMonths[month] = true;
+    return month;
+  }
+
+  const attendanceSheet = database.getSheetByName('Absensi');
+  if (attendanceSheet) getSheetObjects_(attendanceSheet).forEach(function (item) {
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== id) return;
+    const date = normalizeStudentDate_(getObjectValue_(item, ['Tanggal', 'Date']));
+    const status = String(getObjectValue_(item, ['Status']) || '').trim().toLowerCase();
+    if (!date || ['hadir', 'present', 'terlambat', 'late'].indexOf(status) < 0) return;
+    const day = Utilities.formatDate(date, timezone, 'yyyy-MM-dd');
+    const late = status === 'terlambat' || status === 'late';
+    const month = rememberMonth(date);
+    awardStudentExpV22_({
+      studentId: id, sourceType: 'Attendance', sourceId: 'ATT-' + day,
+      activityName: late ? 'Late Attendance' : 'Present Attendance',
+      exp: getGamificationConfigValueV22_(late ? 'EXP-ATTENDANCE-LATE' : 'EXP-ATTENDANCE-PRESENT', late ? 5 : 10),
+      skillCategory: 'Attendance', timestamp: date, month: month,
+      notes: 'V79 historical backfill', deferSync: true
+    });
+  });
+
+  const readSheet = database.getSheetByName('Learning Activity Reads');
+  if (readSheet) getSheetObjects_(readSheet).forEach(function (item) {
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== id) return;
+    const date = normalizeStudentDate_(getObjectValue_(item, ['Completed At'])) || new Date();
+    const month = rememberMonth(date, getObjectValue_(item, ['Month']));
+    const meeting = Number(getObjectValue_(item, ['Meeting Number']) || 0);
+    if (!month || !meeting) return;
+    awardStudentExpV22_({
+      studentId: id, sourceType: 'Learning', sourceId: 'READ-' + month + '-' + meeting,
+      activityName: 'Learning Summary Meeting ' + meeting,
+      exp: Number(getObjectValue_(item, ['EXP Awarded']) || getGamificationConfigValueV22_('EXP-LEARNING', 25)),
+      skillCategory: 'Learning', meetingNumber: meeting, timestamp: date, month: month,
+      notes: 'V79 historical backfill', deferSync: true
+    });
+  });
+
+  [
+    ['Assignment Submissions', 'Assignment', 'Assignment ID', 'Assignment'],
+    ['Challenge Results', 'Challenge', 'Challenge ID', 'Challenge']
+  ].forEach(function (definition) {
+    const sheet = database.getSheetByName(definition[0]);
+    if (!sheet) return;
+    getSheetObjects_(sheet).forEach(function (item) {
+      if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== id) return;
+      const exp = Math.max(0, Number(getObjectValue_(item, ['EXP Awarded']) || 0));
+      const date = normalizeStudentDate_(getObjectValue_(item, ['Reviewed At', 'Submitted At']));
+      const sourceId = String(getObjectValue_(item, [definition[2]]) || '').trim();
+      if (!date || !sourceId || exp <= 0) return;
+      const month = rememberMonth(date);
+      awardStudentExpV22_({
+        studentId: id, sourceType: definition[1], sourceId: sourceId,
+        activityName: definition[3], exp: exp,
+        skillCategory: definition[1], timestamp: date, month: month,
+        notes: 'V79 historical backfill', deferSync: true
+      });
+    });
+  });
+
+  const noteSheet = database.getSheetByName('Student Notes');
+  if (noteSheet) getSheetObjects_(noteSheet).forEach(function (item) {
+    if (String(getObjectValue_(item, ['Student ID']) || '').trim() !== id) return;
+    const exp = Math.max(0, Number(getObjectValue_(item, ['EXP Awarded']) || 0));
+    const noteId = String(getObjectValue_(item, ['Note ID']) || '').trim();
+    const date = normalizeStudentDate_(getObjectValue_(item, ['Date', 'Tanggal']));
+    if (!noteId || !date || exp <= 0) return;
+    const requested = String(getObjectValue_(item, ['EXP Category']) || 'Participation').trim();
+    const category = ['Participation', 'Quiz', 'Project', 'Achievement'].indexOf(requested) >= 0 ? requested : 'Participation';
+    const month = rememberMonth(date);
+    awardStudentExpV22_({
+      studentId: id, sourceType: category, sourceId: noteId,
+      activityName: String(getObjectValue_(item, ['Achievement', 'Participation']) || category),
+      exp: exp, skillCategory: category, timestamp: date, month: month,
+      notes: 'V79 historical backfill', deferSync: true
+    });
+  });
+
+  Object.keys(touchedMonths).forEach(function (month) { rebuildMonthlyGamificationV22_(month, id); });
+  properties.setProperty(marker, 'DONE');
 }
 
 function auditGamificationSystemV22() {
@@ -7389,7 +11622,7 @@ function completeLearningActivityRead_(token, meetingNumber) {
     success: true,
     alreadyCompleted: false,
     expAwarded: expAwarded,
-    gamification: gamificationAward.awarded ? { expAwarded: gamificationAward.expAwarded, message: 'Learning completed' } : null,
+    gamification: gamificationAward.awarded ? gamificationAward : null,
     message: 'Ringkasan selesai dibaca. +' + expAwarded + ' EXP.'
   };
 }
@@ -7607,3 +11840,805 @@ function createTutorTestAccount() {
   Logger.log('Username: ' + username);
   Logger.log('Password: ' + password);
 }
+
+/* ========================================================================== *
+ * V76 — ADMIN OPERATIONS WORKSPACE
+ * ========================================================================== */
+
+function requireAdminV76_(token) {
+  const session = getSession_(token);
+  if (String(session.role || '').trim().toLowerCase() !== 'admin') throw new Error('Fitur ini hanya dapat digunakan oleh Admin.');
+  return session;
+}
+
+function normalizePeriodV76_(value) {
+  const period = String(value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(period)) throw new Error('Periode tagihan tidak valid.');
+  return period;
+}
+
+function periodLabelV76_(period) {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const parts = String(period || '').split('-');
+  return (months[Number(parts[1]) - 1] || period) + ' ' + parts[0];
+}
+
+function getSppInvoiceSheetV76_(database) {
+  return createSheetIfMissing_(database, 'SPP Invoices', ['Invoice ID','Student ID','Student Name','Parent Name','Description','Period','Amount','Status','Created At','Created By','Paid At','Paid By','Payment ID','Notes']);
+}
+
+function getStudentFeeV76_(student, database) {
+  const direct = parseAmount_(getObjectValue_(student, ['SPP per Bulan','SPP Per Bulan','Monthly Tuition','Tuition Fee','SPP','Monthly Fee']));
+  if (direct > 0) return direct;
+  const settingsSheet = database.getSheetByName('Settings');
+  if (settingsSheet) {
+    const setting = getSheetObjects_(settingsSheet).find(function (row) { return String(getObjectValue_(row, ['Setting Key']) || '').trim() === 'TUITION_FEE'; });
+    const fallback = parseAmount_(setting ? getObjectValue_(setting, ['Setting Value']) : 0);
+    if (fallback > 0) return fallback;
+  }
+  return 150000;
+}
+
+function studentStartPeriodV76_(student, timezone) {
+  const explicit = String(getObjectValue_(student, ['Billing Start Period','Start Billing Period','Mulai Tagihan']) || '').trim();
+  if (/^\d{4}-\d{2}$/.test(explicit)) return explicit;
+  const joined = normalizeStudentDate_(getObjectValue_(student, ['Join Date','Tanggal Masuk','Start Date']));
+  return joined ? Utilities.formatDate(joined, timezone, 'yyyy-MM') : '';
+}
+
+function activeStudentV76_(student) {
+  const name = String(getObjectValue_(student, ['Full Name','Student Name','Nama']) || '').trim();
+  const status = String(getObjectValue_(student, ['Student Status','Status']) || 'Aktif').trim().toLowerCase();
+  return Boolean(name) && (status === '' || status === 'aktif' || status === 'active');
+}
+
+function studentViewV76_(student, database) {
+  const timezone = Session.getScriptTimeZone() || 'Asia/Makassar';
+  const joinDate = normalizeStudentDate_(getObjectValue_(student, ['Join Date','Tanggal Masuk','Start Date']));
+  const dob = normalizeStudentDate_(getObjectValue_(student, ['DOB','Date of Birth','Tanggal Lahir','Birth Date']));
+  return {
+    studentId: String(getObjectValue_(student, ['Student ID','ID']) || '').trim().toUpperCase(),
+    fullName: String(getObjectValue_(student, ['Full Name','Student Name','Nama']) || '').trim(),
+    grade: String(getObjectValue_(student, ['Grade','Kelas / Jenjang','Jenjang']) || '').trim(),
+    school: String(getObjectValue_(student, ['School','Sekolah']) || '').trim(),
+    program: canonicalProgramV84_(getObjectValue_(student, ['Program'])),
+    classId: String(getObjectValue_(student, ['Class ID','Class Id']) || '').trim(),
+    className: String(getObjectValue_(student, ['Class','Class Name','Nama Kelas','Kelas']) || '').trim(),
+    parentName: String(getObjectValue_(student, ['Parent Name','Nama Orang Tua','Nama Ortu','Orang Tua']) || '').trim(),
+    waStudent: String(getObjectValue_(student, ['WA Student','WA Siswa','WhatsApp','WA Account']) || '').trim(),
+    waParent: String(getObjectValue_(student, ['WA Parent','WA Orang Tua','WhatsApp Orang Tua']) || '').trim(),
+    monthlyFee: getStudentFeeV76_(student, database),
+    dob: dob ? Utilities.formatDate(dob, timezone, 'yyyy-MM-dd') : '',
+    joinDate: joinDate ? Utilities.formatDate(joinDate, timezone, 'yyyy-MM-dd') : '',
+    billingStartPeriod: studentStartPeriodV76_(student, timezone),
+    status: String(getObjectValue_(student, ['Student Status','Status']) || 'Aktif').trim() || 'Aktif',
+    notes: String(getObjectValue_(student, ['Notes','Catatan','Student Notes']) || '').trim()
+  };
+}
+
+function resolveStudentV76_(students, studentId) {
+  const id = String(studentId || '').trim().toUpperCase();
+  const matches = students.filter(function (row) { return String(getObjectValue_(row, ['Student ID','ID']) || '').trim().toUpperCase() === id; });
+  if (matches.length !== 1) throw new Error(matches.length ? 'Student ID tercatat lebih dari satu kali.' : 'Data murid tidak ditemukan.');
+  return matches[0];
+}
+
+function getAdminWorkspaceV76_(token, requestedPeriod) {
+  requireAdminV76_(token);
+  const database = getDatabase_();
+  const timezone = Session.getScriptTimeZone() || 'Asia/Makassar';
+  const period = requestedPeriod && /^\d{4}-\d{2}$/.test(String(requestedPeriod)) ? String(requestedPeriod) : Utilities.formatDate(new Date(), timezone, 'yyyy-MM');
+  const studentSheet = database.getSheetByName('Data Siswa');
+  if (!studentSheet) throw new Error('Sheet Data Siswa tidak ditemukan.');
+  const allStudentRows = getSheetObjects_(studentSheet).filter(function (row) { return String(getObjectValue_(row, ['Full Name','Student Name','Nama']) || '').trim(); });
+  const students = allStudentRows.map(function (row) { return studentViewV76_(row, database); }).sort(function (a,b) { return a.fullName.localeCompare(b.fullName, 'id'); });
+  const activeRows = allStudentRows.filter(activeStudentV76_).filter(function (row) { const start = studentStartPeriodV76_(row, timezone); return !start || start <= period; });
+
+  const invoiceSheet = getSppInvoiceSheetV76_(database);
+  const invoices = getSheetObjects_(invoiceSheet);
+  const paymentSheet = database.getSheetByName('Data Pembayaran');
+  const payments = paymentSheet ? getSheetObjects_(paymentSheet) : [];
+  const paidTuition = {};
+  payments.forEach(function (row) {
+    const id = String(getObjectValue_(row, ['Student ID','ID']) || '').trim().toUpperCase();
+    const rowPeriod = String(getObjectValue_(row, ['Period','Periode']) || '').trim();
+    const category = normalizePaymentCategory_(getObjectValue_(row, ['Payment Category','Kategori']));
+    const status = String(getObjectValue_(row, ['Status']) || '').trim().toLowerCase();
+    if (id && rowPeriod && category === 'Tuition' && /lunas|paid|verified|approved/.test(status)) paidTuition[id + '|' + rowPeriod] = row;
+  });
+  const billingRows = [];
+  const tuitionInvoiceByStudent = {};
+  invoices.forEach(function (row) {
+    if (String(getObjectValue_(row, ['Period']) || '').trim() !== period) return;
+    const id = String(getObjectValue_(row, ['Student ID']) || '').trim().toUpperCase();
+    const description = String(getObjectValue_(row, ['Description']) || 'Biaya les').trim();
+    const storedStatus = String(getObjectValue_(row,['Status'])||'Belum Bayar').trim();
+    const effectiveStatus = /biaya les|spp|tuition/i.test(description) && paidTuition[id + '|' + period] ? 'Lunas' : storedStatus;
+    billingRows.push({ invoiceId:String(getObjectValue_(row,['Invoice ID'])||'').trim(), studentId:id, studentName:String(getObjectValue_(row,['Student Name'])||'').trim(), parentName:String(getObjectValue_(row,['Parent Name'])||'').trim(), description:description, period:period, amount:parseAmount_(getObjectValue_(row,['Amount'])), status:effectiveStatus, virtual:false });
+    if (/biaya les|spp|tuition/i.test(description)) tuitionInvoiceByStudent[id] = true;
+  });
+  activeRows.forEach(function (row) {
+    const student = studentViewV76_(row, database);
+    if (tuitionInvoiceByStudent[student.studentId]) return;
+    const paid = paidTuition[student.studentId + '|' + period];
+    billingRows.push({ invoiceId:'AUTO:' + student.studentId + ':' + period, studentId:student.studentId, studentName:student.fullName, parentName:student.parentName, description:'Biaya les', period:period, amount:paid ? parseAmount_(getObjectValue_(paid,['Amount'])) || student.monthlyFee : student.monthlyFee, status:paid ? 'Lunas' : 'Belum Bayar', virtual:true });
+  });
+  billingRows.sort(function (a,b) { return a.studentName.localeCompare(b.studentName,'id') || a.description.localeCompare(b.description,'id'); });
+  const studentMap = {};
+  students.forEach(function (student) { studentMap[student.studentId] = student; });
+  billingRows.forEach(function (row) { const student = studentMap[row.studentId] || {}; row.waStudent=student.waStudent||''; row.waParent=student.waParent||''; if(!row.parentName) row.parentName=student.parentName||''; });
+
+  const scheduleSheet = database.getSheetByName('Master Jadwal');
+  const scheduleRows = scheduleSheet ? getSheetObjects_(scheduleSheet) : [];
+  const classesById = {};
+  scheduleRows.forEach(function (row) {
+    const classId = String(getObjectValue_(row,['Class ID','Class Id'])||'').trim();
+    if(!classId) return;
+    if(!classesById[classId]) classesById[classId]={ classId:classId, className:String(getObjectValue_(row,['Nama Kelas','Nama kelas','Class Name','Class'])||classId).trim(), program:canonicalProgramV84_(getObjectValue_(row,['Program'])), tutor:String(getObjectValue_(row,['Tutor','Tutor Name','Nama Tutor'])||'').trim(), location:String(getObjectValue_(row,['Ruang / Lokasi','Location','Ruang'])||'').trim(), days:[], schedules:[], studentIds:[] };
+    const day=String(getObjectValue_(row,['Hari','Day'])||'').trim(); const start=formatStudentTime_(getObjectValue_(row,['Mulai','Start'])); const end=formatStudentTime_(getObjectValue_(row,['Selesai','End']));
+    if(day && classesById[classId].days.indexOf(day)<0) classesById[classId].days.push(day);
+    if(day||start||end) classesById[classId].schedules.push({day:day,start:start,end:end});
+  });
+  students.forEach(function(student){ if(classesById[student.classId]) classesById[student.classId].studentIds.push(student.studentId); });
+  const classes=Object.keys(classesById).map(function(id){return classesById[id];}).sort(function(a,b){return a.className.localeCompare(b.className,'id');});
+
+  const attendanceSheet=database.getSheetByName('Absensi'); const attendanceRows=attendanceSheet?getSheetObjects_(attendanceSheet):[];
+  const notesSheet=database.getSheetByName('Student Notes'); const noteRows=notesSheet?getSheetObjects_(notesSheet):[];
+  const reports=students.filter(function(student){return /^(aktif|active)$/i.test(student.status);}).map(function(student){
+    const monthly=attendanceRows.filter(function(row){const id=String(getObjectValue_(row,['Student ID'])||'').trim().toUpperCase(); const date=normalizeStudentDate_(getObjectValue_(row,['Date','Tanggal','Check-in Time'])); return id===student.studentId&&date&&Utilities.formatDate(date,timezone,'yyyy-MM')===period;});
+    const present=monthly.filter(function(row){return /hadir|present|late|terlambat/i.test(String(getObjectValue_(row,['Status','Attendance Status'])||''));}).length;
+    const latest=noteRows.filter(function(row){return String(getObjectValue_(row,['Student ID'])||'').trim().toUpperCase()===student.studentId;}).sort(function(a,b){return b._rowNumber-a._rowNumber;})[0];
+    return {studentId:student.studentId,fullName:student.fullName,program:student.program,waStudent:student.waStudent,waParent:student.waParent,attendancePresent:present,attendanceTotal:monthly.length,attendancePercentage:monthly.length?Math.round((present/monthly.length)*100):0,latestNote:latest?String(getObjectValue_(latest,['Tutor Comment','Catatan','Comment','Achievement'])||'').trim():''};
+  });
+  const registrationSheet=database.getSheetByName('Student Registrations'); const pendingRegistrations=registrationSheet?getSheetObjects_(registrationSheet).filter(function(row){return /menunggu|pending/i.test(String(getObjectValue_(row,['Status'])||''));}).length:0;
+  const nowBirthday=new Date(); const todayText=Utilities.formatDate(nowBirthday,timezone,'yyyy-MM-dd'); const todayStart=new Date(todayText+'T00:00:00+08:00'); const currentYear=Number(Utilities.formatDate(todayStart,timezone,'yyyy')); const birthdayMonths=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const birthdays=students.filter(function(student){return /^(aktif|active)$/i.test(student.status)&&/^\d{4}-\d{2}-\d{2}$/.test(student.dob||'');}).map(function(student){
+    const parts=student.dob.split('-').map(Number); let nextDate=new Date(currentYear+'-'+String(parts[1]).padStart(2,'0')+'-'+String(parts[2]).padStart(2,'0')+'T00:00:00+08:00');
+    if(nextDate.getTime()<todayStart.getTime())nextDate=new Date((currentYear+1)+'-'+String(parts[1]).padStart(2,'0')+'-'+String(parts[2]).padStart(2,'0')+'T00:00:00+08:00');
+    const daysUntil=Math.round((nextDate.getTime()-todayStart.getTime())/86400000); const age=Number(Utilities.formatDate(nextDate,timezone,'yyyy'))-parts[0];
+    return {studentId:student.studentId,fullName:student.fullName,parentName:student.parentName,waStudent:student.waStudent,waParent:student.waParent,dob:student.dob,birthdayLabel:String(parts[2])+' '+birthdayMonths[parts[1]-1],daysUntil:daysUntil,age:age>0&&age<100?age:0};
+  }).filter(function(item){return item.daysUntil>=0&&item.daysUntil<=7;}).sort(function(a,b){return a.daysUntil-b.daysUntil||a.fullName.localeCompare(b.fullName,'id');});
+  const unpaid=billingRows.filter(function(row){return !/lunas|paid/i.test(row.status);}); const paidIds={}; const unpaidIds={};
+  billingRows.forEach(function(row){if(/lunas|paid/i.test(row.status))paidIds[row.studentId]=true;else unpaidIds[row.studentId]=true;});
+  return {success:true,period:period,periodLabel:periodLabelV76_(period),students:students,activeStudentCount:students.filter(function(s){return /^(aktif|active)$/i.test(s.status);}).length,pendingRegistrations:pendingRegistrations,billingRows:billingRows,billingSummary:{totalInvoices:billingRows.length,paidStudents:Object.keys(paidIds).length,unpaidStudents:Object.keys(unpaidIds).length,unpaidAmount:unpaid.reduce(function(sum,row){return sum+Number(row.amount||0);},0)},birthdays:birthdays,classes:classes,reports:reports,officialSettings:mapCeoSettingsV81_(getSettingsMapV81_(database))};
+}
+
+function adminCreateSppInvoiceV76_(token, invoice) {
+  const session=requireAdminV76_(token); invoice=invoice||{}; const database=getDatabase_(); const student=resolveStudentV76_(getSheetObjects_(database.getSheetByName('Data Siswa')),invoice.studentId); const view=studentViewV76_(student,database); const period=normalizePeriodV76_(invoice.period); const description=String(invoice.description||'').trim(); const amount=parseAmount_(invoice.amount);
+  if(!description||amount<=0)throw new Error('Keterangan dan jumlah tagihan wajib diisi.');
+  const sheet=getSppInvoiceSheetV76_(database); const now=new Date(); const invoiceId='INV-'+Utilities.formatDate(now,'Asia/Makassar','yyyyMMddHHmmss')+'-'+view.studentId;
+  appendMappedRow_(sheet,{'Invoice ID':invoiceId,'Student ID':view.studentId,'Student Name':view.fullName,'Parent Name':view.parentName,'Description':description,'Period':period,'Amount':amount,'Status':'Belum Bayar','Created At':now,'Created By':session.fullName||session.username||'Admin','Notes':String(invoice.notes||'').trim()});
+  return {success:true,invoiceId:invoiceId,message:'Tagihan manual berhasil disimpan.'};
+}
+
+function adminGenerateMonthlySppInvoicesV76_(token, periodValue) {
+  const session=requireAdminV76_(token); const period=normalizePeriodV76_(periodValue); if(period.substring(5)==='07')throw new Error('Bulan Juli adalah bulan libur dan tidak dibuatkan tagihan les.');
+  const database=getDatabase_(); const timezone=Session.getScriptTimeZone()||'Asia/Makassar'; const students=getSheetObjects_(database.getSheetByName('Data Siswa')).filter(activeStudentV76_).filter(function(row){const start=studentStartPeriodV76_(row,timezone);return !start||start<=period;}); const sheet=getSppInvoiceSheetV76_(database); const existing=getSheetObjects_(sheet); const now=new Date(); let created=0;
+  students.forEach(function(student){const view=studentViewV76_(student,database); const found=existing.some(function(row){return String(getObjectValue_(row,['Student ID'])||'').trim().toUpperCase()===view.studentId&&String(getObjectValue_(row,['Period'])||'').trim()===period&&/biaya les|spp|tuition/i.test(String(getObjectValue_(row,['Description'])||''));}); if(found)return; appendMappedRow_(sheet,{'Invoice ID':'SPP-'+period.replace('-','')+'-'+view.studentId,'Student ID':view.studentId,'Student Name':view.fullName,'Parent Name':view.parentName,'Description':'Biaya les','Period':period,'Amount':view.monthlyFee,'Status':'Belum Bayar','Created At':now,'Created By':session.fullName||session.username||'Admin','Notes':'Tagihan bulanan otomatis'});created++;});
+  return {success:true,created:created,message:created?created+' tagihan '+periodLabelV76_(period)+' berhasil dibuat.':'Semua tagihan periode ini sudah tersedia.'};
+}
+
+function adminMarkSppInvoicePaidV76_(token, invoiceIdValue) {
+  const session=requireAdminV76_(token); const invoiceId=String(invoiceIdValue||'').trim(); const database=getDatabase_(); const invoiceSheet=getSppInvoiceSheetV76_(database); let invoice;
+  if(invoiceId.indexOf('AUTO:')===0){const parts=invoiceId.split(':');const student=resolveStudentV76_(getSheetObjects_(database.getSheetByName('Data Siswa')),parts[1]);const view=studentViewV76_(student,database);invoice={studentId:view.studentId,studentName:view.fullName,parentName:view.parentName,description:'Biaya les',period:normalizePeriodV76_(parts[2]),amount:view.monthlyFee};appendMappedRow_(invoiceSheet,{'Invoice ID':'SPP-'+parts[2].replace('-','')+'-'+view.studentId,'Student ID':view.studentId,'Student Name':view.fullName,'Parent Name':view.parentName,'Description':'Biaya les','Period':parts[2],'Amount':view.monthlyFee,'Status':'Lunas','Created At':new Date(),'Created By':session.fullName||session.username,'Paid At':new Date(),'Paid By':session.fullName||session.username});}
+  else{const rows=getSheetObjects_(invoiceSheet);const index=rows.findIndex(function(row){return String(getObjectValue_(row,['Invoice ID'])||'')===invoiceId;});if(index<0)throw new Error('Tagihan tidak ditemukan.');const row=rows[index];invoice={studentId:String(getObjectValue_(row,['Student ID'])||'').trim().toUpperCase(),studentName:String(getObjectValue_(row,['Student Name'])||'').trim(),parentName:String(getObjectValue_(row,['Parent Name'])||'').trim(),description:String(getObjectValue_(row,['Description'])||'').trim(),period:String(getObjectValue_(row,['Period'])||'').trim(),amount:parseAmount_(getObjectValue_(row,['Amount']))};updateMappedRow_(invoiceSheet,index+2,{'Status':'Lunas','Paid At':new Date(),'Paid By':session.fullName||session.username});}
+  const tuition=/biaya les|spp|tuition/i.test(invoice.description); const paymentSheet=database.getSheetByName('Data Pembayaran');ensureHeaders_(paymentSheet,['Payment ID','Student ID','Nama','Payment Category','Item Label','Period','Payment Method','Payment Date','Amount','Status','Verified Date','Verified By','Invoice Number','Notes']);const paymentId='ADM-'+Utilities.formatDate(new Date(),'Asia/Makassar','yyyyMMddHHmmss')+'-'+invoice.studentId;appendMappedRow_(paymentSheet,{'Payment ID':paymentId,'Student ID':invoice.studentId,'Nama':invoice.studentName,'Payment Category':tuition?'Tuition':'Other','Item Label':invoice.description,'Period':invoice.period,'Payment Method':'Dicatat Admin','Payment Date':new Date(),'Amount':invoice.amount,'Status':'Lunas','Verified Date':new Date(),'Verified By':session.fullName||session.username,'Invoice Number':invoiceId,'Notes':'Ditandai lunas dari Tagihan SPP'});if(tuition)markStudentMonthPaid_(database,invoice.studentId,invoice.period);return {success:true,message:'Tagihan '+invoice.studentName+' berhasil ditandai lunas.'};
+}
+
+function nextStudentSlotV76_(studentSheet){const empty=getSheetObjects_(studentSheet).find(function(row){return String(getObjectValue_(row,['Student ID','ID'])||'').trim()&&!String(getObjectValue_(row,['Full Name','Student Name','Nama'])||'').trim();});if(!empty)throw new Error('Tidak ada slot Student ID kosong. Tambahkan slot Student ID di Data Siswa terlebih dahulu.');return empty;}
+
+function adminSaveStudentProfileV76_(token,data){requireAdminV76_(token);data=data||{};const database=getDatabase_();const sheet=database.getSheetByName('Data Siswa');ensureHeaders_(sheet,['Full Name','Grade','School','Program','Class ID','Class','Parent Name','WA Student','WA Parent','SPP per Bulan','Join Date','Billing Start Period','Student Status','Notes','Last Updated']);const rows=getSheetObjects_(sheet);const isNew=!String(data.studentId||'').trim();const target=isNew?nextStudentSlotV76_(sheet):resolveStudentV76_(rows,data.studentId);const studentId=String(getObjectValue_(target,['Student ID','ID'])||data.studentId||'').trim().toUpperCase();const fullName=String(data.fullName||'').trim();if(!fullName)throw new Error('Nama murid wajib diisi.');const program=assertOfficialProgramV84_(data.program);updateMappedRow_(sheet,target._rowNumber,{'Full Name':fullName,'Grade':String(data.grade||'').trim(),'School':String(data.school||'').trim(),'Program':program,'Class ID':String(data.classId||'').trim(),'Class':String(data.className||'').trim(),'Parent Name':String(data.parentName||'').trim(),'WA Student':String(data.waStudent||'').trim(),'WA Parent':String(data.waParent||'').trim(),'SPP per Bulan':parseAmount_(data.monthlyFee),'Join Date':data.joinDate?new Date(String(data.joinDate)+'T00:00:00+08:00'):'','Billing Start Period':String(data.billingStartPeriod||(data.joinDate?String(data.joinDate).substring(0,7):'')).trim(),'Student Status':String(data.status||'Aktif').trim(),'Notes':String(data.notes||'').trim(),'Last Updated':new Date()});return {success:true,studentId:studentId,message:isNew?'Murid baru berhasil ditambahkan dengan Student ID '+studentId+'.':'Data murid berhasil diperbarui.'};}
+
+function deleteRowsByStudentIdV76_(sheet,studentId){if(!sheet||sheet.getLastRow()<2)return 0;const headers=sheet.getRange(1,1,1,sheet.getLastColumn()).getDisplayValues()[0].map(function(value){return normalizeHeader_(value);});const column=headers.indexOf(normalizeHeader_('Student ID'));if(column<0)return 0;const values=sheet.getRange(2,1,sheet.getLastRow()-1,sheet.getLastColumn()).getDisplayValues();const rows=[];values.forEach(function(row,index){if(String(row[column]||'').trim().toUpperCase()===studentId)rows.push(index+2);});rows.reverse().forEach(function(rowNumber){sheet.deleteRow(rowNumber);});return rows.length;}
+
+function adminDeleteStudentRecordV76_(token,studentIdValue){requireAdminV76_(token);const studentId=String(studentIdValue||'').trim().toUpperCase();const database=getDatabase_();const studentSheet=database.getSheetByName('Data Siswa');const student=resolveStudentV76_(getSheetObjects_(studentSheet),studentId);const deleted={};database.getSheets().forEach(function(sheet){if(sheet.getName()==='Data Siswa'||sheet.getName()==='Users')return;const count=deleteRowsByStudentIdV76_(sheet,studentId);if(count)deleted[sheet.getName()]=count;});const usersSheet=database.getSheetByName('Users');if(usersSheet){const users=getSheetObjects_(usersSheet).filter(function(row){const username=String(getObjectValue_(row,['Username'])||'').trim().toUpperCase();const related=String(getObjectValue_(row,['Related ID'])||'').trim().toUpperCase();return username===studentId||related===studentId;});users.sort(function(a,b){return b._rowNumber-a._rowNumber;}).forEach(function(row){usersSheet.deleteRow(row._rowNumber);});if(users.length)deleted.Users=users.length;}const headers=studentSheet.getRange(1,1,1,studentSheet.getLastColumn()).getDisplayValues()[0];const idIndex=headers.map(normalizeHeader_).indexOf(normalizeHeader_('Student ID'));studentSheet.getRange(student._rowNumber,1,1,headers.length).setValues([headers.map(function(header,index){return index===idIndex?studentId:'';})]);return {success:true,deleted:deleted,message:'Murid dan seluruh riwayat tagihannya berhasil dihapus. Slot '+studentId+' tetap tersedia.'};}
+
+function adminSaveClassScheduleV76_(token,data){requireAdminV76_(token);data=data||{};const database=getDatabase_();const sheet=database.getSheetByName('Master Jadwal');ensureHeaders_(sheet,['Class ID','Nama Kelas','Program','Hari','Mulai','Selesai','Tutor','Ruang / Lokasi','Status']);const className=String(data.className||'').trim();const program=assertOfficialProgramV84_(data.program);const days=Array.isArray(data.days)?data.days.filter(Boolean):[];const start=String(data.start||'').trim();const duration=Math.max(15,Number(data.duration||60));if(!className||!program||!days.length||!start)throw new Error('Nama kelas, program, hari, dan jam mulai wajib diisi.');let classId=String(data.classId||'').trim();if(!classId)classId='CLS-'+Utilities.formatDate(new Date(),'Asia/Makassar','yyyyMMddHHmmss');const oldRows=getSheetObjects_(sheet).filter(function(row){return String(getObjectValue_(row,['Class ID'])||'').trim()===classId;});oldRows.sort(function(a,b){return b._rowNumber-a._rowNumber;}).forEach(function(row){sheet.deleteRow(row._rowNumber);});const parts=start.split(':');const endDate=new Date(2000,0,1,Number(parts[0]||0),Number(parts[1]||0)+duration,0);const end=Utilities.formatDate(endDate,'Asia/Makassar','HH:mm');days.forEach(function(day){appendMappedRow_(sheet,{'Class ID':classId,'Nama Kelas':className,'Program':program,'Hari':day,'Mulai':start,'Selesai':end,'Tutor':String(data.tutor||'').trim(),'Ruang / Lokasi':String(data.location||'').trim(),'Status':'Aktif'});});const studentSheet=database.getSheetByName('Data Siswa');const selected={};(Array.isArray(data.studentIds)?data.studentIds:[]).forEach(function(id){selected[String(id).trim().toUpperCase()]=true;});getSheetObjects_(studentSheet).forEach(function(row){const id=String(getObjectValue_(row,['Student ID'])||'').trim().toUpperCase();const oldClassId=String(getObjectValue_(row,['Class ID'])||'').trim();if(selected[id])updateMappedRow_(studentSheet,row._rowNumber,{'Class ID':classId,'Class':className,'Program':program});else if(oldClassId===classId)updateMappedRow_(studentSheet,row._rowNumber,{'Class ID':'','Class':''});});return {success:true,classId:classId,message:'Jadwal kelas berhasil disimpan.'};}
+
+function adminDeleteClassScheduleV76_(token,classIdValue){requireAdminV76_(token);const classId=String(classIdValue||'').trim();const database=getDatabase_();const scheduleSheet=database.getSheetByName('Master Jadwal');const rows=getSheetObjects_(scheduleSheet).filter(function(row){return String(getObjectValue_(row,['Class ID'])||'').trim()===classId;});rows.sort(function(a,b){return b._rowNumber-a._rowNumber;}).forEach(function(row){scheduleSheet.deleteRow(row._rowNumber);});const studentSheet=database.getSheetByName('Data Siswa');getSheetObjects_(studentSheet).forEach(function(row){if(String(getObjectValue_(row,['Class ID'])||'').trim()===classId)updateMappedRow_(studentSheet,row._rowNumber,{'Class ID':'','Class':''});});return {success:true,message:'Kelas berhasil dihapus. Data murid tetap tersimpan tanpa kelas.'};}
+
+/* ========================================================================== *
+ * V84 — STANDARD PROGRAMS
+ * Program resmi hanya Primary, Grammar, dan Speaking. Nama/level kelas tetap
+ * disimpan pada kolom Nama Kelas atau Class, bukan di kolom Program.
+ * ========================================================================== */
+
+function canonicalProgramV84_(value) {
+  const original = String(value || '').trim();
+  const normalized = original.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  if (!normalized) return '';
+  if (/\bprimary\b/.test(normalized)) return 'Primary';
+  if (/\bgrammar\b/.test(normalized)) return 'Grammar';
+  if (/\bspeaking\b|\bspeak\b/.test(normalized)) return 'Speaking';
+  return original;
+}
+
+function assertOfficialProgramV84_(value) {
+  const program = canonicalProgramV84_(value);
+  if (['Primary', 'Grammar', 'Speaking'].indexOf(program) < 0) {
+    throw new Error('Program harus dipilih dari Primary, Grammar, atau Speaking.');
+  }
+  return program;
+}
+
+function adminStandardizeProgramsV84_(token) {
+  const session = requireAdminV76_(token);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('Data sedang digunakan. Silakan coba kembali beberapa saat lagi.');
+  try {
+    const database = getDatabase_();
+    const changedSheets = [];
+    let changedCells = 0;
+    database.getSheets().forEach(function (sheet) {
+      if (sheet.getName() === 'Program Standardization Log' || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+      const programColumns = [];
+      headers.forEach(function (header, index) {
+        const key = normalizeHeader_(header).replace(/[^a-z0-9]/g, '');
+        if (['program', 'requestedprogram', 'programpilihan'].indexOf(key) >= 0) programColumns.push(index);
+      });
+      if (!programColumns.length) return;
+      const rowCount = sheet.getLastRow() - 1;
+      const values = sheet.getRange(2, 1, rowCount, sheet.getLastColumn()).getDisplayValues();
+      let sheetChanges = 0;
+      values.forEach(function (row, rowIndex) {
+        programColumns.forEach(function (columnIndex) {
+          const current = String(row[columnIndex] || '').trim();
+          const canonical = canonicalProgramV84_(current);
+          if (!current || canonical === current || ['Primary', 'Grammar', 'Speaking'].indexOf(canonical) < 0) return;
+          sheet.getRange(rowIndex + 2, columnIndex + 1).setValue(canonical);
+          sheetChanges += 1;
+          changedCells += 1;
+        });
+      });
+      if (sheetChanges) changedSheets.push({ sheetName: sheet.getName(), cells: sheetChanges });
+    });
+
+    let logSheet = database.getSheetByName('Program Standardization Log');
+    const headers = ['Run ID', 'Timestamp', 'Admin', 'Changed Cells', 'Changed Sheets', 'Official Programs'];
+    if (!logSheet) {
+      logSheet = database.insertSheet('Program Standardization Log');
+      logSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      logSheet.setFrozenRows(1);
+    } else ensureHeaders_(logSheet, headers);
+    appendMappedRow_(logSheet, {
+      'Run ID': 'PROGRAM-' + Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyyMMddHHmmss'),
+      'Timestamp': new Date(),
+      'Admin': String(session.fullName || session.username || session.userId || 'Admin'),
+      'Changed Cells': changedCells,
+      'Changed Sheets': JSON.stringify(changedSheets),
+      'Official Programs': 'Primary, Grammar, Speaking'
+    });
+    return {
+      success: true,
+      changedCells: changedCells,
+      changedSheets: changedSheets,
+      officialPrograms: ['Primary', 'Grammar', 'Speaking'],
+      message: changedCells ? changedCells + ' data program berhasil distandarkan menjadi Primary, Grammar, atau Speaking.' : 'Semua data program sudah menggunakan standar resmi.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ========================================================================== *
+ * V83 — ADMIN CLASS MERGE
+ * Kelas tujuan mempertahankan jadwalnya. Semua referensi Class ID kelas asal
+ * dipindahkan lebih dahulu, baru jadwal kelas asal dihapus paling akhir.
+ * ========================================================================== */
+
+function classMergeColumnV83_(headers, aliases) {
+  const normalized = headers.map(function (header) { return normalizeHeader_(header).replace(/[^a-z0-9]/g, ''); });
+  for (let i = 0; i < aliases.length; i += 1) {
+    const key = normalizeHeader_(aliases[i]).replace(/[^a-z0-9]/g, '');
+    const index = normalized.indexOf(key);
+    if (index >= 0) return index;
+  }
+  return -1;
+}
+
+function classMergeColumnLetterV87_(zeroBasedIndex) {
+  let value = Number(zeroBasedIndex) + 1;
+  let label = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    value = Math.floor((value - 1) / 26);
+  }
+  return label;
+}
+
+function classMergeMetaV83_(database, classIdValue) {
+  const classId = String(classIdValue || '').trim();
+  const scheduleSheet = database.getSheetByName('Master Jadwal');
+  if (!scheduleSheet) throw new Error('Sheet Master Jadwal tidak ditemukan.');
+  const rows = getSheetObjects_(scheduleSheet).filter(function (row) {
+    return String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === classId;
+  });
+  if (!rows.length) throw new Error('Kelas ' + classId + ' tidak ditemukan pada Master Jadwal.');
+  const first = rows[0];
+  const studentSheet = database.getSheetByName('Data Siswa');
+  const studentCount = studentSheet ? getSheetObjects_(studentSheet).filter(function (row) {
+    return String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === classId;
+  }).length : 0;
+  return {
+    classId: classId,
+    className: String(getObjectValue_(first, ['Nama Kelas', 'Class Name', 'Class']) || '').trim(),
+    program: canonicalProgramV84_(getObjectValue_(first, ['Program'])),
+    tutor: String(getObjectValue_(first, ['Tutor']) || '').trim(),
+    studentCount: studentCount,
+    scheduleRows: rows.length
+  };
+}
+
+function classMergeReferencesV83_(database, sourceClassId) {
+  const references = [];
+  let totalRows = 0;
+  database.getSheets().forEach(function (sheet) {
+    const sheetName = sheet.getName();
+    if (sheetName === 'Master Jadwal' || sheetName === 'Class Merge Log' || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0];
+    const classIdColumn = classMergeColumnV83_(headers, ['Class ID', 'Class Id', 'ClassID']);
+    if (classIdColumn < 0) return;
+    const values = sheet.getRange(2, 1, sheet.getLastRow() - 1, sheet.getLastColumn()).getDisplayValues();
+    let count = 0;
+    values.forEach(function (row) {
+      if (String(row[classIdColumn] || '').trim() === sourceClassId) count += 1;
+    });
+    if (!count) return;
+    references.push({ sheetName: sheetName, rows: count });
+    totalRows += count;
+  });
+  return { sheets: references, totalRows: totalRows };
+}
+
+function previewAdminClassMergeV83_(token, sourceClassIdValue, targetClassIdValue) {
+  requireAdminV76_(token);
+  const sourceClassId = String(sourceClassIdValue || '').trim();
+  const targetClassId = String(targetClassIdValue || '').trim();
+  if (!sourceClassId || !targetClassId) throw new Error('Pilih kelas asal dan kelas tujuan.');
+  if (sourceClassId === targetClassId) throw new Error('Kelas asal dan kelas tujuan harus berbeda.');
+  const database = getDatabase_();
+  const source = classMergeMetaV83_(database, sourceClassId);
+  const target = classMergeMetaV83_(database, targetClassId);
+  const references = classMergeReferencesV83_(database, sourceClassId);
+  return {
+    success: true,
+    canMerge: true,
+    source: source,
+    target: target,
+    affectedRows: references.totalRows,
+    affectedSheets: references.sheets,
+    warnings: [
+      'Jadwal dan tutor kelas tujuan tetap digunakan.',
+      'Seluruh riwayat yang memiliki Class ID kelas asal akan dipindahkan tanpa menghapus isinya.',
+      'Kelas asal dihapus dari Master Jadwal setelah pemindahan selesai.'
+    ],
+    message: 'Pemeriksaan selesai. Periksa ringkasan sebelum menggabungkan kelas.'
+  };
+}
+
+function adminMergeClassesV83_(token, sourceClassIdValue, targetClassIdValue) {
+  const session = requireAdminV76_(token);
+  const sourceClassId = String(sourceClassIdValue || '').trim();
+  const targetClassId = String(targetClassIdValue || '').trim();
+  if (!sourceClassId || !targetClassId) throw new Error('Pilih kelas asal dan kelas tujuan.');
+  if (sourceClassId === targetClassId) throw new Error('Kelas asal dan kelas tujuan harus berbeda.');
+
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('Data sedang digunakan. Silakan coba kembali beberapa saat lagi.');
+  try {
+    const database = getDatabase_();
+    const source = classMergeMetaV83_(database, sourceClassId);
+    const target = classMergeMetaV83_(database, targetClassId);
+    const changedSheets = [];
+    let changedRows = 0;
+
+    database.getSheets().forEach(function (sheet) {
+      const sheetName = sheet.getName();
+      if (sheetName === 'Master Jadwal' || sheetName === 'Class Merge Log' || sheet.getLastRow() < 2 || sheet.getLastColumn() < 1) return;
+      const columnCount = sheet.getLastColumn();
+      const headers = sheet.getRange(1, 1, 1, columnCount).getDisplayValues()[0];
+      const classIdColumn = classMergeColumnV83_(headers, ['Class ID', 'Class Id', 'ClassID']);
+      if (classIdColumn < 0) return;
+      const classNameColumn = classMergeColumnV83_(headers, ['Nama Kelas', 'Class Name', 'Class']);
+      const programColumn = classMergeColumnV83_(headers, ['Program']);
+      const rowCount = sheet.getLastRow() - 1;
+      const displayValues = sheet.getRange(2, 1, rowCount, columnCount).getDisplayValues();
+      const changedRowNumbers = [];
+      displayValues.forEach(function (row, index) {
+        if (String(row[classIdColumn] || '').trim() === sourceClassId) changedRowNumbers.push(index + 2);
+      });
+      const changed = changedRowNumbers.length;
+      if (!changed) return;
+      // V87: one batched RangeList write per affected column. This preserves
+      // every unrelated cell/formula and is much faster than setValue per row.
+      const addressList = function (columnIndex) {
+        const letter = classMergeColumnLetterV87_(columnIndex);
+        return changedRowNumbers.map(function (rowNumber) { return letter + rowNumber; });
+      };
+      sheet.getRangeList(addressList(classIdColumn)).setValue(targetClassId);
+      if (classNameColumn >= 0) sheet.getRangeList(addressList(classNameColumn)).setValue(target.className);
+      if (programColumn >= 0 && target.program) sheet.getRangeList(addressList(programColumn)).setValue(target.program);
+      changedSheets.push({ sheetName: sheetName, rows: changed });
+      changedRows += changed;
+    });
+
+    const scheduleSheet = database.getSheetByName('Master Jadwal');
+    const sourceScheduleRows = getSheetObjects_(scheduleSheet).filter(function (row) {
+      return String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === sourceClassId;
+    }).sort(function (a, b) { return b._rowNumber - a._rowNumber; });
+    sourceScheduleRows.forEach(function (row) { scheduleSheet.deleteRow(row._rowNumber); });
+
+    let logSheet = database.getSheetByName('Class Merge Log');
+    const logHeaders = ['Merge ID', 'Timestamp', 'Admin', 'Source Class ID', 'Source Class Name', 'Target Class ID', 'Target Class Name', 'Affected Rows', 'Affected Sheets', 'Source Schedule Rows', 'Status'];
+    if (!logSheet) {
+      logSheet = database.insertSheet('Class Merge Log');
+      logSheet.getRange(1, 1, 1, logHeaders.length).setValues([logHeaders]);
+      logSheet.setFrozenRows(1);
+    } else ensureHeaders_(logSheet, logHeaders);
+    appendMappedRow_(logSheet, {
+      'Merge ID': 'MERGE-' + Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyyMMddHHmmss'),
+      'Timestamp': new Date(),
+      'Admin': String(session.fullName || session.username || session.userId || 'Admin'),
+      'Source Class ID': source.classId,
+      'Source Class Name': source.className,
+      'Target Class ID': target.classId,
+      'Target Class Name': target.className,
+      'Affected Rows': changedRows,
+      'Affected Sheets': JSON.stringify(changedSheets),
+      'Source Schedule Rows': source.scheduleRows,
+      'Status': 'Completed'
+    });
+
+    return {
+      success: true,
+      source: source,
+      target: target,
+      affectedRows: changedRows,
+      affectedSheets: changedSheets,
+      inspectedRows: changedRows,
+      message: 'Kelas ' + source.className + ' berhasil digabungkan ke ' + target.className + '. ' + changedRows + ' baris data telah disinkronkan.'
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* =========================================================
+ * MOC V77 — TUTOR OPERATIONS
+ * Menggunakan sheet lama (Absensi, Learning Journal, Student Notes,
+ * Master Jadwal) agar tidak mengubah alur Admin/Siswa yang sudah stabil.
+ * ========================================================= */
+function requireTutorV77_(token) {
+  const session = getSession_(token);
+  if (String(session.role || '').trim().toLowerCase() !== 'tutor') {
+    throw new Error('Halaman ini hanya dapat digunakan oleh Tutor.');
+  }
+  return session;
+}
+
+function tutorPeriodV77_(value) {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}$/.test(text)) return text;
+  return Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyy-MM');
+}
+
+function tutorDateV77_(value) {
+  const date = normalizeStudentDate_(value);
+  return date ? Utilities.formatDate(date, 'Asia/Makassar', 'yyyy-MM-dd') : '';
+}
+
+function tutorTimeMinutesV77_(value) {
+  const text = formatStudentTime_(value) || String(value || '').trim();
+  const match = text.match(/(\d{1,2})[:.](\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+}
+
+function getTutorOperationsV77_(token, requestedPeriod) {
+  const session = requireTutorV77_(token);
+  const dashboard = getTutorDashboard_(token);
+  const database = getDatabase_();
+  const period = tutorPeriodV77_(requestedPeriod);
+  const classIds = {};
+  dashboard.classes.forEach(function (item) { classIds[item.classId] = true; });
+
+  const scheduleSheet = database.getSheetByName('Master Jadwal');
+  const scheduleRows = scheduleSheet ? getSheetObjects_(scheduleSheet) : [];
+  const classMeta = {};
+  dashboard.classes.forEach(function (item) {
+    classMeta[item.classId] = {
+      classId: item.classId,
+      className: item.className,
+      program: canonicalProgramV84_(item.program),
+      location: '',
+      tutor: dashboard.tutor.name,
+      honorPerSession: 0,
+      schedules: item.schedules || [],
+      students: item.students || [],
+      assignments: item.assignments || [],
+      submissions: item.submissions || [],
+      challenges: item.challenges || [],
+      challengeResults: item.challengeResults || []
+    };
+  });
+  scheduleRows.forEach(function (row) {
+    const classId = String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim();
+    if (!classIds[classId] || !classMeta[classId]) return;
+    classMeta[classId].location = classMeta[classId].location || String(getObjectValue_(row, ['Ruang / Lokasi', 'Lokasi', 'Ruang']) || '').trim();
+    classMeta[classId].honorPerSession = classMeta[classId].honorPerSession || parseAmount_(getObjectValue_(row, ['Honor per Sesi', 'Honor / Sesi', 'Tutor Fee', 'Honor Tutor']));
+  });
+
+  let defaultHonor = 0;
+  const usersSheet = database.getSheetByName('Users');
+  let tutorWa = '';
+  if (usersSheet) {
+    const candidates = [session.relatedId, session.userId, session.username, session.fullName, session.name]
+      .map(function (value) { return String(value || '').trim().toLowerCase(); }).filter(Boolean);
+    const userRow = getSheetObjects_(usersSheet).find(function (row) {
+      return [getObjectValue_(row, ['Related ID']), getObjectValue_(row, ['User ID']), getObjectValue_(row, ['Username']), getObjectValue_(row, ['Full Name', 'Name'])]
+        .some(function (value) { return candidates.indexOf(String(value || '').trim().toLowerCase()) >= 0; });
+    });
+    if (userRow) {
+      tutorWa = String(getObjectValue_(userRow, ['WhatsApp', 'WA', 'Phone', 'No. WhatsApp']) || '').trim();
+      defaultHonor = parseAmount_(getObjectValue_(userRow, ['Honor per Sesi', 'Honor / Sesi', 'Tutor Fee', 'Honor Tutor']));
+    }
+  }
+  if (!defaultHonor) {
+    Object.keys(classMeta).some(function (classId) {
+      if (classMeta[classId].honorPerSession > 0) {
+        defaultHonor = classMeta[classId].honorPerSession;
+        return true;
+      }
+      return false;
+    });
+  }
+  if (!defaultHonor) defaultHonor = 50000;
+  Object.keys(classMeta).forEach(function (classId) {
+    if (!classMeta[classId].honorPerSession) classMeta[classId].honorPerSession = defaultHonor;
+  });
+
+  const attendanceSheet = database.getSheetByName('Absensi');
+  const attendanceRows = attendanceSheet ? getSheetObjects_(attendanceSheet) : [];
+  const journalSheet = database.getSheetByName('Learning Journal');
+  const journalRows = journalSheet ? getSheetObjects_(journalSheet) : [];
+  const journalBySession = {};
+  journalRows.forEach(function (row) {
+    const classId = String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim();
+    const date = tutorDateV77_(getObjectValue_(row, ['Tanggal', 'Date']));
+    if (!classIds[classId] || !date || date.substring(0, 7) !== period) return;
+    journalBySession[classId + '|' + date] = {
+      material: String(getObjectValue_(row, ['Material / Topic', 'Material', 'Topic', 'Materi']) || '').trim(),
+      classNotes: String(getObjectValue_(row, ['Tutor Notes', 'Catatan Tutor', 'Catatan Kelas']) || '').trim(),
+      meetingNumber: Number(getObjectValue_(row, ['Meeting Number', 'Pertemuan Ke']) || 1)
+    };
+  });
+  const grouped = {};
+  attendanceRows.forEach(function (row) {
+    const classId = String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim();
+    const date = tutorDateV77_(getObjectValue_(row, ['Tanggal', 'Date']));
+    if (!classIds[classId] || !date || date.substring(0, 7) !== period) return;
+    const key = classId + '|' + date;
+    if (!grouped[key]) grouped[key] = {
+      sessionId: key, classId: classId, className: classMeta[classId].className,
+      program: classMeta[classId].program, date: date, tutor: String(getObjectValue_(row, ['Tutor']) || dashboard.tutor.name),
+      material: String(getObjectValue_(row, ['Materi', 'Material']) || ''),
+      classNotes: String(getObjectValue_(row, ['Catatan Kelas', 'Class Notes']) || ''),
+      meetingNumber: Number(getObjectValue_(row, ['Pertemuan Ke', 'Meeting Number']) || 1),
+      presentCount: 0, totalStudents: 0, studentStatuses: {}
+    };
+    const studentId = String(getObjectValue_(row, ['Student ID']) || '').trim();
+    const status = String(getObjectValue_(row, ['Status']) || '').trim();
+    const present = /^(hadir|present|terlambat|late)$/i.test(status);
+    grouped[key].totalStudents += 1;
+    if (present) grouped[key].presentCount += 1;
+    if (studentId) grouped[key].studentStatuses[studentId] = present ? 'Present' : 'Absent';
+    if (!grouped[key].material) grouped[key].material = String(getObjectValue_(row, ['Materi', 'Material']) || '');
+    if (!grouped[key].classNotes) grouped[key].classNotes = String(getObjectValue_(row, ['Catatan Kelas', 'Class Notes']) || '');
+  });
+  const sessions = Object.keys(grouped).map(function (key) { return grouped[key]; })
+    .map(function (item) {
+      const journal = journalBySession[item.sessionId] || {};
+      if (!item.material) item.material = journal.material || '';
+      if (!item.classNotes) item.classNotes = journal.classNotes || '';
+      if (!item.meetingNumber) item.meetingNumber = journal.meetingNumber || 1;
+      return item;
+    })
+    .sort(function (a, b) { return b.date.localeCompare(a.date) || a.className.localeCompare(b.className); });
+
+  const today = Utilities.formatDate(new Date(), 'Asia/Makassar', 'yyyy-MM-dd');
+  const todayIndex = Number(Utilities.formatDate(new Date(), 'Asia/Makassar', 'u')) % 7;
+  const todayClasses = Object.keys(classMeta).map(function (key) { return classMeta[key]; }).filter(function (item) {
+    return item.schedules.some(function (schedule) { return Number(schedule.dayIndex) === todayIndex; });
+  }).map(function (item) {
+    const schedule = item.schedules.find(function (entry) { return Number(entry.dayIndex) === todayIndex; }) || {};
+    return Object.assign({}, item, { today: today, start: schedule.start || '', end: schedule.end || '' });
+  }).sort(function (a, b) { return tutorTimeMinutesV77_(a.start) - tutorTimeMinutesV77_(b.start); });
+
+  const notesSheet = database.getSheetByName('Student Notes');
+  const noteRows = notesSheet ? getSheetObjects_(notesSheet) : [];
+  const reports = [];
+  Object.keys(classMeta).forEach(function (classId) {
+    const item = classMeta[classId];
+    item.students.forEach(function (student) {
+      const relevantSessions = sessions.filter(function (sessionRow) { return sessionRow.classId === classId; });
+      let present = 0;
+      relevantSessions.forEach(function (sessionRow) { if (sessionRow.studentStatuses[student.studentId] === 'Present') present += 1; });
+      const studentNotes = noteRows.filter(function (row) {
+        return String(getObjectValue_(row, ['Student ID']) || '').trim() === student.studentId &&
+          String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === classId;
+      }).map(function (row) {
+        return {
+          date: tutorDateV77_(getObjectValue_(row, ['Date', 'Tanggal'])),
+          comment: String(getObjectValue_(row, ['Tutor Comment', 'Komentar Tutor']) || '').trim(),
+          score: String(getObjectValue_(row, ['Achievement', 'Pencapaian', 'Nilai']) || '').trim()
+        };
+      }).filter(function (note) { return note.date && note.date.substring(0, 7) === period; })
+        .sort(function (a, b) { return b.date.localeCompare(a.date); });
+      reports.push({
+        studentId: student.studentId, fullName: student.fullName, grade: student.grade,
+        classId: classId, className: item.className, program: item.program,
+        attendancePresent: present, attendanceTotal: relevantSessions.length,
+        attendancePercentage: relevantSessions.length ? Math.round(present / relevantSessions.length * 100) : 0,
+        latestNote: studentNotes[0] ? studentNotes[0].comment : '', latestScore: studentNotes[0] ? studentNotes[0].score : '',
+        notes: studentNotes
+      });
+    });
+  });
+  reports.sort(function (a, b) { return a.fullName.localeCompare(b.fullName); });
+
+  const sessionCount = sessions.length;
+  const totalPresent = sessions.reduce(function (sum, item) { return sum + item.presentCount; }, 0);
+  const honorStudentIds = {};
+  Object.keys(classMeta).forEach(function (classId) {
+    (classMeta[classId].students || []).forEach(function (student) {
+      const studentId = String(student.studentId || '').trim();
+      if (studentId) honorStudentIds[studentId] = true;
+    });
+  });
+  const honorStudentCount = Object.keys(honorStudentIds).length;
+  const honorPerStudent = 30000;
+  const studentBasedHonor = honorStudentCount * honorPerStudent;
+  const pendingReviews = Object.keys(classMeta).reduce(function (total, classId) {
+    const item = classMeta[classId];
+    return total + item.submissions.filter(function (entry) { return String(entry.status || '').toLowerCase() === 'submitted'; }).length + item.challengeResults.filter(function (entry) { return String(entry.status || '').toLowerCase() === 'submitted'; }).length;
+  }, 0);
+  return {
+    success: true, period: period, periodLabel: periodLabelV76_(period),
+    tutor: { name: dashboard.tutor.name, relatedId: dashboard.tutor.relatedId, wa: tutorWa },
+    classes: Object.keys(classMeta).map(function (key) { return classMeta[key]; }), todayClasses: todayClasses,
+    sessions: sessions, summary: { sessionCount: sessionCount, averagePresent: sessionCount ? Math.round(totalPresent / sessionCount * 10) / 10 : 0 },
+    honor: { sessions: sessionCount, students: honorStudentCount, honorPerStudent: honorPerStudent, honorPerSession: 0, total: studentBasedHonor, calculation: 'Active Students × Rp30.000', subjects: Object.keys(classMeta).map(function (key) { return classMeta[key].program; }).filter(Boolean).filter(function (value, index, array) { return array.indexOf(value) === index; }).join(', ') },
+    reports: reports,
+    officialSettings: mapCeoSettingsV81_(getSettingsMapV81_(database)),
+    synchronization: {
+      pendingReviews: pendingReviews,
+      sources: ['Master Jadwal', 'Data Siswa', 'Absensi', 'Learning Journal', 'Student Notes', 'Assignments', 'Assignment Submissions', 'Challenges', 'Challenge Results', 'EXP Ledger'],
+      studentSynced: true, adminSynced: true, ceoSynced: true
+    },
+    attention: (dashboard.attendanceFollowUps || []).filter(function (item) { return !/selesai|resolved|closed/i.test(String(item.status || '')); })
+  };
+}
+
+function saveTutorOperationsSessionV77_(token, sessionData) {
+  requireTutorV77_(token);
+  sessionData = sessionData || {};
+  const dashboard = getTutorDashboard_(token);
+  const classId = String(sessionData.classId || '').trim();
+  const tutorClass = dashboard.classes.find(function (item) { return item.classId === classId; });
+  if (!tutorClass) throw new Error('Tutor tidak memiliki akses ke kelas tersebut.');
+  const presentIds = {};
+  (Array.isArray(sessionData.presentStudentIds) ? sessionData.presentStudentIds : []).forEach(function (id) { presentIds[String(id).trim()] = true; });
+  const date = String(sessionData.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Tanggal sesi wajib diisi.');
+  const existingDates = (tutorClass.journals || []).filter(function (item) { return item.date.substring(0, 7) === date.substring(0, 7); });
+  const meetingNumber = Math.max(1, Math.min(8, Number(sessionData.meetingNumber || (existingDates.length + 1))));
+  return saveTutorClassAttendance_(token, {
+    classId: classId, date: date, meetingNumber: meetingNumber,
+    records: tutorClass.students.map(function (student) { return { studentId: student.studentId, status: presentIds[student.studentId] ? 'Hadir' : 'Tidak Hadir' }; }),
+    material: String(sessionData.material || '').trim(),
+    objective: String(sessionData.objective || 'Memahami materi dan mencapai target pembelajaran pertemuan.').trim(),
+    activities: String(sessionData.activities || 'Penjelasan materi, latihan, dan evaluasi kelas.').trim(),
+    classNotes: String(sessionData.classNotes || '').trim()
+  });
+}
+
+function deleteTutorOperationsSessionV77_(token, classIdValue, dateValue) {
+  requireTutorV77_(token);
+  const classId = String(classIdValue || '').trim();
+  const date = String(dateValue || '').trim();
+  const dashboard = getTutorDashboard_(token);
+  if (!dashboard.classes.some(function (item) { return item.classId === classId; })) throw new Error('Tutor tidak memiliki akses ke kelas tersebut.');
+  const database = getDatabase_();
+  let deleted = 0;
+  const affectedStudentIds = {};
+  ['Absensi', 'Learning Journal'].forEach(function (sheetName) {
+    const sheet = database.getSheetByName(sheetName);
+    if (!sheet) return;
+    const rows = getSheetObjects_(sheet).filter(function (row) {
+      return String(getObjectValue_(row, ['Class ID', 'Class Id']) || '').trim() === classId &&
+        tutorDateV77_(getObjectValue_(row, ['Tanggal', 'Date'])) === date;
+    }).sort(function (a, b) { return b._rowNumber - a._rowNumber; });
+    rows.forEach(function (row) {
+      if (sheetName === 'Absensi') {
+        const studentId = String(getObjectValue_(row, ['Student ID']) || '').trim();
+        if (studentId) affectedStudentIds[studentId] = true;
+      }
+      sheet.deleteRow(row._rowNumber);
+      deleted += 1;
+    });
+  });
+  Object.keys(affectedStudentIds).forEach(function (studentId) {
+    setStudentExpForSourceV79_({
+      studentId: studentId,
+      sourceType: 'Attendance',
+      sourceId: 'ATT-' + date,
+      activityName: 'Deleted Attendance',
+      exp: 0,
+      skillCategory: 'Attendance',
+      month: date.slice(0, 7),
+      notes: 'Tutor deleted attendance session'
+    });
+  });
+  return { success: true, deleted: deleted, message: 'Riwayat sesi berhasil dihapus.' };
+}
+
+function saveTutorScheduleEditV77_(token, classData) {
+  requireTutorV77_(token);
+  classData = classData || {};
+  const dashboard = getTutorDashboard_(token);
+  const classId = String(classData.classId || '').trim();
+  const existingClass = dashboard.classes.find(function (item) { return item.classId === classId; });
+  if (!existingClass) throw new Error('Tutor hanya dapat mengubah kelas yang ditugaskan kepadanya.');
+  const days = Array.isArray(classData.days) ? classData.days.filter(Boolean) : [];
+  const start = String(classData.start || '').trim();
+  const className = String(classData.className || '').trim();
+  const program = assertOfficialProgramV84_(classData.program);
+  const duration = Math.max(15, Number(classData.duration || 60));
+  if (!className || !program || !days.length || !/^\d{1,2}:\d{2}$/.test(start)) throw new Error('Nama kelas, program, hari, dan jam mulai wajib diisi.');
+  const database = getDatabase_();
+  const sheet = database.getSheetByName('Master Jadwal');
+  const oldRows = getSheetObjects_(sheet).filter(function (row) { return String(getObjectValue_(row, ['Class ID']) || '').trim() === classId; });
+  const original = oldRows[0] || {};
+  oldRows.sort(function (a, b) { return b._rowNumber - a._rowNumber; }).forEach(function (row) { sheet.deleteRow(row._rowNumber); });
+  const parts = start.split(':');
+  const endDate = new Date(2000, 0, 1, Number(parts[0]), Number(parts[1]) + duration, 0);
+  const end = Utilities.formatDate(endDate, 'Asia/Makassar', 'HH:mm');
+  const tutorName = String(getObjectValue_(original, ['Tutor', 'Nama Tutor']) || dashboard.tutor.name);
+  const tutorId = String(getObjectValue_(original, ['Tutor ID', 'Tutor Id']) || '').trim();
+  const honorPerSession = parseAmount_(getObjectValue_(original, ['Honor per Sesi', 'Honor / Sesi', 'Tutor Fee', 'Honor Tutor']));
+  days.forEach(function (day) {
+    appendMappedRow_(sheet, {
+      'Class ID': classId, 'Nama Kelas': className, 'Program': program, 'Hari': day,
+      'Mulai': start, 'Selesai': end, 'Tutor': tutorName, 'Tutor ID': tutorId,
+      'Ruang / Lokasi': String(classData.location || getObjectValue_(original, ['Ruang / Lokasi', 'Lokasi']) || '').trim(),
+      'Status': String(getObjectValue_(original, ['Status']) || 'Aktif'),
+      'Honor per Sesi': honorPerSession, 'Honor / Sesi': honorPerSession,
+      'Tutor Fee': honorPerSession, 'Honor Tutor': honorPerSession
+    });
+  });
+  const selected = {};
+  (Array.isArray(classData.studentIds) ? classData.studentIds : existingClass.students.map(function (item) { return item.studentId; }))
+    .forEach(function (id) { selected[String(id).trim().toUpperCase()] = true; });
+  const studentSheet = database.getSheetByName('Data Siswa');
+  getSheetObjects_(studentSheet).forEach(function (row) {
+    const id = String(getObjectValue_(row, ['Student ID']) || '').trim().toUpperCase();
+    const oldClassId = String(getObjectValue_(row, ['Class ID']) || '').trim();
+    if (selected[id]) updateMappedRow_(studentSheet, row._rowNumber, { 'Class ID': classId, 'Class': className, 'Program': program });
+    else if (oldClassId === classId) updateMappedRow_(studentSheet, row._rowNumber, { 'Class ID': '', 'Class': '' });
+  });
+  return { success: true, message: 'Jadwal kelas berhasil diperbarui.' };
+}
+
+function saveTutorParentNoteV77_(token, note) {
+  requireTutorV77_(token);
+  note = note || {};
+  return saveTutorStudentNote_(token, {
+    classId: note.classId, studentId: note.studentId, date: note.date,
+    comment: String(note.comment || '').trim(), achievement: String(note.score || '').trim(),
+    participation: String(note.participation || ''), strengths: '', improvements: '',
+    expAwarded: Math.max(0, Math.min(100, Number(note.expAwarded || 0))),
+    expCategory: String(note.expCategory || 'Participation')
+  });
+}
+
