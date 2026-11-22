@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwm_4x2LJOUygCTv-8WyJO8iMbZ95-jowWyH8x1ZcnvPG85dZw54Ad-o8wMmyOLxAz9ng/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbympcu2PaSa5lCMtar8BuyVMucmqFEuLT1eWxCC1GTg3ar-AWPt5fGMfu9YUtMiUFAb5w/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -2250,8 +2250,27 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
   const nav = [
     ['home', '⌂', 'Beranda'], ['attendance', '✓', 'Absensi'], ['schedule', '▣', 'Jadwal & Kelas'],
-    ['honor', '▤', 'Honor Tutor'], ['reports', '↗', 'Laporan Ortu']
+    ['activities', '★', 'Tugas & Tantangan'], ['honor', '▤', 'Honor Tutor'], ['reports', '↗', 'Laporan Ortu']
   ];
+
+  function openTutorNavigation(value) {
+    if (value === 'activities') {
+      setPage('schedule');
+      setScheduleSection('activities');
+    } else if (value === 'schedule') {
+      setPage('schedule');
+      setScheduleSection('schedule');
+    } else {
+      setPage(value);
+    }
+    setSearch('');
+  }
+
+  function tutorNavigationActive(value) {
+    if (value === 'activities') return page === 'schedule' && scheduleSection === 'activities';
+    if (value === 'schedule') return page === 'schedule' && scheduleSection === 'schedule';
+    return page === value;
+  }
 
   function HomePage() {
     const attention = data?.attention || [];
@@ -2262,9 +2281,9 @@ function TutorOperationsV77({ user, token, onLogout }) {
       </section>
       <div className="tutor-v77-home-grid">
         <section className="tutor-v77-card tutor-v77-today-summary"><div className="tutor-v85-overview"><article><small>KELAS HARI INI</small><strong>{data?.todayClasses?.length || 0}</strong><span>jadwal</span></article><article><small>KELAS SAYA</small><strong>{classes.length}</strong><span>kelas aktif</span></article><article><small>TOTAL SISWA</small><strong>{totalTutorStudents}</strong><span>murid unik</span></article><article className={pendingReviews ? 'attention' : ''}><small>PERLU DINILAI</small><strong>{pendingReviews}</strong><span>kiriman</span></article></div>
-          <div className="tutor-v77-shortcuts"><button type="button" onClick={() => setPage('attendance')}><b>✓</b><span>Absen</span></button><button type="button" onClick={() => { setPage('schedule'); setScheduleSection('activities'); }}><b>★</b><span>Tugas & EXP</span></button><button type="button" onClick={() => setPage('reports')}><b>➤</b><span>Laporan Ortu</span></button></div>
+          <div className="tutor-v77-shortcuts"><button type="button" onClick={() => openTutorNavigation('attendance')}><b>✓</b><span>Absen</span></button><button type="button" onClick={() => openTutorNavigation('activities')}><b>★</b><span>Tugas & Tantangan</span></button><button type="button" onClick={() => openTutorNavigation('reports')}><b>➤</b><span>Laporan Ortu</span></button></div>
         </section>
-        <section><div className="tutor-v77-section-title"><h2>Jadwal hari ini</h2><button onClick={() => setPage('schedule')}>Semua</button></div><div className="tutor-v77-card tutor-v77-agenda">
+        <section><div className="tutor-v77-section-title"><h2>Jadwal hari ini</h2><button onClick={() => openTutorNavigation('schedule')}>Semua</button></div><div className="tutor-v77-card tutor-v77-agenda">
           {(data?.todayClasses || []).length ? data.todayClasses.map((item) => <article key={item.classId}><time>{item.start || '--:--'}</time><div><strong>{item.className}</strong><small>{item.program} · {item.students.length} murid{item.location ? ` · ${item.location}` : ''}</small></div><button onClick={() => openAttendance(item)}>Absen</button></article>) : <p className="tutor-v77-empty">Tidak ada kelas dalam jadwal hari ini.</p>}
         </div></section>
       </div>
@@ -2321,9 +2340,9 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
   return <main className="tutor-v77-shell">
     <header className="tutor-v77-header"><div className="tutor-v77-brand"><PaperPlaneLogo /><div><strong>Mr One Course</strong><small>Ruang Tutor</small></div></div><div><span>{tutorName}</span><button type="button" onClick={onLogout}>Keluar</button></div></header>
-    <aside className="tutor-v77-sidebar"><div className="tutor-v77-brand"><PaperPlaneLogo /><div><strong>Mr One Course</strong><small>Ruang Tutor</small></div></div><nav>{nav.map(([value, icon, label]) => <button className={page === value ? 'active' : ''} key={value} onClick={() => { setPage(value); setSearch(''); }}><b>{icon}</b><span>{label}</span></button>)}</nav><button className="tutor-v77-logout" onClick={onLogout}>↪ Keluar</button></aside>
+    <aside className="tutor-v77-sidebar"><div className="tutor-v77-brand"><PaperPlaneLogo /><div><strong>Mr One Course</strong><small>Ruang Tutor</small></div></div><nav>{nav.map(([value, icon, label]) => <button className={tutorNavigationActive(value) ? 'active' : ''} key={value} onClick={() => openTutorNavigation(value)}><b>{icon}</b><span>{label}</span></button>)}</nav><button className="tutor-v77-logout" onClick={onLogout}>↪ Keluar</button></aside>
     <section className="tutor-v77-content">{notice && <div className="tutor-v77-notice"><span>{notice}</span><button onClick={() => setNotice('')}>×</button></div>}{loading ? <div className="tutor-v77-loading">Memuat ruang Tutor...</div> : !data ? <div className="tutor-v77-loading">Data belum tersedia.</div> : page === 'home' ? <HomePage /> : page === 'attendance' ? <AttendancePage /> : page === 'schedule' ? <SchedulePage /> : page === 'honor' ? <HonorPage /> : <ReportsPage />}</section>
-    <nav className="tutor-v77-bottom-nav">{nav.map(([value, icon, label]) => <button className={page === value ? 'active' : ''} key={value} onClick={() => { setPage(value); setSearch(''); }}><b>{icon}</b><span>{label}</span></button>)}</nav>
+    <nav className="tutor-v77-bottom-nav">{nav.map(([value, icon, label]) => <button className={tutorNavigationActive(value) ? 'active' : ''} key={value} onClick={() => openTutorNavigation(value)}><b>{icon}</b><span>{label}</span></button>)}</nav>
 
     {attendanceModal && <TutorModalV77 title={`Absensi · ${attendanceModal.className}`} onClose={() => setAttendanceModal(null)}><form className="tutor-v77-form" onSubmit={saveAttendance}><div className="two"><label>Tanggal *<input type="date" required value={attendanceModal.date} onChange={(event) => setAttendanceModal({ ...attendanceModal, date: event.target.value })} /></label><label>Tutor yang mengajar<input value={tutorName} readOnly /></label></div><label>Murid hadir ({attendanceModal.presentStudentIds.length} murid)<div className="tutor-v77-checks">{(classes.find((item) => item.classId === attendanceModal.classId)?.students || []).map((student) => { const checked = attendanceModal.presentStudentIds.includes(student.studentId); return <button type="button" className={checked ? 'checked' : ''} key={student.studentId} onClick={() => setAttendanceModal({ ...attendanceModal, presentStudentIds: checked ? attendanceModal.presentStudentIds.filter((id) => id !== student.studentId) : [...attendanceModal.presentStudentIds, student.studentId] })}>{checked ? '✓' : '○'} {student.fullName}</button>; })}</div><small>Hilangkan centang untuk murid yang tidak hadir.</small></label><label>Materi yang diajarkan *<input required value={attendanceModal.material} onChange={(event) => setAttendanceModal({ ...attendanceModal, material: event.target.value })} /></label><label>Catatan kelas<textarea rows="3" value={attendanceModal.classNotes} onChange={(event) => setAttendanceModal({ ...attendanceModal, classNotes: event.target.value })} /></label><footer><button type="button" onClick={() => setAttendanceModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan'}</button></footer></form></TutorModalV77>}
 
@@ -5168,7 +5187,7 @@ function CeoSettingsPageV81({ token }) {
       <aside className="ceo-settings-side">
         <section className="ceo-settings-card"><header><div><span>02</span><h2>Cadangan Data</h2></div></header><p>Unduh cadangan operasional secara berkala. Password, PIN, dan sesi login tidak disertakan.</p><div className="ceo-backup-actions"><button type="button" className="primary" disabled={backupBusy} onClick={() => createBackup('download')}>⇩ Unduh cadangan</button><button type="button" disabled={backupBusy} onClick={() => createBackup('copy')}>Salin cadangan</button><button type="button" disabled={backupBusy} onClick={() => restoreInputRef.current?.click()}>Pulihkan pengaturan</button><input ref={restoreInputRef} hidden type="file" accept="application/json,.json" onChange={restoreSettings} /></div></section>
         <section className="ceo-settings-card ceo-settings-safety"><header><div><span>03</span><h2>Keamanan Data</h2></div></header><ul><li>Hanya CEO yang dapat membuka dan menyimpan pengaturan ini.</li><li>PIN disimpan sebagai hash, bukan angka asli.</li><li>Pemulihan hanya mengubah profil dan template—data akademik tidak ditimpa.</li></ul></section>
-        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V87 • Admin, Tutor, CEO Refinement + Student Sync</small></section>
+        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V88 • Tutor Tasks & Challenges Navigation</small></section>
       </aside>
 
       <section className="ceo-settings-card ceo-settings-templates">

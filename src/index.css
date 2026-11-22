@@ -24654,6 +24654,9 @@ html[data-theme='light'] .tuition-status-summary b{color:#153047}
 @media(max-width:900px){.tutor-v77-heading{align-items:flex-start;flex-direction:column}.tutor-v80-activity-grid{grid-template-columns:1fr}}
 @media(max-width:560px){.tutor-v80-tabs{width:100%}.tutor-v80-tabs button{flex:1}.tutor-v80-option-grid{grid-template-columns:1fr}}
 
+/* V88: six explicit Tutor destinations, including Tugas & Tantangan. */
+@media(max-width:760px){.tutor-v77-bottom-nav{grid-template-columns:repeat(6,minmax(0,1fr))}.tutor-v77-bottom-nav span{line-height:1.15}}
+
 /* V81 — CEO Settings */
 .ceo-header-settings{padding:10px 14px;border:1px solid var(--moc-border);border-radius:12px;color:var(--moc-text);background:var(--moc-surface-soft);font:inherit;font-size:11px;font-weight:900;cursor:pointer}.ceo-header-settings.active{border-color:var(--moc-primary);color:var(--moc-primary-strong);background:var(--moc-primary-soft)}
 .ceo-settings-page{display:grid;gap:22px;max-width:1320px;margin:0 auto;padding:34px clamp(18px,4vw,58px) 110px}.ceo-settings-loading{display:grid;place-items:center;min-height:65vh;color:var(--moc-muted);font-weight:850}.ceo-settings-notice{position:sticky;top:14px;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 16px;border:1px solid var(--moc-primary);border-radius:13px;color:var(--moc-primary-strong);background:var(--moc-primary-soft);font-size:12px;font-weight:800}.ceo-settings-notice button{border:0;color:inherit;background:transparent;font-size:20px;cursor:pointer}
