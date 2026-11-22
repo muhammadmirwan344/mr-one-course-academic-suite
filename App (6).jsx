@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbympcu2PaSa5lCMtar8BuyVMucmqFEuLT1eWxCC1GTg3ar-AWPt5fGMfu9YUtMiUFAb5w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxwLHdCiDkVsaWXpIbtT_cA0Zy6DOqlW9q4PfmyBbLgciLUahlXBK6EW1wVQ56ZVV97iQ/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -5187,7 +5187,7 @@ function CeoSettingsPageV81({ token }) {
       <aside className="ceo-settings-side">
         <section className="ceo-settings-card"><header><div><span>02</span><h2>Cadangan Data</h2></div></header><p>Unduh cadangan operasional secara berkala. Password, PIN, dan sesi login tidak disertakan.</p><div className="ceo-backup-actions"><button type="button" className="primary" disabled={backupBusy} onClick={() => createBackup('download')}>⇩ Unduh cadangan</button><button type="button" disabled={backupBusy} onClick={() => createBackup('copy')}>Salin cadangan</button><button type="button" disabled={backupBusy} onClick={() => restoreInputRef.current?.click()}>Pulihkan pengaturan</button><input ref={restoreInputRef} hidden type="file" accept="application/json,.json" onChange={restoreSettings} /></div></section>
         <section className="ceo-settings-card ceo-settings-safety"><header><div><span>03</span><h2>Keamanan Data</h2></div></header><ul><li>Hanya CEO yang dapat membuka dan menyimpan pengaturan ini.</li><li>PIN disimpan sebagai hash, bukan angka asli.</li><li>Pemulihan hanya mengubah profil dan template—data akademik tidak ditimpa.</li></ul></section>
-        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V88 • Tutor Tasks & Challenges Navigation</small></section>
+        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V90 • Registration History & Student ID</small></section>
       </aside>
 
       <section className="ceo-settings-card ceo-settings-templates">
@@ -5614,8 +5614,16 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   const nowDate = new Date();
   const currentPeriod = `${nowDate.getFullYear()}-${String(nowDate.getMonth() + 1).padStart(2, '0')}`;
   const [period, setPeriod] = useState(currentPeriod);
-  const [workspace, setWorkspace] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const readWorkspaceCache = (selectedPeriod) => {
+    try {
+      const cached = JSON.parse(window.sessionStorage.getItem(`moc-admin-workspace-v89:${selectedPeriod}`) || 'null');
+      return cached && cached.savedAt && Date.now() - cached.savedAt < 5 * 60 * 1000 ? cached.data : null;
+    } catch (_) { return null; }
+  };
+  const initialWorkspace = readWorkspaceCache(currentPeriod);
+  const [workspace, setWorkspace] = useState(initialWorkspace);
+  const [loading, setLoading] = useState(!initialWorkspace);
+  const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState('');
   const [clock, setClock] = useState(new Date());
   const [search, setSearch] = useState('');
@@ -5642,16 +5650,22 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
 
   useEffect(() => { loadWorkspace(period); }, [period]);
 
-  async function loadWorkspace(selectedPeriod = period) {
-    setLoading(true);
-    setNotice('');
+  async function loadWorkspace(selectedPeriod = period, options = {}) {
+    const cached = readWorkspaceCache(selectedPeriod);
+    if (cached && (!workspace || workspace.period !== selectedPeriod)) setWorkspace(cached);
+    const hasVisibleData = Boolean(cached || (workspace && workspace.period === selectedPeriod));
+    if (!hasVisibleData && options.background !== true) setLoading(true);
+    else setRefreshing(true);
+    if (options.keepNotice !== true) setNotice('');
     try {
       const result = await callApi({ action: 'getAdminWorkspace', token, period: selectedPeriod });
       setWorkspace(result);
+      try { window.sessionStorage.setItem(`moc-admin-workspace-v89:${selectedPeriod}`, JSON.stringify({ savedAt: Date.now(), data: result })); } catch (_) {}
     } catch (error) {
       setNotice(error.message || 'Data operasional Admin gagal dimuat.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
 
@@ -5662,7 +5676,9 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
       const result = await callApi({ ...request, token });
       setNotice(result.message || 'Perubahan berhasil disimpan.');
       if (successAction) successAction(result);
-      await loadWorkspace(request.period || request.invoice?.period || period);
+      // Simpan tidak lagi menunggu seluruh dashboard dimuat ulang. Data terbaru
+      // disegarkan di belakang layar sehingga Admin bisa langsung lanjut bekerja.
+      loadWorkspace(request.period || request.invoice?.period || period, { background:true, keepNotice:true });
       return true;
     } catch (error) {
       setNotice(error.message || 'Perubahan belum berhasil disimpan.');
@@ -5816,26 +5832,27 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   return <main className="app-dashboard admin-dashboard admin-v76">
     <header className="app-header"><div className="brand-small"><PaperPlaneLogo /><div><strong>Mr One Course</strong><span>Admin Operations</span></div></div><button className="logout-button" onClick={onLogout}>Keluar</button></header>
     {notice && <div className={`admin-v76-notice ${/berhasil|disalin|tersedia/i.test(notice) ? 'success' : ''}`}>{notice}</div>}
+    {refreshing && workspace && <div className="admin-v76-refreshing">Memperbarui data…</div>}
     {loading && !workspace ? <div className="dashboard-loading">Memuat pusat operasional Admin...</div> : <>
       {page === 'home' && <section className="admin-v76-page admin-v76-home">
         <div className="admin-v76-greeting"><div><span className="eyebrow">BERANDA ADMIN</span><h1>{greeting}, {user.fullName || 'Admin'}.</h1><p>{clock.toLocaleDateString('id-ID', { weekday:'long', day:'numeric', month:'long', year:'numeric' })} • {clock.toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit', second:'2-digit' })}</p></div><article><small>MURID AKTIF</small><strong>{workspace?.activeStudentCount || 0}</strong><span>terdaftar di Academic Suite</span></article></div>
         <div className="admin-v76-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari nama murid atau orang tua..." /></div>
         {search && <div className="admin-v76-search-results">{filteredStudents.slice(0,8).map((student) => <button key={student.studentId} onClick={() => { setStudentModal(student); setSearch(''); }}><span>{student.fullName.charAt(0)}</span><div><strong>{student.fullName}</strong><small>{student.studentId} • {student.parentName || 'Orang tua belum diisi'}</small></div><b>→</b></button>)}</div>}
         <div className="admin-v76-shortcuts"><button onClick={() => onNavigate('admin-spp')}><span>Rp</span><div><strong>Tagih SPP</strong><small>Buat dan tindak lanjuti tagihan</small></div><b>→</b></button><button onClick={() => onNavigate('admin-reports')}><span>➤</span><div><strong>KIRIM</strong><small>Laporan untuk orang tua</small></div><b>→</b></button><button onClick={async () => { setVerificationOpen(true); await onRefreshRegistrations(); }}><span>✓</span><div><strong>Verifikasi Murid</strong><small>{workspace?.pendingRegistrations || 0} pendaftaran menunggu</small></div><b>→</b></button></div>
-        <section className="admin-v76-attention"><header><div><span className="eyebrow">PERLU PERHATIAN</span><h2>SPP Belum Dibayar</h2></div><strong>{formatRupiah(workspace?.billingSummary?.unpaidAmount || 0)}</strong></header>{unpaidRows.length ? <div>{unpaidRows.slice(0,8).map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small>{item.description} • {workspace.periodLabel}</small></div><b>{formatRupiah(item.amount)}</b></article>)}</div> : <div className="empty-state">Tidak ada tagihan yang perlu ditindaklanjuti.</div>}</section>
+        <section className="admin-v76-attention"><header><div><span className="eyebrow">PERLU PERHATIAN</span><h2>SPP Belum Dibayar</h2></div><strong>{formatRupiah(workspace?.billingSummary?.unpaidAmount || 0)}</strong></header>{unpaidRows.length ? <div>{unpaidRows.slice(0,8).map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small>{item.studentId || 'TANPA STUDENT ID'} • {item.description} • {workspace.periodLabel}</small></div><b>{formatRupiah(item.amount)}</b></article>)}</div> : <div className="empty-state">Tidak ada tagihan yang perlu ditindaklanjuti.</div>}</section>
         <section className="admin-v76-attention birthday"><header><div><span className="eyebrow">PERLU PERHATIAN</span><h2>Ulang Tahun Siswa</h2><p>Hari ini dan 7 hari ke depan</p></div><strong>{workspace?.birthdays?.length || 0} siswa</strong></header>{workspace?.birthdays?.length ? <div>{workspace.birthdays.map((item) => <article key={item.studentId}><div><strong>🎂 {item.fullName}</strong><small>{item.daysUntil === 0 ? 'Ulang tahun hari ini' : item.daysUntil === 1 ? 'Ulang tahun besok' : `${item.daysUntil} hari lagi`} • {item.birthdayLabel}{item.age ? ` • ${item.age} tahun` : ''}</small></div><b>{item.studentId}</b><button onClick={() => openBirthdayWa(item)}><WhatsAppIcon /> Kirim WA</button></article>)}</div> : <div className="empty-state">Tidak ada siswa yang berulang tahun dalam 7 hari ke depan.</div>}</section>
       </section>}
 
       {page === 'spp' && <section className="admin-v76-page">
         <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • BILLING</span><h1>Tagihan SPP</h1><p>Buat tagihan sekali klik, tagih lewat WhatsApp, cetak kuitansi.</p></div><div><button className="secondary" onClick={() => { setInvoiceForm({ studentId:'', description:'Biaya les', amount:'', period }); setShowManualInvoice(true); }}>＋ Tagihan manual</button><button onClick={() => mutate({ action:'adminGenerateMonthlySppInvoices', period })} disabled={busy}>Buat Tagihan {workspace?.periodLabel}</button></div></div>
         <div className="admin-v76-kpis"><article><small>TOTAL TAGIHAN</small><strong>{workspace?.billingSummary?.totalInvoices || 0}</strong><span>jumlah tagihan</span></article><article className="paid"><small>SUDAH LUNAS</small><strong>{workspace?.billingSummary?.paidStudents || 0}</strong><span>murid</span></article><article><small>BELUM BAYAR</small><strong>{workspace?.billingSummary?.unpaidStudents || 0}</strong><span>murid</span></article></div>
-        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small>{item.parentName || item.studentId}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId })} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}</div></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small><b>{item.studentId || 'TANPA STUDENT ID'}</b>{item.parentName ? ` • ${item.parentName}` : ''}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId })} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}</div></div>
       </section>}
 
       {page === 'students' && <section className="admin-v76-page">
         <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • STUDENTS</span><h1>Murid</h1><p>{workspace?.activeStudentCount || 0} murid aktif</p></div><div><button className="secondary" onClick={async () => { setVerificationOpen(true); await onRefreshRegistrations(); }}>{workspace?.pendingRegistrations || 0} Pendaftaran Baru</button><button onClick={() => setStudentModal(emptyStudent())}>＋ Murid baru</button></div></div>
         <div className="admin-v76-search"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid, orang tua, atau program..." /></div>
-        <div className="admin-v76-table-card"><div className="admin-v76-table student-table"><div className="head"><span>Murid</span><span>Orang Tua</span><span>Kelas</span><span>SPP</span><span>Status</span><span>Aksi</span></div>{filteredStudents.map((student) => <article key={student.studentId}><div><strong>{student.fullName}</strong><small>{student.grade || 'Jenjang belum diisi'} • {student.program || 'Program belum diisi'}</small></div><div><strong>{student.parentName || '—'}</strong><small>{student.waParent || student.waStudent || 'Nomor belum diisi'}</small></div><span>{student.className || '—'}</span><b>{formatRupiah(student.monthlyFee)}</b><em className={/aktif|active/i.test(student.status) ? 'paid' : ''}>{student.status}</em><div className="actions"><button onClick={() => setStudentModal({ ...student })}>Edit</button><button className="danger" onClick={() => setStudentDelete(student)}>Hapus</button></div></article>)}</div></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-table student-table"><div className="head"><span>Murid</span><span>Orang Tua</span><span>Kelas</span><span>SPP</span><span>Status</span><span>Aksi</span></div>{filteredStudents.map((student) => <article key={student.studentId}><div><strong>{student.fullName}</strong><small><b>{student.studentId || 'TANPA STUDENT ID'}</b> • {student.grade || 'Jenjang belum diisi'} • {student.program || 'Program belum diisi'}</small></div><div><strong>{student.parentName || '—'}</strong><small>{student.waParent || student.waStudent || 'Nomor belum diisi'}</small></div><span>{student.className || '—'}</span><b>{formatRupiah(student.monthlyFee)}</b><em className={/aktif|active/i.test(student.status) ? 'paid' : ''}>{student.status}</em><div className="actions"><button onClick={() => setStudentModal({ ...student })}>Edit</button><button className="danger" onClick={() => setStudentDelete(student)}>Hapus</button></div></article>)}</div></div>
       </section>}
 
       {page === 'classes' && <section className="admin-v76-page">
@@ -6756,6 +6773,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
   const [previewLoading, setPreviewLoading] = useState('');
   const [waLoading, setWaLoading] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [selectedRegistration, setSelectedRegistration] = useState(null);
 
   const pending = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'menunggu verifikasi');
   const approved = (registrations || []).filter((item) => String(item.status).toLowerCase() === 'disetujui');
@@ -6786,6 +6804,13 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
     } finally {
       setPreviewLoading('');
     }
+  }
+
+  function formatRegistrationDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString('id-ID', { timeZone:'Asia/Makassar', weekday:'long', day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit' });
   }
 
   function normalizeWa(value) {
@@ -6924,6 +6949,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
             </div>
 
             <div className="registration-file-actions">
+              <button type="button" onClick={() => setSelectedRegistration(item)}>Lihat Form Pendaftaran</button>
               <button type="button" className="primary-proof-action" onClick={() => viewRegistrationFile(item, 'payment')} disabled={previewLoading === `${item.registrationId}-payment`}>{previewLoading === `${item.registrationId}-payment` ? 'Membuka Bukti Transfer...' : 'Lihat Bukti Transfer'}</button>
               {item.idCard === 'Ya' && <button type="button" onClick={() => viewRegistrationFile(item, 'photo')} disabled={previewLoading === `${item.registrationId}-photo`}>{previewLoading === `${item.registrationId}-photo` ? 'Membuka...' : 'Lihat Foto ID Card'}</button>}
             </div>
@@ -6947,9 +6973,10 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
       {statusFilter === 'approved' && (approved.length > 0 ? <div className="registration-approved-section">
         <div className="registration-approved-heading"><div><span className="eyebrow">SUDAH DIVERIFIKASI</span><h3>Kirim Hasil Verifikasi</h3></div><small>Status pendaftaran + pembayaran + data siswa</small></div>
         <div className="registration-admin-list">{approved.map((item) => <article key={`approved-${item.registrationId}`} className="registration-approved-card">
-          <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p>{item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
+          <header><div><small>{item.registrationId}</small><h3>{item.fullName}</h3><p><b>{item.studentId || 'TANPA STUDENT ID'}</b> • {item.requestedProgram || '—'} • {item.requestedSchedule || '—'}</p></div><span className="approved-status">DISETUJUI</span></header>
           <div className="registration-contact"><span>Student ID: <b>{item.studentId || '—'}</b></span><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
           <div className="registration-wa-actions registration-wa-actions-approved">
+            <button type="button" className="view-registration-form" onClick={() => setSelectedRegistration(item)}>📋 Lihat Form Pendaftaran</button>
             <button type="button" className="cancel-verification" onClick={() => { if (window.confirm(`Batalkan verifikasi pendaftaran ${item.fullName}?`)) onCancelVerification({ registrationId: item.registrationId }); }}>↶ Batalkan Verifikasi</button>
             <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'approved')} disabled={waLoading === `${item.registrationId}-approved`}>
               {waLoading === `${item.registrationId}-approved` ? 'Membuka...' : '💬 Kirim Hasil Verifikasi'}
@@ -6968,6 +6995,7 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
           <div className="registration-rejection-reason"><span>Alasan</span><strong>{item.adminNote || '—'}</strong></div>
           <div className="registration-contact"><span>WA: <b>{item.waStudent || item.waParent || '—'}</b></span></div>
           <div className="registration-wa-actions single">
+            <button type="button" className="view-registration-form" onClick={() => setSelectedRegistration(item)}>📋 Lihat Form Pendaftaran</button>
             <button type="button" onClick={() => sendRegistrationWhatsApp(item, 'rejected')} disabled={waLoading === `${item.registrationId}-rejected`}>
               {waLoading === `${item.registrationId}-rejected` ? 'Membuka...' : '💬 Kirim Alasan Penolakan via WA'}
             </button>
@@ -6975,6 +7003,37 @@ function StudentRegistrationsPage({ registrations, loading, message, onApprove, 
         </article>)}</div>
       </div> : <div className="empty-state">Belum ada pendaftaran yang ditolak.</div>)}
     </>}
+    {selectedRegistration && <div className="registration-history-modal" role="dialog" aria-modal="true">
+      <div className="registration-history-card">
+        <header><div><span className="eyebrow">FORM PENDAFTARAN TERSIMPAN</span><h2>{selectedRegistration.fullName || 'Pendaftar'}</h2><p>{selectedRegistration.registrationId}</p></div><button type="button" onClick={() => { setSelectedRegistration(null); setPreview(null); }}>×</button></header>
+        <div className="registration-history-meta"><span>Status: <b>{selectedRegistration.status || '—'}</b></span><span>Form dikirim: <b>{formatRegistrationDate(selectedRegistration.registeredAt)}</b></span>{selectedRegistration.reviewedAt && <span>Diproses Admin: <b>{formatRegistrationDate(selectedRegistration.reviewedAt)}</b></span>}</div>
+        <div className="registration-submitted-data registration-history-data">
+          <div><span>Nama Lengkap</span><strong>{selectedRegistration.fullName || '—'}</strong></div>
+          <div><span>Student ID</span><strong>{selectedRegistration.studentId || 'Belum dibuat'}</strong></div>
+          <div><span>Tanggal Lahir</span><strong>{selectedRegistration.dob || '—'}</strong></div>
+          <div><span>Sekolah / Kelas</span><strong>{selectedRegistration.school || '—'} • {selectedRegistration.grade || '—'}</strong></div>
+          <div className="wide"><span>Alamat</span><strong>{selectedRegistration.address || '—'}</strong></div>
+          <div><span>WA Siswa</span><strong>{selectedRegistration.waStudent || '—'}</strong></div>
+          <div><span>WA Orang Tua</span><strong>{selectedRegistration.waParent || '—'}</strong></div>
+          <div><span>Program</span><strong>{selectedRegistration.requestedProgram || '—'}</strong></div>
+          <div><span>Class ID</span><strong>{selectedRegistration.requestedClassId || selectedRegistration.classId || '—'}</strong></div>
+          <div className="wide"><span>Jadwal Pilihan</span><strong>{selectedRegistration.requestedSchedule || '—'}</strong></div>
+          <div><span>Biaya Les Pertama</span><strong>{formatRupiah(selectedRegistration.firstTuitionAmount || 0)}</strong></div>
+          <div><span>Paket Buku</span><strong>{selectedRegistration.bookPackage || 'Tidak'} {selectedRegistration.bookAmount ? `• ${formatRupiah(selectedRegistration.bookAmount)}` : ''}</strong></div>
+          <div><span>ID Card</span><strong>{selectedRegistration.idCard || 'Tidak'} {selectedRegistration.idCardAmount ? `• ${formatRupiah(selectedRegistration.idCardAmount)}` : ''}</strong></div>
+          <div><span>Total Transfer</span><strong>{formatRupiah(selectedRegistration.totalAmount || 0)}</strong></div>
+          <div><span>Rekening Tujuan</span><strong>{selectedRegistration.transferBank || 'BCA'} • 7815846478 a.n. Novita Rohmawati</strong></div>
+          <div><span>Status Pembayaran</span><strong>{selectedRegistration.paymentStatus || '—'}</strong></div>
+          {selectedRegistration.adminNote && <div className="wide"><span>Catatan Admin</span><strong>{selectedRegistration.adminNote}</strong></div>}
+        </div>
+        <div className="registration-history-files">
+          <div><span>Bukti Transfer</span><small>{selectedRegistration.paymentProofFileName || 'File bukti tersimpan'}</small><button type="button" onClick={() => viewRegistrationFile(selectedRegistration, 'payment')} disabled={previewLoading === `${selectedRegistration.registrationId}-payment`}>{previewLoading === `${selectedRegistration.registrationId}-payment` ? 'Membuka...' : 'Lihat Bukti Transfer'}</button></div>
+          {selectedRegistration.idCard === 'Ya' && <div><span>Foto ID Card</span><small>{selectedRegistration.idPhotoFileName || 'Foto tersimpan'}</small><button type="button" onClick={() => viewRegistrationFile(selectedRegistration, 'photo')} disabled={previewLoading === `${selectedRegistration.registrationId}-photo`}>{previewLoading === `${selectedRegistration.registrationId}-photo` ? 'Membuka...' : 'Lihat Foto'}</button></div>}
+        </div>
+        {preview?.registrationId === selectedRegistration.registrationId && <div className="registration-history-preview"><div><strong>{preview.fileType === 'photo' ? 'Foto ID Card' : 'Bukti Transfer'}</strong><span>{preview.fileName || ''}</span><small>Bukti diunggah: {formatRegistrationDate(preview.uploadedAt || selectedRegistration.registeredAt)}</small></div>{preview.mimeType === 'application/pdf' ? <iframe title="Registration file" src={`data:${preview.mimeType};base64,${preview.base64}`} /> : <img src={`data:${preview.mimeType};base64,${preview.base64}`} alt={preview.fileType === 'photo' ? 'Foto ID Card' : 'Bukti transfer'} />}<button type="button" onClick={() => setPreview(null)}>Tutup Bukti</button></div>}
+        <footer><button type="button" onClick={() => { setSelectedRegistration(null); setPreview(null); }}>Tutup Form</button></footer>
+      </div>
+    </div>}
   </section>;
 }
 
