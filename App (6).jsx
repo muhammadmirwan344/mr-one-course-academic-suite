@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbxwLHdCiDkVsaWXpIbtT_cA0Zy6DOqlW9q4PfmyBbLgciLUahlXBK6EW1wVQ56ZVV97iQ/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwC489eOJrJn4tTkf4637Ev17-tcKK8fDlmVHzhe7dUWZeiFtbSiGPRgJuf-MruwSLLJw/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -2026,13 +2026,20 @@ const ASSIGNMENT_TASK_TYPES = [
   ['multiple-choice', 'Pilihan Ganda', '◉'], ['multiple-select', 'Pilihan Ganda Kompleks', '☑'], ['true-false', 'Benar / Salah', '◐'],
   ['fill-blank', 'Fill in the Blank + Panel Kata', '＿'], ['matching', 'Matching', '⇄'], ['ordering', 'Mengurutkan / Drag & Drop', '↕'],
   ['sentence-builder', 'Susun Kalimat dari Panel Kata', '▤'], ['categorization', 'Kategorisasi', '▦'], ['short-answer', 'Jawaban Singkat', '✎'],
-  ['error-correction', 'Error Correction', '✓'], ['reading', 'Reading Task', '▧'], ['listening', 'Listening Task', '◖']
+  ['error-correction', 'Error Correction', '✓'], ['reading', 'Reading Task', '▧'], ['listening', 'Listening Task', '◖'],
+  ['toefl-test', 'TOEFL Computer Test', 'T']
 ];
 
+const TOEFL_TEST_SECTIONS = ['Listening Comprehension', 'Structure and Written Expression', 'Reading Comprehension'];
+
+function assignmentTaskTypesForProgram(program) {
+  return ASSIGNMENT_TASK_TYPES.filter(([value]) => value !== 'toefl-test' || /grammar/i.test(String(program || '')));
+}
+
 function createEmptyAssignmentQuestion(taskType = 'multiple-choice') {
-  const type = ['reading', 'listening'].includes(taskType) ? 'multiple-choice' : taskType;
+  const type = ['reading', 'listening', 'toefl-test'].includes(taskType) ? 'multiple-choice' : taskType;
   const base = { id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, text: '', points: 10 };
-  if (type === 'multiple-choice') return { ...base, options: ['', '', '', ''], correctOption: 0 };
+  if (type === 'multiple-choice') return { ...base, ...(taskType === 'toefl-test' ? { section: TOEFL_TEST_SECTIONS[0] } : {}), options: ['', '', '', ''], correctOption: 0 };
   if (type === 'multiple-select') return { ...base, options: ['', '', '', ''], correctOptions: [] };
   if (type === 'true-false') return { ...base, options: ['True', 'False'], correctOption: 0 };
   if (type === 'fill-blank') return { ...base, acceptedAnswers: '', wordBank: '' };
@@ -2043,13 +2050,19 @@ function createEmptyAssignmentQuestion(taskType = 'multiple-choice') {
   return { ...base, acceptedAnswers: '' };
 }
 
+function createAssignmentQuestionSet(taskType = 'multiple-choice') {
+  if (taskType !== 'toefl-test') return [createEmptyAssignmentQuestion(taskType)];
+  return TOEFL_TEST_SECTIONS.map((section) => ({ ...createEmptyAssignmentQuestion(taskType), section }));
+}
+
 function AssignmentQuestionBuilder({ questions, onChange, isID, taskType = 'multiple-choice' }) {
   const rows = Array.isArray(questions) ? questions : [];
-  const editorType = ['reading', 'listening'].includes(taskType) ? 'multiple-choice' : taskType;
+  const editorType = ['reading', 'listening', 'toefl-test'].includes(taskType) ? 'multiple-choice' : taskType;
   const updateQuestion = (index, update) => onChange(rows.map((item, itemIndex) => itemIndex === index ? { ...item, ...update } : item));
   const updateList = (questionIndex, field, itemIndex, value) => updateQuestion(questionIndex, { [field]: (rows[questionIndex][field] || []).map((item, index) => index === itemIndex ? value : item) });
   const typeLabel = ASSIGNMENT_TASK_TYPES.find(([value]) => value === taskType)?.[1] || 'Assignment';
-  return <section className={`assignment-question-builder task-${taskType}`}><div className="question-builder-heading"><div><span>{typeLabel.toUpperCase()}</span><strong>{rows.length} {isID ? 'soal' : 'questions'} • {rows.reduce((sum, item) => sum + Number(item.points || 0), 0)} {isID ? 'poin' : 'points'}</strong></div><button type="button" onClick={() => onChange([...rows, createEmptyAssignmentQuestion(taskType)])}>＋ {isID ? 'Tambah Soal' : 'Add Question'}</button></div>{rows.map((question, questionIndex) => <article key={question.id || questionIndex}><header><b>{isID ? 'Soal' : 'Question'} {questionIndex + 1}</b><label><span>{isID ? 'Bobot' : 'Weight'}</span><input type="number" min="1" max="100" value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} /></label><button type="button" aria-label={isID ? 'Hapus soal' : 'Delete question'} onClick={() => onChange(rows.filter((_, index) => index !== questionIndex))}>×</button></header><textarea rows="2" value={question.text} onChange={(event) => updateQuestion(questionIndex, { text: event.target.value })} placeholder={editorType === 'fill-blank' ? (isID ? 'Gunakan ___ pada bagian yang harus dilengkapi.' : 'Use ___ for the missing part.') : (isID ? 'Tulis pertanyaan atau instruksi...' : 'Write the question or instruction...')} />
+  return <section className={`assignment-question-builder task-${taskType}`}><div className="question-builder-heading"><div><span>{typeLabel.toUpperCase()}</span><strong>{rows.length} {isID ? 'soal' : 'questions'} • {rows.reduce((sum, item) => sum + Number(item.points || 0), 0)} {isID ? 'poin' : 'points'}</strong></div><button type="button" onClick={() => { const next = createEmptyAssignmentQuestion(taskType); if (taskType === 'toefl-test') next.section = rows[rows.length - 1]?.section || TOEFL_TEST_SECTIONS[0]; onChange([...rows, next]); }}>＋ {isID ? 'Tambah Soal' : 'Add Question'}</button></div>{taskType === 'toefl-test' && <p className="toefl-builder-note">Kerangka TOEFL terdiri dari Listening, Structure and Written Expression, dan Reading. Tambahkan soal sebanyak yang diperlukan; nilai dihitung otomatis dari seluruh bagian.</p>}{rows.map((question, questionIndex) => <article key={question.id || questionIndex}><header><b>{isID ? 'Soal' : 'Question'} {questionIndex + 1}</b><label><span>{isID ? 'Bobot' : 'Weight'}</span><input type="number" min="1" max="100" value={question.points} onChange={(event) => updateQuestion(questionIndex, { points: Number(event.target.value) })} /></label><button type="button" aria-label={isID ? 'Hapus soal' : 'Delete question'} onClick={() => onChange(rows.filter((_, index) => index !== questionIndex))}>×</button></header>{taskType === 'toefl-test' && <label className="toefl-section-field"><span>Bagian TOEFL</span><select value={question.section || TOEFL_TEST_SECTIONS[0]} onChange={(event) => updateQuestion(questionIndex, { section: event.target.value })}>{TOEFL_TEST_SECTIONS.map((section) => <option key={section} value={section}>{section}</option>)}</select></label>}<textarea rows="2" value={question.text} onChange={(event) => updateQuestion(questionIndex, { text: event.target.value })} placeholder={editorType === 'fill-blank' ? (isID ? 'Gunakan ___ pada bagian yang harus dilengkapi.' : 'Use ___ for the missing part.') : taskType === 'toefl-test' ? 'Tulis soal, dialog singkat, kalimat, atau bacaan TOEFL...' : (isID ? 'Tulis pertanyaan atau instruksi...' : 'Write the question or instruction...')} />
+    {taskType === 'toefl-test' && <label className="structured-key-field"><span>{question.section === 'Listening Comprehension' ? 'Naskah audio (tidak terlihat oleh siswa)' : question.section === 'Reading Comprehension' ? 'Teks bacaan untuk soal ini' : 'Konteks / kalimat dasar (opsional)'}</span><textarea rows="3" value={question.context || ''} onChange={(event) => updateQuestion(questionIndex, { context: event.target.value })} placeholder={question.section === 'Listening Comprehension' ? 'Masukkan dialog/narasi bahasa Inggris yang akan dibacakan oleh komputer...' : question.section === 'Reading Comprehension' ? 'Masukkan passage yang dibaca siswa...' : 'Masukkan kalimat atau konteks tambahan bila diperlukan...'} /></label>}
     {['multiple-choice', 'multiple-select', 'true-false'].includes(editorType) && <div className="question-option-grid">{(question.options || []).map((option, optionIndex) => { const checked = editorType === 'multiple-select' ? (question.correctOptions || []).includes(optionIndex) : Number(question.correctOption) === optionIndex; return <label className={checked ? 'correct-option' : ''} key={optionIndex}><input type={editorType === 'multiple-select' ? 'checkbox' : 'radio'} name={`key-${question.id || questionIndex}`} checked={checked} onChange={() => editorType === 'multiple-select' ? updateQuestion(questionIndex, { correctOptions: checked ? (question.correctOptions || []).filter((value) => value !== optionIndex) : [...(question.correctOptions || []), optionIndex] }) : updateQuestion(questionIndex, { correctOption: optionIndex })} /><span>{String.fromCharCode(65 + optionIndex)}</span><input value={option} readOnly={editorType === 'true-false'} onChange={(event) => updateList(questionIndex, 'options', optionIndex, event.target.value)} placeholder={`${isID ? 'Pilihan' : 'Option'} ${String.fromCharCode(65 + optionIndex)}`} /></label>; })}</div>}
     {['fill-blank', 'short-answer', 'error-correction'].includes(editorType) && <label className="structured-key-field"><span>{isID ? 'Jawaban yang diterima' : 'Accepted Answers'}</span><input value={question.acceptedAnswers || ''} onChange={(event) => updateQuestion(questionIndex, { acceptedAnswers: event.target.value })} placeholder={isID ? 'Pisahkan alternatif dengan tanda |' : 'Separate alternatives with |'} /><small>{isID ? 'Huruf besar, tanda baca, dan spasi berlebih akan diabaikan.' : 'Capitalization, punctuation, and extra spaces are ignored.'}</small></label>}
     {editorType === 'fill-blank' && <label className="structured-key-field"><span>{isID ? 'Panel kata untuk siswa' : 'Student Word Bank'}</span><input value={question.wordBank || ''} onChange={(event) => updateQuestion(questionIndex, { wordBank: event.target.value })} placeholder={isID ? 'Contoh: am, is, are, was, were' : 'Example: am, is, are, was, were'} /><small>{isID ? 'Pisahkan setiap pilihan kata dengan koma.' : 'Separate each word option with a comma.'}</small></label>}
@@ -2172,8 +2185,8 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
   function openAssignment(classItem) {
     setAssignmentModal({
-      classId: classItem.classId, className: classItem.className, title: '', instructions: '',
-      assignedDate: today, dueDate: today, expReward: 100, taskType: 'multiple-choice',
+      classId: classItem.classId, className: classItem.className, program: classItem.program || '', title: '', instructions: '',
+      assignedDate: today, dueDate: today, expReward: 100, durationMinutes: 120, taskType: 'multiple-choice',
       stimulus: '', questions: [createEmptyAssignmentQuestion('multiple-choice')]
     });
   }
@@ -2182,8 +2195,8 @@ function TutorOperationsV77({ user, token, onLogout }) {
     setAssignmentModal((current) => ({
       ...current,
       taskType,
-      stimulus: ['reading', 'listening'].includes(taskType) ? current.stimulus || '' : '',
-      questions: [createEmptyAssignmentQuestion(taskType)]
+      stimulus: ['reading', 'listening', 'toefl-test'].includes(taskType) ? current.stimulus || '' : '',
+      questions: createAssignmentQuestionSet(taskType)
     }));
   }
 
@@ -2193,7 +2206,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
       const payload = {
         classId: assignmentModal.classId, title: assignmentModal.title, instructions: assignmentModal.instructions,
         assignedDate: assignmentModal.assignedDate, dueDate: assignmentModal.dueDate,
-        expReward: Number(assignmentModal.expReward || 0), taskType: assignmentModal.taskType,
+        expReward: Number(assignmentModal.expReward || 0), durationMinutes: Number(assignmentModal.durationMinutes || 120), taskType: assignmentModal.taskType,
         stimulus: assignmentModal.stimulus || '', questions: assignmentModal.questions || []
       };
       const result = await callApi({ action: 'createTutorAssignment', token, assignment: payload });
@@ -2354,7 +2367,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
     {slipOpen && <TutorModalV77 title={`Slip honor · ${tutorName}`} onClose={() => setSlipOpen(false)} wide printClass="tutor-honor-slip-print"><div className="tutor-v77-print-paper"><header><strong>Mr One Course</strong><span>SLIP HONOR TUTOR</span><small>Periode {monthLabel(period)}</small></header><dl><dt>Nama tutor</dt><dd>{tutorName}</dd><dt>Mata pelajaran</dt><dd>{data?.honor?.subjects || '-'}</dd></dl><table><thead><tr><th>No</th><th>Tanggal</th><th>Kelas</th><th>Materi</th><th>Hadir</th></tr></thead><tbody>{sessions.map((item, index) => <tr key={item.sessionId}><td>{index + 1}</td><td>{dateLabel(item.date)}</td><td>{item.className}</td><td>{item.material || '-'}</td><td>{item.presentCount}</td></tr>)}</tbody></table><dl className="totals"><dt>Dasar honor</dt><dd>{data?.honor?.students || 0} siswa × {formatRupiah(data?.honor?.honorPerStudent || 30000)}</dd><dt>Sesi tercatat</dt><dd>{data?.honor?.sessions || 0} sesi</dd><dt>Total honor</dt><dd><strong>{formatRupiah(data?.honor?.total || 0)}</strong></dd></dl></div><footer className="tutor-v77-print-actions"><button onClick={() => setSlipOpen(false)}>Tutup</button><button className="primary" onClick={() => window.print()}>Cetak / PDF</button></footer></TutorModalV77>}
 
-    {assignmentModal && <TutorModalV77 title={`Buat tugas · ${assignmentModal.className}`} onClose={() => setAssignmentModal(null)} wide><form className="tutor-v77-form" onSubmit={saveAssignment}><div className="two"><label>Judul tugas *<input required value={assignmentModal.title} onChange={(event) => setAssignmentModal({ ...assignmentModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="200" value={assignmentModal.expReward} onChange={(event) => setAssignmentModal({ ...assignmentModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="3" value={assignmentModal.instructions} onChange={(event) => setAssignmentModal({ ...assignmentModal, instructions: event.target.value })} /></label><div className="two"><label>Tanggal diberikan *<input type="date" required value={assignmentModal.assignedDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, assignedDate: event.target.value })} /></label><label>Tenggat *<input type="date" required min={assignmentModal.assignedDate} value={assignmentModal.dueDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, dueDate: event.target.value })} /></label></div><label>Jenis tugas *<select value={assignmentModal.taskType} onChange={(event) => changeQuickAssignmentType(event.target.value)}>{ASSIGNMENT_TASK_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Mengganti jenis tugas akan memulai kembali daftar soal agar formatnya konsisten.</small></label>{['reading','listening'].includes(assignmentModal.taskType) && <label>{assignmentModal.taskType === 'reading' ? 'Teks bacaan *' : 'Naskah listening *'}<textarea required rows="5" value={assignmentModal.stimulus} onChange={(event) => setAssignmentModal({ ...assignmentModal, stimulus: event.target.value })} /></label>}<AssignmentQuestionBuilder taskType={assignmentModal.taskType} questions={assignmentModal.questions} onChange={(questions) => setAssignmentModal({ ...assignmentModal, questions })} isID /><p className="tutor-v80-sync-note">Klik “Tambah Soal” untuk membuat nomor 2, 3, dan seterusnya. Setelah diterbitkan, tugas langsung tampil di akun Siswa dan nilainya tersinkron ke Tutor, Admin, CEO, serta EXP Ledger.</p><footer><button type="button" onClick={() => setAssignmentModal(null)}>Batal</button><button className="primary" disabled={saving || !assignmentModal.questions?.length}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
+    {assignmentModal && <TutorModalV77 title={`Buat tugas · ${assignmentModal.className}`} onClose={() => setAssignmentModal(null)} wide><form className="tutor-v77-form" onSubmit={saveAssignment}><div className="two"><label>Judul tugas *<input required value={assignmentModal.title} onChange={(event) => setAssignmentModal({ ...assignmentModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="200" value={assignmentModal.expReward} onChange={(event) => setAssignmentModal({ ...assignmentModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="3" value={assignmentModal.instructions} onChange={(event) => setAssignmentModal({ ...assignmentModal, instructions: event.target.value })} /></label><div className="two"><label>Tanggal diberikan *<input type="date" required value={assignmentModal.assignedDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, assignedDate: event.target.value })} /></label><label>Tenggat *<input type="date" required min={assignmentModal.assignedDate} value={assignmentModal.dueDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, dueDate: event.target.value })} /></label></div><label>Jenis tugas *<select value={assignmentModal.taskType} onChange={(event) => changeQuickAssignmentType(event.target.value)}>{assignmentTaskTypesForProgram(assignmentModal.program).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Mengganti jenis tugas akan memulai kembali daftar soal agar formatnya konsisten.</small></label>{['reading','listening','toefl-test'].includes(assignmentModal.taskType) && <label>{assignmentModal.taskType === 'reading' ? 'Teks bacaan *' : assignmentModal.taskType === 'listening' ? 'Naskah listening *' : 'Petunjuk umum Tes TOEFL (opsional)'}<textarea required={assignmentModal.taskType !== 'toefl-test'} rows="5" value={assignmentModal.stimulus} onChange={(event) => setAssignmentModal({ ...assignmentModal, stimulus: event.target.value })} /></label>}<AssignmentQuestionBuilder taskType={assignmentModal.taskType} questions={assignmentModal.questions} onChange={(questions) => setAssignmentModal({ ...assignmentModal, questions })} isID /><p className="tutor-v80-sync-note">Klik “Tambah Soal” untuk membuat nomor berikutnya. Setelah diterbitkan, tugas langsung tampil di akun Siswa dan nilainya tersinkron ke Tutor, Admin, CEO, serta EXP Ledger.</p><footer><button type="button" onClick={() => setAssignmentModal(null)}>Batal</button><button className="primary" disabled={saving || !assignmentModal.questions?.length}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
 
     {challengeModal && <TutorModalV77 title={`Buat challenge · ${challengeModal.className}`} onClose={() => setChallengeModal(null)}><form className="tutor-v77-form" onSubmit={saveChallenge}><div className="two"><label>Judul challenge *<input required value={challengeModal.title} onChange={(event) => setChallengeModal({ ...challengeModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="250" value={challengeModal.expReward} onChange={(event) => setChallengeModal({ ...challengeModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="4" value={challengeModal.instructions} onChange={(event) => setChallengeModal({ ...challengeModal, instructions: event.target.value })} /></label><div className="two"><label>Jenis jawaban<select value={challengeModal.responseType} onChange={(event) => setChallengeModal({ ...challengeModal, responseType: event.target.value })}><option value="text">Teks</option><option value="speech">Speaking</option></select></label><label>Tenggat *<input type="date" required value={challengeModal.dueDate} onChange={(event) => setChallengeModal({ ...challengeModal, dueDate: event.target.value })} /></label></div><label>Metode penilaian<select value={challengeModal.gradingMode} onChange={(event) => setChallengeModal({ ...challengeModal, gradingMode: event.target.value })}><option value="automatic">Otomatis</option><option value="review">Dinilai Tutor</option></select></label>{challengeModal.gradingMode === 'automatic' && <label>Kunci / contoh jawaban *<textarea required rows="3" value={challengeModal.answerKey} onChange={(event) => setChallengeModal({ ...challengeModal, answerKey: event.target.value })} /></label>}<p className="tutor-v80-sync-note">Challenge langsung tersedia untuk seluruh murid di kelas ini. Penilaian otomatis maupun Tutor memakai EXP Ledger yang sama.</p><footer><button type="button" onClick={() => setChallengeModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
 
@@ -2639,14 +2652,14 @@ function TutorDashboard({ user, token, overview, loading, message, onRefresh, on
     try {
       const result = await callApi({ action: 'createTutorAssignment', token, assignment: { ...assignment, taskType: assignmentType, classId: selectedClassId } });
       setNotice(result.message || (isID ? 'Assignment berhasil dibuat.' : 'Assignment created successfully.'));
-      setAssignment((current) => ({ ...current, title: '', instructions: '', stimulus: '', dueDate: '', answerKey: '', questions: [createEmptyAssignmentQuestion(assignmentType)] })); await onRefresh();
+      setAssignment((current) => ({ ...current, title: '', instructions: '', stimulus: '', dueDate: '', answerKey: '', questions: createAssignmentQuestionSet(assignmentType) })); await onRefresh();
     } catch (error) { setNotice(error.message || (isID ? 'Assignment gagal dibuat.' : 'Assignment could not be created.')); }
     finally { setSaving(false); }
   }
 
   function chooseAssignmentType(type) {
     setAssignmentType(type);
-    setAssignment((current) => ({ ...current, gradingMode: 'automatic', answerKey: '', stimulus: '', questions: [createEmptyAssignmentQuestion(type)] }));
+    setAssignment((current) => ({ ...current, gradingMode: 'automatic', answerKey: '', stimulus: '', questions: createAssignmentQuestionSet(type) }));
   }
 
   async function saveAssessment(event) {
@@ -3586,9 +3599,41 @@ function isAssignmentAnswerComplete(question, answer) {
   return answer !== '' && answer !== null && typeof answer !== 'undefined';
 }
 
+function StudentToeflComputerTest({ assignment, answers, onChange, isID }) {
+  const rows = Array.isArray(assignment.questions) ? assignment.questions : [];
+  const [started, setStarted] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(Math.max(15, Number(assignment.durationMinutes || 120)) * 60);
+  const question = rows[currentIndex] || {};
+  const answer = answers?.[question.id];
+  const answeredCount = rows.filter((item) => isAssignmentAnswerComplete(item, answers?.[item.id])).length;
+  const setAnswer = (value) => onChange({ ...(answers || {}), [question.id]: value });
+
+  useEffect(() => {
+    if (!started || secondsLeft <= 0) return undefined;
+    const timer = window.setInterval(() => setSecondsLeft((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [started, secondsLeft]);
+
+  function playQuestionAudio() {
+    if (!('speechSynthesis' in window) || !question.context) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(question.context);
+    utterance.lang = 'en-US'; utterance.rate = 0.88;
+    window.speechSynthesis.speak(utterance);
+  }
+
+  if (!started) return <section className="toefl-computer-intro"><span>TOEFL COMPUTER TEST</span><h3>{assignment.title}</h3><p>{assignment.stimulus || (isID ? 'Tes terdiri dari Listening Comprehension, Structure and Written Expression, serta Reading Comprehension.' : 'The test includes Listening Comprehension, Structure and Written Expression, and Reading Comprehension.')}</p><div><b>{rows.length}<small>{isID ? 'SOAL' : 'QUESTIONS'}</small></b><b>{Math.max(15, Number(assignment.durationMinutes || 120))}<small>{isID ? 'MENIT' : 'MINUTES'}</small></b><b>3<small>{isID ? 'BAGIAN' : 'SECTIONS'}</small></b></div><button type="button" onClick={() => setStarted(true)}>{isID ? 'Mulai Tes' : 'Start Test'} →</button></section>;
+
+  const minutes = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const seconds = String(secondsLeft % 60).padStart(2, '0');
+  return <section className="toefl-computer-test"><header><div><small>TOEFL COMPUTER TEST</small><strong>{question.section || 'TOEFL'}</strong></div><div className={secondsLeft <= 300 ? 'urgent' : ''}><small>{isID ? 'SISA WAKTU' : 'TIME LEFT'}</small><b>{minutes}:{seconds}</b></div></header><div className="toefl-computer-progress"><span><b style={{ width:`${rows.length ? Math.round(answeredCount / rows.length * 100) : 0}%` }} /></span><small>{answeredCount}/{rows.length} {isID ? 'terjawab' : 'answered'}</small></div><div className="toefl-question-navigator">{rows.map((item, index) => <button type="button" className={`${index === currentIndex ? 'active' : ''} ${isAssignmentAnswerComplete(item, answers?.[item.id]) ? 'answered' : ''}`} key={item.id || index} onClick={() => setCurrentIndex(index)}>{index + 1}</button>)}</div><article className="toefl-question-screen">{question.section === 'Listening Comprehension' && question.context && <button className="student-toefl-audio" type="button" onClick={playQuestionAudio}>▶ {isID ? 'Putar Audio Soal' : 'Play Question Audio'}</button>}{question.section === 'Reading Comprehension' && question.context && <p className="student-toefl-passage">{question.context}</p>}<div className="toefl-question-title"><span>{currentIndex + 1}</span><h3>{question.text}</h3></div><div className="toefl-computer-options">{(question.options || []).map((option, optionIndex) => <label className={Number(answer) === optionIndex ? 'selected' : ''} key={optionIndex}><input type="radio" name={`${assignment.assignmentId}-${question.id}`} checked={Number(answer) === optionIndex} onChange={() => setAnswer(optionIndex)} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>)}</div></article><footer><button type="button" disabled={currentIndex === 0} onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}>← {isID ? 'Sebelumnya' : 'Previous'}</button><strong>{currentIndex + 1} / {rows.length}</strong><button type="button" disabled={currentIndex >= rows.length - 1} onClick={() => setCurrentIndex((index) => Math.min(rows.length - 1, index + 1))}>{isID ? 'Berikutnya' : 'Next'} →</button></footer>{secondsLeft === 0 && <p className="toefl-time-up">{isID ? 'Waktu habis. Periksa jawaban, lalu tekan “Kumpulkan & Lihat Nilai”.' : 'Time is up. Review your answers, then press “Submit & View Score”.'}</p>}</section>;
+}
+
 function StudentAssignmentQuestions({ assignment, answers, onChange, isID }) {
   const rows = Array.isArray(assignment.questions) ? assignment.questions : [];
   const taskType = assignment.taskType || 'multiple-choice';
+  if (taskType === 'toefl-test') return <StudentToeflComputerTest assignment={assignment} answers={answers} onChange={onChange} isID={isID} />;
   const setAnswer = (id, value) => onChange({ ...(answers || {}), [id]: value });
   function playListening() {
     if (!('speechSynthesis' in window) || !assignment.stimulus) return;
@@ -3597,10 +3642,18 @@ function StudentAssignmentQuestions({ assignment, answers, onChange, isID }) {
     utterance.lang = 'en-US'; utterance.rate = 0.88;
     window.speechSynthesis.speak(utterance);
   }
+  function playQuestionAudio(script) {
+    if (!('speechSynthesis' in window) || !script) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(script);
+    utterance.lang = 'en-US'; utterance.rate = 0.88;
+    window.speechSynthesis.speak(utterance);
+  }
   return <div className="student-question-list structured-student-assignment">
     {taskType === 'reading' && <article className="assignment-reading-passage"><small>READING TEXT</small><p>{assignment.stimulus}</p></article>}
     {taskType === 'listening' && <article className="assignment-listening-player"><span>◖</span><div><small>LISTENING AUDIO</small><strong>{isID ? 'Dengarkan sebelum menjawab' : 'Listen before answering'}</strong></div><button type="button" onClick={playListening}>▶ {isID ? 'Putar Audio' : 'Play Audio'}</button></article>}
-    {rows.map((question, questionIndex) => { const type = question.type || 'multiple-choice'; const answer = answers?.[question.id]; return <fieldset key={question.id || questionIndex}><legend><span>{questionIndex + 1}</span><strong>{question.text}</strong><b>{question.points || 0} {isID ? 'poin' : 'pts'}</b></legend>
+    {taskType === 'toefl-test' && assignment.stimulus && <article className="assignment-reading-passage toefl-test-instructions"><small>TOEFL TEST</small><p>{assignment.stimulus}</p></article>}
+    {rows.map((question, questionIndex) => { const type = question.type || 'multiple-choice'; const answer = answers?.[question.id]; return <fieldset key={question.id || questionIndex}>{taskType === 'toefl-test' && <small className="student-toefl-section">{question.section || 'TOEFL'}</small>}{taskType === 'toefl-test' && question.context && question.section === 'Listening Comprehension' && <button className="student-toefl-audio" type="button" onClick={() => playQuestionAudio(question.context)}>▶ {isID ? 'Putar Audio Soal' : 'Play Question Audio'}</button>}{taskType === 'toefl-test' && question.context && question.section === 'Reading Comprehension' && <p className="student-toefl-passage">{question.context}</p>}<legend><span>{questionIndex + 1}</span><strong>{question.text}</strong><b>{question.points || 0} {isID ? 'poin' : 'pts'}</b></legend>
       {['multiple-choice','true-false'].includes(type) && (question.options || []).map((option, optionIndex) => <label className={Number(answer) === optionIndex ? 'selected' : ''} key={optionIndex}><input type="radio" name={`${assignment.assignmentId}-${question.id}`} checked={Number(answer) === optionIndex} onChange={() => setAnswer(question.id, optionIndex)} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>)}
       {type === 'multiple-select' && (question.options || []).map((option, optionIndex) => { const selected = Array.isArray(answer) && answer.includes(optionIndex); return <label className={selected ? 'selected' : ''} key={optionIndex}><input type="checkbox" checked={selected} onChange={() => setAnswer(question.id, selected ? answer.filter((value) => value !== optionIndex) : [...(answer || []), optionIndex])} /><span>{String.fromCharCode(65 + optionIndex)}</span><p>{option}</p></label>; })}
       {['fill-blank','short-answer','error-correction'].includes(type) && <><input className="student-structured-text-answer" value={answer || ''} onChange={(event) => setAnswer(question.id, event.target.value)} placeholder={isID ? 'Ketik jawaban Anda...' : 'Type your answer...'} />{type === 'fill-blank' && (question.wordBank || []).length > 0 && <div className="ordering-choice-bank fill-blank-word-bank">{question.wordBank.map((word, index) => <button type="button" key={`${word}-${index}`} onClick={() => setAnswer(question.id, word)}>{word}</button>)}</div>}</>}
@@ -5187,7 +5240,7 @@ function CeoSettingsPageV81({ token }) {
       <aside className="ceo-settings-side">
         <section className="ceo-settings-card"><header><div><span>02</span><h2>Cadangan Data</h2></div></header><p>Unduh cadangan operasional secara berkala. Password, PIN, dan sesi login tidak disertakan.</p><div className="ceo-backup-actions"><button type="button" className="primary" disabled={backupBusy} onClick={() => createBackup('download')}>⇩ Unduh cadangan</button><button type="button" disabled={backupBusy} onClick={() => createBackup('copy')}>Salin cadangan</button><button type="button" disabled={backupBusy} onClick={() => restoreInputRef.current?.click()}>Pulihkan pengaturan</button><input ref={restoreInputRef} hidden type="file" accept="application/json,.json" onChange={restoreSettings} /></div></section>
         <section className="ceo-settings-card ceo-settings-safety"><header><div><span>03</span><h2>Keamanan Data</h2></div></header><ul><li>Hanya CEO yang dapat membuka dan menyimpan pengaturan ini.</li><li>PIN disimpan sebagai hash, bukan angka asli.</li><li>Pemulihan hanya mengubah profil dan template—data akademik tidak ditimpa.</li></ul></section>
-        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V90 • Registration History & Student ID</small></section>
+        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V91 • Paid Billing Filter & TOEFL Test</small></section>
       </aside>
 
       <section className="ceo-settings-card ceo-settings-templates">
@@ -5627,6 +5680,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   const [notice, setNotice] = useState('');
   const [clock, setClock] = useState(new Date());
   const [search, setSearch] = useState('');
+  const [billingStatus, setBillingStatus] = useState('unpaid');
   const [showManualInvoice, setShowManualInvoice] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({ studentId: '', description: 'Biaya les', amount: '', period: currentPeriod });
   const [studentModal, setStudentModal] = useState(null);
@@ -5686,6 +5740,15 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
     } finally {
       setBusy(false);
     }
+  }
+
+  async function markInvoicePaid(item) {
+    return mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId }, () => {
+      setWorkspace((current) => current ? {
+        ...current,
+        billingRows: (current.billingRows || []).map((row) => row.invoiceId === item.invoiceId ? { ...row, status:'Lunas' } : row)
+      } : current);
+    });
   }
 
   function normalizeWa(value) {
@@ -5822,7 +5885,11 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   }
 
   const filteredStudents = (workspace?.students || []).filter((student) => [student.fullName, student.parentName, student.program, student.className, student.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
-  const filteredBills = (workspace?.billingRows || []).filter((item) => [item.studentName, item.parentName, item.description, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
+  const filteredBills = (workspace?.billingRows || []).filter((item) => {
+    const isPaid = /lunas|paid/i.test(item.status);
+    const matchesStatus = billingStatus === 'all' || (billingStatus === 'paid' ? isPaid : !isPaid);
+    return matchesStatus && [item.studentName, item.parentName, item.description, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase());
+  });
   const filteredReports = (workspace?.reports || []).filter((item) => [item.fullName, item.program, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
   const unpaidRows = (workspace?.billingRows || []).filter((item) => !/lunas|paid/i.test(item.status));
   const greeting = clock.getHours() < 11 ? 'Selamat pagi' : clock.getHours() < 15 ? 'Selamat siang' : clock.getHours() < 18 ? 'Selamat sore' : 'Selamat malam';
@@ -5846,7 +5913,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
       {page === 'spp' && <section className="admin-v76-page">
         <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • BILLING</span><h1>Tagihan SPP</h1><p>Buat tagihan sekali klik, tagih lewat WhatsApp, cetak kuitansi.</p></div><div><button className="secondary" onClick={() => { setInvoiceForm({ studentId:'', description:'Biaya les', amount:'', period }); setShowManualInvoice(true); }}>＋ Tagihan manual</button><button onClick={() => mutate({ action:'adminGenerateMonthlySppInvoices', period })} disabled={busy}>Buat Tagihan {workspace?.periodLabel}</button></div></div>
         <div className="admin-v76-kpis"><article><small>TOTAL TAGIHAN</small><strong>{workspace?.billingSummary?.totalInvoices || 0}</strong><span>jumlah tagihan</span></article><article className="paid"><small>SUDAH LUNAS</small><strong>{workspace?.billingSummary?.paidStudents || 0}</strong><span>murid</span></article><article><small>BELUM BAYAR</small><strong>{workspace?.billingSummary?.unpaidStudents || 0}</strong><span>murid</span></article></div>
-        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small><b>{item.studentId || 'TANPA STUDENT ID'}</b>{item.parentName ? ` • ${item.parentName}` : ''}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId })} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}</div></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><select value={billingStatus} onChange={(event) => setBillingStatus(event.target.value)} aria-label="Status tagihan"><option value="unpaid">Belum Bayar</option><option value="paid">Sudah Lunas / Riwayat</option><option value="all">Semua Status</option></select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small><b>{item.studentId || 'TANPA STUDENT ID'}</b>{item.parentName ? ` • ${item.parentName}` : ''}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => markInvoicePaid(item)} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}{!filteredBills.length && <div className="empty-state">{billingStatus === 'unpaid' ? 'Tidak ada tagihan yang belum dibayar.' : billingStatus === 'paid' ? 'Belum ada riwayat tagihan lunas pada periode ini.' : 'Tidak ada tagihan pada periode ini.'}</div>}</div></div>
       </section>}
 
       {page === 'students' && <section className="admin-v76-page">
