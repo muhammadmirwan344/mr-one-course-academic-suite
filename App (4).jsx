@@ -23,7 +23,7 @@ class PaymentPageErrorBoundary extends React.Component {
   }
 }
 
-const API_URL = 'https://script.google.com/macros/s/AKfycbwC489eOJrJn4tTkf4637Ev17-tcKK8fDlmVHzhe7dUWZeiFtbSiGPRgJuf-MruwSLLJw/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxdqrSr_pFPf6mnKbA04Yc_-EsR-j4H4nHpf3jtaZ-mn9gt1Fm7f_eM3WLf6gp6Sa5aIg/exec';
 
 function PaperPlaneLogo() {
   return (
@@ -2217,7 +2217,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
   }
 
   function openChallenge(classItem) {
-    setChallengeModal({ classId: classItem.classId, className: classItem.className, title: '', instructions: '', responseType: 'text', dueDate: today, expReward: 150, gradingMode: 'automatic', answerKey: '' });
+    setChallengeModal({ classId: classItem.classId, className: classItem.className, title: '', instructions: '', responseType: 'text', gameUrl: '', dueDate: today, expReward: 150, gradingMode: 'automatic', answerKey: '' });
   }
 
   async function saveChallenge(event) {
@@ -2369,7 +2369,7 @@ function TutorOperationsV77({ user, token, onLogout }) {
 
     {assignmentModal && <TutorModalV77 title={`Buat tugas · ${assignmentModal.className}`} onClose={() => setAssignmentModal(null)} wide><form className="tutor-v77-form" onSubmit={saveAssignment}><div className="two"><label>Judul tugas *<input required value={assignmentModal.title} onChange={(event) => setAssignmentModal({ ...assignmentModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="200" value={assignmentModal.expReward} onChange={(event) => setAssignmentModal({ ...assignmentModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="3" value={assignmentModal.instructions} onChange={(event) => setAssignmentModal({ ...assignmentModal, instructions: event.target.value })} /></label><div className="two"><label>Tanggal diberikan *<input type="date" required value={assignmentModal.assignedDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, assignedDate: event.target.value })} /></label><label>Tenggat *<input type="date" required min={assignmentModal.assignedDate} value={assignmentModal.dueDate} onChange={(event) => setAssignmentModal({ ...assignmentModal, dueDate: event.target.value })} /></label></div><label>Jenis tugas *<select value={assignmentModal.taskType} onChange={(event) => changeQuickAssignmentType(event.target.value)}>{assignmentTaskTypesForProgram(assignmentModal.program).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><small>Mengganti jenis tugas akan memulai kembali daftar soal agar formatnya konsisten.</small></label>{['reading','listening','toefl-test'].includes(assignmentModal.taskType) && <label>{assignmentModal.taskType === 'reading' ? 'Teks bacaan *' : assignmentModal.taskType === 'listening' ? 'Naskah listening *' : 'Petunjuk umum Tes TOEFL (opsional)'}<textarea required={assignmentModal.taskType !== 'toefl-test'} rows="5" value={assignmentModal.stimulus} onChange={(event) => setAssignmentModal({ ...assignmentModal, stimulus: event.target.value })} /></label>}<AssignmentQuestionBuilder taskType={assignmentModal.taskType} questions={assignmentModal.questions} onChange={(questions) => setAssignmentModal({ ...assignmentModal, questions })} isID /><p className="tutor-v80-sync-note">Klik “Tambah Soal” untuk membuat nomor berikutnya. Setelah diterbitkan, tugas langsung tampil di akun Siswa dan nilainya tersinkron ke Tutor, Admin, CEO, serta EXP Ledger.</p><footer><button type="button" onClick={() => setAssignmentModal(null)}>Batal</button><button className="primary" disabled={saving || !assignmentModal.questions?.length}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
 
-    {challengeModal && <TutorModalV77 title={`Buat challenge · ${challengeModal.className}`} onClose={() => setChallengeModal(null)}><form className="tutor-v77-form" onSubmit={saveChallenge}><div className="two"><label>Judul challenge *<input required value={challengeModal.title} onChange={(event) => setChallengeModal({ ...challengeModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="250" value={challengeModal.expReward} onChange={(event) => setChallengeModal({ ...challengeModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="4" value={challengeModal.instructions} onChange={(event) => setChallengeModal({ ...challengeModal, instructions: event.target.value })} /></label><div className="two"><label>Jenis jawaban<select value={challengeModal.responseType} onChange={(event) => setChallengeModal({ ...challengeModal, responseType: event.target.value })}><option value="text">Teks</option><option value="speech">Speaking</option></select></label><label>Tenggat *<input type="date" required value={challengeModal.dueDate} onChange={(event) => setChallengeModal({ ...challengeModal, dueDate: event.target.value })} /></label></div><label>Metode penilaian<select value={challengeModal.gradingMode} onChange={(event) => setChallengeModal({ ...challengeModal, gradingMode: event.target.value })}><option value="automatic">Otomatis</option><option value="review">Dinilai Tutor</option></select></label>{challengeModal.gradingMode === 'automatic' && <label>Kunci / contoh jawaban *<textarea required rows="3" value={challengeModal.answerKey} onChange={(event) => setChallengeModal({ ...challengeModal, answerKey: event.target.value })} /></label>}<p className="tutor-v80-sync-note">Challenge langsung tersedia untuk seluruh murid di kelas ini. Penilaian otomatis maupun Tutor memakai EXP Ledger yang sama.</p><footer><button type="button" onClick={() => setChallengeModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
+    {challengeModal && <TutorModalV77 title={`Buat challenge · ${challengeModal.className}`} onClose={() => setChallengeModal(null)}><form className="tutor-v77-form" onSubmit={saveChallenge}><div className="two"><label>Judul challenge *<input required value={challengeModal.title} onChange={(event) => setChallengeModal({ ...challengeModal, title: event.target.value })} /></label><label>Bonus EXP<input type="number" min="0" max="250" value={challengeModal.expReward} onChange={(event) => setChallengeModal({ ...challengeModal, expReward: Number(event.target.value) })} /></label></div><label>Instruksi *<textarea required rows="4" value={challengeModal.instructions} onChange={(event) => setChallengeModal({ ...challengeModal, instructions: event.target.value })} /></label><div className="two"><label>Jenis challenge<select value={challengeModal.responseType} onChange={(event) => { const responseType = event.target.value; setChallengeModal({ ...challengeModal, responseType, gradingMode: responseType === 'game' ? 'automatic' : challengeModal.gradingMode, answerKey: responseType === 'game' ? '' : challengeModal.answerKey }); }}><option value="text">Jawaban Teks</option><option value="speech">Speaking</option><option value="game">Game HTML / Link</option></select></label><label>Tenggat *<input type="date" required value={challengeModal.dueDate} onChange={(event) => setChallengeModal({ ...challengeModal, dueDate: event.target.value })} /></label></div>{challengeModal.responseType === 'game' && <label>Link game HTTPS *<input type="url" required pattern="https://.*" placeholder="https://..." value={challengeModal.gameUrl || ''} onChange={(event) => setChallengeModal({ ...challengeModal, gameUrl: event.target.value })} /><small>Game langsung tampil di akun siswa. Jika situs game melarang tampilan di dalam aplikasi, siswa tetap bisa membukanya di tab baru.</small></label>}<label>Metode penilaian<select disabled={challengeModal.responseType === 'game'} value={challengeModal.responseType === 'game' ? 'automatic' : challengeModal.gradingMode} onChange={(event) => setChallengeModal({ ...challengeModal, gradingMode: event.target.value })}><option value="automatic">Otomatis</option><option value="review">Dinilai Tutor</option></select></label>{challengeModal.responseType !== 'game' && challengeModal.gradingMode === 'automatic' && <label>Kunci / contoh jawaban *<textarea required rows="3" value={challengeModal.answerKey} onChange={(event) => setChallengeModal({ ...challengeModal, answerKey: event.target.value })} /></label>}<p className="tutor-v80-sync-note">Challenge langsung tersedia untuk seluruh murid di kelas ini. Game ditandai selesai oleh siswa dan EXP tercatat otomatis.</p><footer><button type="button" onClick={() => setChallengeModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan & Terbitkan'}</button></footer></form></TutorModalV77>}
 
     {activityReviewModal && <TutorModalV77 title={`Nilai ${activityReviewModal.kind === 'assignment' ? 'tugas' : 'challenge'} · ${activityReviewModal.studentName}`} onClose={() => setActivityReviewModal(null)}><form className="tutor-v77-form" onSubmit={saveActivityReview}><label>Jawaban murid<textarea rows="5" readOnly value={activityReviewModal.response || '-'} /></label><div className="two"><label>Nilai 0–100<input type="number" required min="0" max="100" value={activityReviewModal.score} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, score: Number(event.target.value) })} /></label><label>EXP diberikan<input type="number" min="0" max={activityReviewModal.kind === 'assignment' ? 200 : 250} value={activityReviewModal.expAwarded} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, expAwarded: Number(event.target.value) })} /></label></div><label>Umpan balik<textarea rows="4" value={activityReviewModal.feedback} onChange={(event) => setActivityReviewModal({ ...activityReviewModal, feedback: event.target.value })} /></label><p className="tutor-v80-sync-note">Saat disimpan, nilai tampil di akun Siswa dan EXP diperbarui tanpa menggandakan poin lama.</p><footer><button type="button" onClick={() => setActivityReviewModal(null)}>Batal</button><button className="primary" disabled={saving}>{saving ? 'Menyimpan...' : 'Simpan Penilaian'}</button></footer></form></TutorModalV77>}
 
@@ -4183,8 +4183,8 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
     catch (error) { setStudentSubmitMessage(error.message); } finally { setStudentSubmitting(''); }
   }
 
-  async function sendChallenge(challengeId) {
-    const response = String(challengeResponses[challengeId] || '').trim(); if (!response) return;
+  async function sendChallenge(challengeId, overrideResponse) {
+    const response = String(overrideResponse || challengeResponses[challengeId] || '').trim(); if (!response) return;
     setStudentSubmitting(challengeId); setStudentSubmitMessage('');
     try { const result = await callApi({ action: 'submitStudentChallenge', token, submission: { challengeId, response } }); setStudentSubmitMessage(result.message); showGamificationReward(result, isID ? 'Challenge selesai' : 'Challenge completed'); await onRefreshOverview(); }
     catch (error) { setStudentSubmitMessage(error.message); } finally { setStudentSubmitting(''); }
@@ -4915,7 +4915,7 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
                     </div>
                     <p>{item.instructions}</p>
                     <div className="assignment-meta">
-                      <span>{item.responseType === 'speech' ? (isID ? 'Jawaban: mikrofon & pengenalan suara' : 'Response: microphone & speech recognition') : item.responseType === 'link' ? (isID ? 'Jawaban: tautan audio/video/file' : 'Response: audio/video/file link') : (isID ? 'Jawaban teks' : 'Text response')}</span>
+                      <span>{item.responseType === 'game' ? (isID ? 'Game interaktif HTML' : 'Interactive HTML game') : item.responseType === 'speech' ? (isID ? 'Jawaban: mikrofon & pengenalan suara' : 'Response: microphone & speech recognition') : item.responseType === 'link' ? (isID ? 'Jawaban: tautan audio/video/file' : 'Response: audio/video/file link') : (isID ? 'Jawaban teks' : 'Text response')}</span>
                       <strong>{isID ? 'Tenggat' : 'Due'}: {item.dueDate}</strong>
                     </div>
                     {item.result ? (
@@ -4925,7 +4925,13 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
                       </div>
                     ) : (
                       <div className="student-response-box">
-                        {item.responseType === 'speech' ? (
+                        {item.responseType === 'game' ? (
+                          <div className="student-html-game">
+                            <iframe title={item.title} src={item.gameUrl} loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-pointer-lock" allow="fullscreen; microphone; autoplay" />
+                            <a href={item.gameUrl} target="_blank" rel="noopener noreferrer">Buka game layar penuh ↗</a>
+                            <p>Selesaikan game terlebih dahulu, lalu tekan tombol di bawah untuk mencatat penyelesaian dan EXP.</p>
+                          </div>
+                        ) : item.responseType === 'speech' ? (
                           <SpeakingChallengeRecorder
                             item={item}
                             isID={isID}
@@ -4941,8 +4947,8 @@ function StudentDetailPage({ page, token, user, overview, onRefreshOverview, onB
                             placeholder={item.responseType === 'link' ? (isID ? 'Tempel tautan audio, video, atau file...' : 'Paste an audio, video, or file link...') : (isID ? 'Tulis jawaban Anda...' : 'Write your response...')}
                           />
                         )}
-                        <button type="button" disabled={studentSubmitting === item.challengeId || !String(challengeResponses[item.challengeId] || '').trim()} onClick={() => sendChallenge(item.challengeId)}>
-                          {studentSubmitting === item.challengeId ? (isID ? 'Mengirim...' : 'Sending...') : (isID ? 'Kirim Challenge' : 'Submit Challenge')}
+                        <button type="button" disabled={studentSubmitting === item.challengeId || (item.responseType !== 'game' && !String(challengeResponses[item.challengeId] || '').trim())} onClick={() => sendChallenge(item.challengeId, item.responseType === 'game' ? 'GAME_COMPLETED' : '')}>
+                          {studentSubmitting === item.challengeId ? (isID ? 'Mengirim...' : 'Sending...') : item.responseType === 'game' ? (isID ? 'Tandai Game Selesai' : 'Mark Game Complete') : (isID ? 'Kirim Challenge' : 'Submit Challenge')}
                         </button>
                       </div>
                     )}
@@ -5240,7 +5246,7 @@ function CeoSettingsPageV81({ token }) {
       <aside className="ceo-settings-side">
         <section className="ceo-settings-card"><header><div><span>02</span><h2>Cadangan Data</h2></div></header><p>Unduh cadangan operasional secara berkala. Password, PIN, dan sesi login tidak disertakan.</p><div className="ceo-backup-actions"><button type="button" className="primary" disabled={backupBusy} onClick={() => createBackup('download')}>⇩ Unduh cadangan</button><button type="button" disabled={backupBusy} onClick={() => createBackup('copy')}>Salin cadangan</button><button type="button" disabled={backupBusy} onClick={() => restoreInputRef.current?.click()}>Pulihkan pengaturan</button><input ref={restoreInputRef} hidden type="file" accept="application/json,.json" onChange={restoreSettings} /></div></section>
         <section className="ceo-settings-card ceo-settings-safety"><header><div><span>03</span><h2>Keamanan Data</h2></div></header><ul><li>Hanya CEO yang dapat membuka dan menyimpan pengaturan ini.</li><li>PIN disimpan sebagai hash, bukan angka asli.</li><li>Pemulihan hanya mengubah profil dan template—data akademik tidak ditimpa.</li></ul></section>
-        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V91 • Paid Billing Filter & TOEFL Test</small></section>
+        <section className="ceo-settings-card ceo-settings-about"><header><div><span>04</span><h2>Tentang</h2></div></header><strong>Mr One Course Academic Suite</strong><p>Manajemen murid, kelas, pembayaran, absensi, gamifikasi, honor Tutor, laporan orang tua, dan monitoring CEO.</p><small>V92 • Paid Invoice Removal & HTML Games</small></section>
       </aside>
 
       <section className="ceo-settings-card ceo-settings-templates">
@@ -5669,7 +5675,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   const [period, setPeriod] = useState(currentPeriod);
   const readWorkspaceCache = (selectedPeriod) => {
     try {
-      const cached = JSON.parse(window.sessionStorage.getItem(`moc-admin-workspace-v89:${selectedPeriod}`) || 'null');
+      const cached = JSON.parse(window.sessionStorage.getItem(`moc-admin-workspace-v92:${selectedPeriod}`) || 'null');
       return cached && cached.savedAt && Date.now() - cached.savedAt < 5 * 60 * 1000 ? cached.data : null;
     } catch (_) { return null; }
   };
@@ -5680,7 +5686,6 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
   const [notice, setNotice] = useState('');
   const [clock, setClock] = useState(new Date());
   const [search, setSearch] = useState('');
-  const [billingStatus, setBillingStatus] = useState('unpaid');
   const [showManualInvoice, setShowManualInvoice] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({ studentId: '', description: 'Biaya les', amount: '', period: currentPeriod });
   const [studentModal, setStudentModal] = useState(null);
@@ -5714,7 +5719,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
     try {
       const result = await callApi({ action: 'getAdminWorkspace', token, period: selectedPeriod });
       setWorkspace(result);
-      try { window.sessionStorage.setItem(`moc-admin-workspace-v89:${selectedPeriod}`, JSON.stringify({ savedAt: Date.now(), data: result })); } catch (_) {}
+      try { window.sessionStorage.setItem(`moc-admin-workspace-v92:${selectedPeriod}`, JSON.stringify({ savedAt: Date.now(), data: result })); } catch (_) {}
     } catch (error) {
       setNotice(error.message || 'Data operasional Admin gagal dimuat.');
     } finally {
@@ -5746,7 +5751,10 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
     return mutate({ action:'adminMarkSppInvoicePaid', invoiceId:item.invoiceId }, () => {
       setWorkspace((current) => current ? {
         ...current,
-        billingRows: (current.billingRows || []).map((row) => row.invoiceId === item.invoiceId ? { ...row, status:'Lunas' } : row)
+        billingRows: (current.billingRows || []).filter((row) => !(
+          row.studentId === item.studentId && row.period === item.period &&
+          (/biaya les|spp|tuition/i.test(item.description) ? /biaya les|spp|tuition/i.test(row.description) : row.invoiceId === item.invoiceId)
+        ))
       } : current);
     });
   }
@@ -5886,9 +5894,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
 
   const filteredStudents = (workspace?.students || []).filter((student) => [student.fullName, student.parentName, student.program, student.className, student.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
   const filteredBills = (workspace?.billingRows || []).filter((item) => {
-    const isPaid = /lunas|paid/i.test(item.status);
-    const matchesStatus = billingStatus === 'all' || (billingStatus === 'paid' ? isPaid : !isPaid);
-    return matchesStatus && [item.studentName, item.parentName, item.description, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase());
+    return !/lunas|paid|verified|approved/i.test(item.status) && [item.studentName, item.parentName, item.description, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase());
   });
   const filteredReports = (workspace?.reports || []).filter((item) => [item.fullName, item.program, item.studentId].join(' ').toLowerCase().includes(search.toLowerCase()));
   const unpaidRows = (workspace?.billingRows || []).filter((item) => !/lunas|paid/i.test(item.status));
@@ -5913,7 +5919,7 @@ function AdminWorkspaceV76({ user, token, activePage, onNavigate, onLogout, regi
       {page === 'spp' && <section className="admin-v76-page">
         <div className="admin-v76-heading"><div><span className="eyebrow">ADMIN • BILLING</span><h1>Tagihan SPP</h1><p>Buat tagihan sekali klik, tagih lewat WhatsApp, cetak kuitansi.</p></div><div><button className="secondary" onClick={() => { setInvoiceForm({ studentId:'', description:'Biaya les', amount:'', period }); setShowManualInvoice(true); }}>＋ Tagihan manual</button><button onClick={() => mutate({ action:'adminGenerateMonthlySppInvoices', period })} disabled={busy}>Buat Tagihan {workspace?.periodLabel}</button></div></div>
         <div className="admin-v76-kpis"><article><small>TOTAL TAGIHAN</small><strong>{workspace?.billingSummary?.totalInvoices || 0}</strong><span>jumlah tagihan</span></article><article className="paid"><small>SUDAH LUNAS</small><strong>{workspace?.billingSummary?.paidStudents || 0}</strong><span>murid</span></article><article><small>BELUM BAYAR</small><strong>{workspace?.billingSummary?.unpaidStudents || 0}</strong><span>murid</span></article></div>
-        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><select value={billingStatus} onChange={(event) => setBillingStatus(event.target.value)} aria-label="Status tagihan"><option value="unpaid">Belum Bayar</option><option value="paid">Sudah Lunas / Riwayat</option><option value="all">Semua Status</option></select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small><b>{item.studentId || 'TANPA STUDENT ID'}</b>{item.parentName ? ` • ${item.parentName}` : ''}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em className={/lunas|paid/i.test(item.status) ? 'paid' : ''}>{item.status}</em><div className="actions">{!/lunas|paid/i.test(item.status) ? <button onClick={() => markInvoicePaid(item)} disabled={busy}>Tandai lunas</button> : <button onClick={() => setSelectedReceipt(item)}>Kuitansi</button>}<button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}{!filteredBills.length && <div className="empty-state">{billingStatus === 'unpaid' ? 'Tidak ada tagihan yang belum dibayar.' : billingStatus === 'paid' ? 'Belum ada riwayat tagihan lunas pada periode ini.' : 'Tidak ada tagihan pada periode ini.'}</div>}</div></div>
+        <div className="admin-v76-table-card"><div className="admin-v76-toolbar"><select value={period} onChange={(event) => { setPeriod(event.target.value); setSearch(''); }}>{months.map((month) => <option key={month.value} value={month.value}>{month.label}</option>)}</select><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari murid..." /><button onClick={() => copyUnpaidList(false)}>Salin daftar belum bayar</button><button onClick={() => copyUnpaidList(true)}><WhatsAppIcon /> Bagikan</button></div><p className="admin-v92-unpaid-note">Daftar ini hanya menampilkan tagihan yang belum dibayar. Setelah ditandai lunas, nama langsung hilang dari bulan tersebut.</p><div className="admin-v76-table"><div className="head"><span>Murid</span><span>Keterangan</span><span>Jumlah</span><span>Status</span><span>Aksi</span></div>{filteredBills.map((item) => <article key={item.invoiceId}><div><strong>{item.studentName}</strong><small><b>{item.studentId || 'TANPA STUDENT ID'}</b>{item.parentName ? ` • ${item.parentName}` : ''}</small></div><span>{item.description}</span><b>{formatRupiah(item.amount)}</b><em>{item.status}</em><div className="actions"><button onClick={() => markInvoicePaid(item)} disabled={busy}>Tandai lunas</button><button className="wa" onClick={() => openWa(item)}><WhatsAppIcon /> WA</button></div></article>)}{!filteredBills.length && <div className="empty-state">Tidak ada tagihan yang belum dibayar.</div>}</div></div>
       </section>}
 
       {page === 'students' && <section className="admin-v76-page">

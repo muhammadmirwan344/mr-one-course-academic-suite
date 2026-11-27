@@ -28325,3 +28325,41 @@ button:disabled{cursor:not-allowed!important;opacity:.52!important}
   .admin-dashboard .admin-contact-student-list>article>button{grid-column:1/-1;width:100%}
   .admin-dashboard .admin-contact-actions{display:grid;grid-template-columns:1fr 1fr}.admin-dashboard .admin-contact-actions>button{min-width:0;padding-inline:8px}
 }
+.admin-v92-unpaid-note {
+  margin: 0;
+  padding: 10px 18px;
+  color: #8fa8bd;
+  font-size: .82rem;
+  border-top: 1px solid rgba(116, 160, 190, .14);
+  border-bottom: 1px solid rgba(116, 160, 190, .14);
+}
+
+.student-html-game {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.student-html-game iframe {
+  width: 100%;
+  min-height: 520px;
+  border: 1px solid rgba(77, 210, 230, .28);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.student-html-game a {
+  color: #33d1e3;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.student-html-game p {
+  margin: 0;
+  color: #9cb0c2;
+  font-size: .82rem;
+}
+
+@media (max-width: 720px) {
+  .student-html-game iframe { min-height: 440px; }
+}
